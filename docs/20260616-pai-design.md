@@ -569,6 +569,59 @@ topic:
     - file_not_found
 ```
 
+### 7.7.3 Reasoning 分层压缩
+
+**痛点：** 每次请求发送完整的历史 reasoning 非常占 token，但完全丢弃又丢失推理链。
+
+**核心思想：** 按层级保留 reasoning：近几轮完整 > 更早的摘要 > 更久的结论。
+
+**分层策略：**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Reasoning 分层                            │
+│                                                              │
+│   最近 N 轮 ──→ 完整保留 reasoning                         │
+│        ↓                                                    │
+│   更早的 ──→ 摘要保留（保留关键步骤 + 结论）                 │
+│        ↓                                                    │
+│   更久的 ──→ 仅保留结论（不发送 reasoning）                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**分层配置：**
+| 层级 | 保留内容 | 触发条件 |
+|------|----------|----------|
+| Layer 1 | 完整 reasoning | 最近 3 轮 |
+| Layer 2 | 摘要（关键步骤 + 结论） | 4-10 轮 |
+| Layer 3 | 仅结论 | 超过 10 轮 |
+
+**摘要格式：**
+```markdown
+## Reasoning Summary
+- 关键推理步骤：[step1, step2, step3]
+- 最终结论：[conclusion]
+- 依赖信息：[dependencies]
+```
+
+**压缩时机：**
+| 时机 | 说明 |
+|------|------|
+| **Compaction 时** | 顺便压缩 reasoning |
+| **Reasoning 超限** | 单次 reasoning 超过阈值 |
+| **轮次触发** | 超过保留轮次自动压缩 |
+
+**配置项：**
+```yaml
+reasoning:
+  preserve_recent_turns: 3      # 保留最近 3 轮的完整 reasoning
+  summarize_older: true        # 更早的 reasoning 摘要
+  max_reasoning_tokens: 8000    # 单次 reasoning 上限
+  compression_trigger:          # 触发条件
+    - on_compaction
+    - on_overflow
+    - on_turn_threshold
+```
+
 ### 7.8 异常处理
 
 - 工具执行失败 → 重试（3次，指数退避）
