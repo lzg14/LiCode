@@ -1,8 +1,8 @@
 # Pai Core Loop 设计文档
 
-**版本**: v1.1.0
+**版本**: v1.2.0
 **日期**: 2026-06-16
-**状态**: 已根据评审意见修订
+**状态**: 评审已处理
 
 ---
 
@@ -58,6 +58,11 @@
 - 单工具调用：直接可执行，无需推理
 - 纯查询：无副作用，只读操作
 - 用户明确说"快点"、"简单弄一下"
+
+**最低 Effort Level 保护：**
+- Fast-path 最高只能到 E1，即使用户说"快点"也不能绕过 E2+ 任务的完整流程
+- 判定为 E2+ 的任务会强制走完整流程，即使用户说"快点"
+- 防止复杂任务被错误降级
 
 ### 2.5 E4/E5 强制门禁
 
@@ -283,12 +288,21 @@ compaction:
 - 更早的工具输出删除（除非是 `skill` 工具）
 - 工具输出压缩后标记 `compacted: timestamp`
 
+**skill 工具特殊保护原因：**
+skill 工具输出包含 Skill 定义、指令和最佳实践，是 Skill 自改进机制的核心。删除会导致 Skill 的进化历史丢失、后续无法回溯改进过程。
+
 ### 6.7 Auto-Continue
 
 压缩完成后，如果 `auto=true`，自动发送：
 ```
 "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."
 ```
+
+**无限循环保护：**
+- 每次 Auto-Continue 计数
+- 连续 3 次 Auto-Continue 后停止自动发送，改为提示用户
+- 用户需要明确回复才能继续
+- 防止压缩后继续 → 又压缩 → 又继续的死循环
 
 ### 6.8 配置项
 
@@ -520,67 +534,16 @@ const RETRY_CONFIG = {
 
 ## 10. 参考项目
 
-- [Personal AI Infrastructure](https://github.com/danielmiessler/Personal_AI_Infrastructure) - Effort Level 系统参考
-- [mimo-code](https://github.com/mimo-code/mimo-code) - Memory Recall 和 Compaction 参考
-- [Claude Code](https://github.com/anthropics/claude-code) - 上下文管理参考（闭源）
-- [Hermes Agent](https://github.com/NousResearch/hermes-agent) - 子 Agent 安全限制参考
-- [awesome-ai-anatomy](https://github.com/awesome-ai-anatomy/awesome-ai-anatomy) - 源码分析
+| 项目 | 参考内容 | 说明 |
+|------|----------|------|
+| **Personal AI Infrastructure** | Effort Level 系统 | 核心参考：E1-E5 分级、Mode 压缩路径 |
+| **mimo-code** | Memory Recall、Compaction | 核心参考：两阶段压缩、摘要模板、Prune 机制 |
+| **Claude Code** | 上下文管理策略 | 借鉴：4 层上下文管理（无损删除→缓存隐藏→归档→压缩） |
+| **Hermes Agent** | 子 Agent 安全限制 | 启发：子 agent 权限限制、安全扫描 |
+| **awesome-ai-anatomy** | 源码分析 | 辅助参考：各项目设计分析 |
 
----
-
-## 11. 评审意见
-
-### 11.1 待改进项
-
-#### 11.1.1 七阶段流程有重叠
-- **OBSERVE** 和 **THINK** 职责边界模糊：OBSERVE 包含"解析意图 + 设置 Effort Level"，THINK 包含"分析风险/假设"
-- **BUILD** 和 **EXECUTE** 分离必要性存疑：BUILD 是"调用工具 + 准备决策"，EXECUTE 是"产出实际输出"，实际实现中这两步往往是原子操作
-
-**建议**：合并为 5 阶段（OBSERVE → PLAN → BUILD → VERIFY → LEARN），或明确各阶段的输入/输出边界
-
-#### 11.1.2 ISA/ISC 门禁标准不明确
-- E4 >= 128 条 ISC、E5 >= 256 条 ISC - 这个数字依据是什么？
-- "12 个章节必须填充" - 具体是哪 12 个章节？文档未列出
-
-**建议**：补充 ISA 章节清单，并说明 ISC 数量标准的来源
-
-#### 11.1.3 Compaction 触发条件模糊
-- "上下文接近上限，自动触发" - 接近上限的阈值是多少？
-- `preserve_recent_tokens` 在 §6.5 和 §6.8 中默认值不一致（2000-8000 vs 4000）
-
-**建议**：统一配置默认值，明确触发阈值
-
-#### 11.1.4 多话题隔离的实现细节缺失
-- "自动检测话题切换" 的具体算法未说明（关键词匹配？向量相似度？）
-- `/return` 命令如何恢复之前的上下文？从 memory 重新加载？
-
-**建议**：补充话题检测的具体实现方案
-
-#### 11.1.5 异常处理过于简略
-- 仅列出 3 种异常场景，缺少：
-  - 子 agent 启动失败
-  - Memory 写入失败
-  - 用户中途取消任务
-
-**建议**：补充完整的异常处理矩阵
-
-### 11.2 待澄清问题
-
-1. **E1 判定规则**：用户说"快点"就触发 Fast-path，但如果任务本身是 E4 级别呢？是否需要最低 Effort Level 保护？
-2. **Auto-Continue 机制**：压缩后自动发送 "Continue if you have next steps" - 如何避免无限循环？
-3. **Prune 规则**："更早的工具输出删除（除非是 `skill` 工具）" - skill 工具的输出为什么需要特殊保护？
-4. **与 Claude Code 的关系**：文档提到参考 Claude Code，但未说明哪些机制是借鉴、哪些是原创
-
-### 11.3 格式建议
-
-1. §3.2 各阶段职责表格中，OBSERVE 的"处理"列内容过多，建议拆分
-2. §6.4 摘要模板可补充示例
-3. 缺少"术语表"或"名词解释"章节（ISA/ISC/PRUNE_PROTECT 等缩写未解释）
-
-### 11.4 总结
-
-文档完成度约 **75%**，核心设计思路正确，但实现细节和边界条件需要补充。建议重点完善：
-1. 七阶段流程的职责边界
-2. ISA/ISC 门禁的具体标准
-3. 多话题隔离的实现算法
-4. 异常处理矩阵
+**Claude Code 借鉴说明：**
+Claude Code 是闭源产品，以下机制基于 awesome-ai-anatomy 的逆向分析：
+- 4 层上下文管理策略
+- 工具执行的 RWLock 机制
+- 工具工厂函数模式（buildTool()）
