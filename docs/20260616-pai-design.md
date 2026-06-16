@@ -137,6 +137,89 @@ skill-name/
 | **版本管理** | 依赖锁定，自动更新 |
 | **沙箱隔离** | Skill 运行在隔离环境，互不干扰 |
 
+### 4.4 自改进技能（参考 Hermes Agent）
+
+**设计理念：**
+Skill 不是静态的，而是"活"的——执行后会根据结果自我改进。
+
+**自改进循环（Reflexion + Voyager 风格）：**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Skill 自改进循环                          │
+│                                                              │
+│   执行 Skill ──→ 成功 ──→ 记录最佳实践到 Skill               │
+│       │                                                     │
+│       └──→ 失败 ──→ 自我反思 ──→ Patch Skill in-place        │
+│                       │                                    │
+│                       └──→ 复杂任务 ──→ 自动创建新 Skill      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Skill 本质（参考 Hermes）：**
+Skill 就是一个 Markdown 文件，包含指令和代码片段，类似 human 的 runbook。
+```markdown
+# Skill: prometheus-setup
+## 触发词
+- setup prometheus
+- 部署 prometheus
+## 指令
+1. 安装 Prometheus
+2. 配置 Grafana
+3. 设置监控面板
+## 最佳实践（自动更新）
+- 使用 docker-compose 部署
+- 默认端口 9090
+## 历史版本
+- v1: 初始版本
+- v2: 优化安装步骤（2026-06-16）
+```
+
+**三种自改进机制：**
+
+| 机制 | 触发条件 | 行为 |
+|------|----------|------|
+| **Skill Patch** | Skill 执行失败 | 反思失败原因，补丁更新到 Skill |
+| **Skill Create** | 复杂任务完成无对应 Skill | 自动创建新 Skill |
+| **Best Practice Update** | Skill 执行成功 | 总结本次最佳实践，更新 Skill |
+
+**自改进流程详解：**
+
+1. **Patch（失败后）**
+   ```
+   用户: "部署 Prometheus"
+   Skill: prometheus-setup 执行
+   结果: 失败（端口冲突）
+   反思: "端口 9090 被占用，应该先检查端口或使用备用端口"
+   Patch: 更新 SKILL.md 添加端口检查步骤
+   ```
+
+2. **Create（无对应 Skill）**
+   ```
+   用户: "配置 Kubernetes 监控栈"
+   Skill: 无对应
+   结果: 任务完成
+   反思: "这是个通用任务，值得创建 Skill"
+   Create: 创建 k8s-monitoring-setup Skill
+   ```
+
+3. **Update（成功后）**
+   ```
+   用户: "部署 Redis 集群"
+   Skill: redis-setup 执行
+   结果: 成功，发现新优化点
+   Update: 更新 SKILL.md 添加"使用集群模式"最佳实践
+   ```
+
+**安全机制（参考 Hermes memory-threat-detection）：**
+- 每次 patch 前扫描内容，防止 prompt injection
+- Skill 写入前安全校验
+- 子 agent 限制（无代码执行、无内存写入、无用户交互）
+
+**版本控制：**
+- 每次 patch 自动记录版本历史
+- 支持回滚到任意版本
+- `skill diff <name>` 查看变更
+
 ---
 
 ## 5. 集成层设计
