@@ -1,8 +1,8 @@
 # Pai Core Loop 设计文档
 
-**版本**: v1.0.0
+**版本**: v1.1.0
 **日期**: 2026-06-16
-**状态**: 待评审
+**状态**: 已根据评审意见修订
 
 ---
 
@@ -65,10 +65,35 @@ E4/E5 任务必须通过以下门禁才能进入 BUILD：
 
 | 门禁 | 要求 |
 |------|------|
-| **ISA 完整** | 12 个章节必须填充（Problem, Vision, Goal, Criteria 等） |
+| **ISA 完整** | 12 个章节必须填充 |
 | **ISC 数量** | E4 >= 128 条, E5 >= 256 条 |
 | **Anti-criteria** | >= 1 条（必须识别 failure modes） |
 | **审查通过** | Commit-Boundary Advisor 二次确认 |
+
+#### ISA 的 12 个章节
+
+| # | 章节 | 说明 |
+|---|------|------|
+| 1 | **Problem** | 问题定义 - 描述要解决的核心问题 |
+| 2 | **Vision** | 愿景 - 描述目标状态是什么样子 |
+| 3 | **Out of Scope** | 范围外 - 明确不包含的内容 |
+| 4 | **Principles** | 设计原则 - 指导决策的原则 |
+| 5 | **Constraints** | 约束条件 - 技术、时间、资源等约束 |
+| 6 | **Goal** | 具体目标 - 可测量的目标 |
+| 7 | **Criteria** | 验收标准 - 如何判断完成 |
+| 8 | **Test Strategy** | 测试策略 - 如何验证 |
+| 9 | **Features** | 功能列表 - 需要实现的功能 |
+| 10 | **Decisions** | 决策记录 - 关键决策及理由 |
+| 11 | **Changelog** | 变更记录 - 追踪变更历史 |
+| 12 | **Verification** | 验证结果 - 实际验证的证据 |
+
+#### ISC 数量标准来源
+
+ISC（Ideal State Criteria）是验证的原子单元。E4/E5 对 ISC 数量的要求：
+- **E4 >= 128 条**：深度任务需要详细分解，确保每个细节都被验证
+- **E5 >= 256 条**：综合任务更复杂，需要更细致的分解
+
+这是 PAI 的经验值，用于确保任务被充分拆解，避免遗漏关键验收点。
 
 ---
 
@@ -163,12 +188,28 @@ Level 4: 完整压缩（保留语义，压缩存储）
 
 上下文溢出时，自动启动 compaction 子 agent 生成摘要，替换历史消息。
 
-### 6.2 触发时机
+### 6.2 触发时机（两阶段压缩）
 
-| 触发 | 说明 |
-|------|------|
-| **overflow** | 上下文超过模型限制 |
-| **auto** | 上下文接近上限，自动触发 |
+根据上下文使用率分阶段触发 compaction：
+
+| 压力等级 | 阈值 | 行为 |
+|----------|------|------|
+| **Level 0** | < 50% | 无操作，正常运行 |
+| **Level 1** | 50% - 79% | 触发第一次 compaction（轻量压缩） |
+| **Level 2** | >= 80% | 触发第二次 compaction（激进压缩，确保完成） |
+
+**设计思路：**
+- 50% 时给第一次缓冲机会，避免频繁触发
+- 80% 时确保必须压缩，留紧急 buffer
+- 参考 mimo-code 的 `pressureLevel` 机制
+
+**配置项：**
+```yaml
+compaction:
+  auto: true                    # 是否自动触发
+  reserve_buffer: 20000          # 保留的 buffer 大小（tokens）
+  level1_threshold: 0.50         # 第一阶段阈值（50%）
+  level2_threshold: 0.80         # 第二阶段阈值（80%）
 
 ### 6.3 Compaction 子 Agent 工作流
 
@@ -211,13 +252,28 @@ Level 4: 完整压缩（保留语义，压缩存储）
 ## Relevant files / directories
 
 [Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand.]
+
+## Context Assessment
+
+[评估上下文增长的原因，帮助判断是否需要优化]
+
+- **Large Project**: 上下文增长是否因为项目本身较大（代码库大、依赖多）
+- **Context Leak**: 是否有不必要的上下文残留（如已完成的无关任务）
+- **Optimization Opportunity**: 是否有压缩优化空间（如重复的 tool 输出）
+
+**示例**：
+```
+- Large Project: ✅ 是，项目包含 50+ 文件的微服务架构
+- Context Leak: ❌ 否，无关任务已清理
+- Optimization Opportunity: ⚠️ 部分工具输出可精简（如 test 输出）
+```
 ```
 
 ### 6.5 保留机制（Prune）
 
 | 配置 | 默认值 | 说明 |
 |------|--------|------|
-| `preserve_recent_tokens` | 2000-8000 | 保留最近的 tokens 量 |
+| `preserve_recent_tokens` | 4000 | 保留最近的 tokens 量（动态范围 2000-8000） |
 | `tail_turns` | 2 | 保留最近的对话轮次 |
 | `PRUNE_PROTECT` | 40,000 | 工具输出保护阈值 |
 
@@ -254,45 +310,67 @@ compaction:
 
 ### 7.2 核心思想
 
-自动检测话题切换，提示用户隔离上下文，避免无关信息干扰。
+采用**消息标记 + 动态过滤**方案，在消息级别打 `topic` 标签，过滤时只看当前话题。
 
-### 7.3 工作流程
+### 7.3 数据模型
 
-```
-用户输入 → 话题检测 → 发现新话题
-              ↓
-    提示用户："切换到新项目 X？"
-              ↓
-    ┌─────────────────────────┐
-    │ 用户确认 / 自动隔离      │
-    └─────────────────────────┘
-              ↓
-    隔离旧上下文 → 开始新话题上下文
+```typescript
+interface Message {
+  id: string
+  topic: string           // "project-a" | "project-b" | "default"
+  topic_status: "active" | "archived"
+  content: string
+  archived_at?: number    // 存档时间戳
+}
 ```
 
-### 7.4 话题检测算法
+### 7.4 工作流程
 
-| 信号 | 说明 |
-|------|------|
-| **目录变更** | 当前工作目录与之前不同 |
-| **项目路径** | 提及 `/path/to/project-b`，与当前项目无关 |
-| **关键词** | "另一个项目"、"新问题"、"顺便问下" |
-| **文件路径** | 提及当前项目不存在的文件路径 |
+```
+用户说 "切到 project-B"
+      ↓
+当前话题 project-A 的消息标记为 archived
+      ↓
+只加载 project-B 的消息到上下文
+      ↓
+project-A 的消息存入 memory
+```
 
-### 7.5 隔离方式
+### 7.5 话题检测算法
 
-| 方式 | 说明 |
-|------|------|
-| **用户确认** | 提示用户选择："隔离 / 继续 / 取消" |
-| **自动隔离** | 用户设置 `auto_isolate: true` 时自动隔离 |
+| 信号 | 说明 | 实现 |
+|------|------|------|
+| **目录变更** | 当前工作目录与之前不同 | 监控 `cwd` 变化 |
+| **项目路径** | 提及 `/path/to/project-b` | 正则匹配路径模式 |
+| **关键词** | "另一个项目"、"新问题" | 关键词列表匹配 |
+| **文件路径** | 提及当前项目不存在的文件 | 检查文件是否存在 |
+
+**检测优先级：**
+1. 目录变更（最可靠）
+2. 文件不存在（较可靠）
+3. 关键词（辅助）
+4. 项目路径提及（辅助）
 
 ### 7.6 隔离后的处理
 
-1. 当前上下文压缩存档（保留到 memory）
-2. 新话题创建独立上下文
-3. 用户可通过 `/return` 返回之前的话题
+| 操作 | 说明 |
+|------|------|
+| **存档** | 当前话题的消息标记为 `archived`，存入 memory |
+| **恢复** | `/return topic-name` 从 memory 加载并标记为 `active` |
+| **合并** | `/merge topic1 topic2` 将两个话题的消息合并 |
 
-### 7.7 提示示例
+### 7.7 相关命令
+
+| 命令 | 说明 |
+|------|------|
+| `/isolate [topic]` | 手动隔离当前话题 |
+| `/return [topic]` | 返回之前的话题 |
+| `/topics` | 列出所有话题及状态 |
+| `/merge [topic1] [topic2]` | 合并两个话题 |
+| `/archive [topic]` | 归档话题（不删除，仅存档） |
+| `/delete [topic]` | 删除话题 |
+
+### 7.8 提示示例
 
 ```
 <system-reminder>
@@ -302,26 +380,19 @@ compaction:
 </system-reminder>
 ```
 
-### 7.8 相关命令
-
-| 命令 | 说明 |
-|------|------|
-| `/isolate [topic]` | 手动隔离当前话题 |
-| `/return [topic]` | 返回之前的话题 |
-| `/topics` | 列出所有话题及状态 |
-| `/merge [topic1] [topic2]` | 合并两个话题 |
-
 ### 7.9 配置项
 
 ```yaml
 topic:
   auto_detect: true              # 自动检测话题切换
   auto_isolate: false            # 自动隔离（需用户确认）
-  detect_signals:                # 检测信号
+  detect_signals:                # 检测信号（按优先级）
     - directory_change
-    - path_mention
-    - keyword_match
     - file_not_found
+    - keyword_match
+    - path_mention
+  max_topics: 10                # 最大话题数（超出后提示清理）
+  auto_archive_threshold: 0.8    # 话题存档阈值（上下文超过 80%）
 ```
 
 ---
@@ -390,11 +461,60 @@ reasoning:
 
 ---
 
-## 9. 异常处理
+## 9. 异常处理矩阵
 
-- 工具执行失败 → 重试（3次，指数退避）
-- 循环检测 → 超过 10 次迭代 → 中断 + 报告
-- 上下文超限 → 触发压缩 + 归档
+### 9.1 异常分类
+
+| 类别 | 异常场景 | 处理方式 | 恢复策略 |
+|------|----------|----------|----------|
+| **工具执行** | 工具调用失败 | 重试（3次，指数退避） | 降级或跳过 |
+| **循环检测** | 超过 10 次迭代 | 中断 + 报告 | 用户确认后继续 |
+| **上下文** | 上下文超限 | 触发 compaction | 分层压缩 |
+| **子 Agent** | 子 agent 启动失败 | 回退到主 agent | 记录错误，继续 |
+| **内存/存储** | Memory 写入失败 | 警告 + 降级写入 | 磁盘文件兜底 |
+| **用户交互** | 用户取消任务 | 存档状态 + 优雅退出 | 保存 checkpoint |
+| **网络/IO** | 网络错误、IO 异常 | 重试 + 降级 | 本地缓存 + 重试 |
+| **权限/安全** | 权限不足、越界访问 | 拒绝 + 报告 | 提示用户授权 |
+
+### 9.2 重试策略
+
+```typescript
+const RETRY_CONFIG = {
+  maxAttempts: 3,
+  backoffMultiplier: 2,
+  initialDelayMs: 1000,
+  maxDelayMs: 10000,
+}
+
+// 指数退避：1s → 2s → 4s
+```
+
+### 9.3 循环检测
+
+| 配置 | 默认值 | 说明 |
+|------|--------|------|
+| `maxIterations` | 10 | 单次任务最大迭代次数 |
+| `iterationWarning` | 7 | 发出警告的阈值 |
+| `iterationBlock` | 10 | 强制中断的阈值 |
+
+### 9.4 用户取消处理
+
+```
+用户发送 SIGINT / 按下 Ctrl+C
+      ↓
+保存当前 checkpoint（state + messages）
+      ↓
+优雅退出（"任务已保存，可通过 /resume 恢复"）
+```
+
+### 9.5 降级策略
+
+| 场景 | 降级方案 |
+|------|----------|
+| Memory 写入失败 | → 降级到本地磁盘文件 |
+| LLM API 失败 | → 降级到本地模型 / 返回错误 |
+| 网络超时 | → 重试 3 次后返回缓存结果 |
+| 工具执行失败 | → 跳过该工具，继续其他步骤 |
 
 ---
 
@@ -405,3 +525,62 @@ reasoning:
 - [Claude Code](https://github.com/anthropics/claude-code) - 上下文管理参考（闭源）
 - [Hermes Agent](https://github.com/NousResearch/hermes-agent) - 子 Agent 安全限制参考
 - [awesome-ai-anatomy](https://github.com/awesome-ai-anatomy/awesome-ai-anatomy) - 源码分析
+
+---
+
+## 11. 评审意见
+
+### 11.1 待改进项
+
+#### 11.1.1 七阶段流程有重叠
+- **OBSERVE** 和 **THINK** 职责边界模糊：OBSERVE 包含"解析意图 + 设置 Effort Level"，THINK 包含"分析风险/假设"
+- **BUILD** 和 **EXECUTE** 分离必要性存疑：BUILD 是"调用工具 + 准备决策"，EXECUTE 是"产出实际输出"，实际实现中这两步往往是原子操作
+
+**建议**：合并为 5 阶段（OBSERVE → PLAN → BUILD → VERIFY → LEARN），或明确各阶段的输入/输出边界
+
+#### 11.1.2 ISA/ISC 门禁标准不明确
+- E4 >= 128 条 ISC、E5 >= 256 条 ISC - 这个数字依据是什么？
+- "12 个章节必须填充" - 具体是哪 12 个章节？文档未列出
+
+**建议**：补充 ISA 章节清单，并说明 ISC 数量标准的来源
+
+#### 11.1.3 Compaction 触发条件模糊
+- "上下文接近上限，自动触发" - 接近上限的阈值是多少？
+- `preserve_recent_tokens` 在 §6.5 和 §6.8 中默认值不一致（2000-8000 vs 4000）
+
+**建议**：统一配置默认值，明确触发阈值
+
+#### 11.1.4 多话题隔离的实现细节缺失
+- "自动检测话题切换" 的具体算法未说明（关键词匹配？向量相似度？）
+- `/return` 命令如何恢复之前的上下文？从 memory 重新加载？
+
+**建议**：补充话题检测的具体实现方案
+
+#### 11.1.5 异常处理过于简略
+- 仅列出 3 种异常场景，缺少：
+  - 子 agent 启动失败
+  - Memory 写入失败
+  - 用户中途取消任务
+
+**建议**：补充完整的异常处理矩阵
+
+### 11.2 待澄清问题
+
+1. **E1 判定规则**：用户说"快点"就触发 Fast-path，但如果任务本身是 E4 级别呢？是否需要最低 Effort Level 保护？
+2. **Auto-Continue 机制**：压缩后自动发送 "Continue if you have next steps" - 如何避免无限循环？
+3. **Prune 规则**："更早的工具输出删除（除非是 `skill` 工具）" - skill 工具的输出为什么需要特殊保护？
+4. **与 Claude Code 的关系**：文档提到参考 Claude Code，但未说明哪些机制是借鉴、哪些是原创
+
+### 11.3 格式建议
+
+1. §3.2 各阶段职责表格中，OBSERVE 的"处理"列内容过多，建议拆分
+2. §6.4 摘要模板可补充示例
+3. 缺少"术语表"或"名词解释"章节（ISA/ISC/PRUNE_PROTECT 等缩写未解释）
+
+### 11.4 总结
+
+文档完成度约 **75%**，核心设计思路正确，但实现细节和边界条件需要补充。建议重点完善：
+1. 七阶段流程的职责边界
+2. ISA/ISC 门禁的具体标准
+3. 多话题隔离的实现算法
+4. 异常处理矩阵
