@@ -303,7 +303,59 @@ function buildTool<I, O>(config: ToolConfig<I, O>): Tool<I, O> {
 
 ## 7. Core Loop 设计
 
-### 7.1 七阶段循环
+### 7.1 Effort Level 路由（参考 PAI Algorithm v6.3.0）
+
+**核心思想：** 不是每个任务都需要完整走 7 阶段。复杂任务走完整流程，简单任务走压缩路径。
+
+```
+用户输入 → 分类器 → 路由到不同路径
+                    │
+    ┌────────────────┼────────────────┐
+    ↓                ↓                ↓
+  E1 (Minimal)    E2-E3 (Normal)    E4-E5 (Complex)
+    ↓                ↓                ↓
+ Fast-path       Standard Loop    Full Algorithm
+```
+
+### 7.2 Effort Level 定义
+
+| 等级 | 复杂度 | 场景示例 | 路径 |
+|------|--------|---------|------|
+| **E1** | Minimal | 简单命令、单工具调用、纯查询 | Fast-path |
+| **E2** | Light | 简单修改、单文件、已知模式 | Standard |
+| **E3** | Medium | 多文件修改、常规开发任务 | Standard |
+| **E4** | Deep | 架构变更、多系统协作 | Full Algorithm |
+| **E5** | Comprehensive | 关键系统变更、不可逆操作 | Full Algorithm + Interview |
+
+### 7.3 Mode 压缩路径
+
+| Mode | 触发条件 | 阶段路径 |
+|------|---------|---------|
+| **Fast-path** | E1 + 单工具调用 | OBSERVE → EXECUTE → VERIFY |
+| **Research** | E1/E2 + 分析/审查（无代码变更） | OBSERVE → THINK → EXECUTE → VERIFY → LEARN |
+| **Standard** | 默认（E2-E3） | 完整 7 阶段 |
+| **Full Algorithm** | E4-E5 | 完整 7 阶段 + ISA + 验证门禁 |
+
+### 7.4 E1 判定规则（Fast-path）
+
+满足以下任一条件 → Fast-path：
+- 简单命令：`git status`、`ls -la`
+- 单工具调用：直接可执行，无需推理
+- 纯查询：无副作用，只读操作
+- 用户明确说"快点"、"简单弄一下"
+
+### 7.5 E4/E5 强制门禁
+
+E4/E5 任务必须通过以下门禁才能进入 BUILD：
+
+| 门禁 | 要求 |
+|------|------|
+| **ISA 完整** | 12 个章节必须填充（Problem, Vision, Goal, Criteria 等） |
+| **ISC 数量** | E4 >= 128 条, E5 >= 256 条 |
+| **Anti-criteria** | >= 1 条（必须识别 failure modes） |
+| **审查通过** | Commit-Boundary Advisor 二次确认 |
+
+### 7.6 七阶段循环
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -320,19 +372,50 @@ function buildTool<I, O>(config: ToolConfig<I, O>): Tool<I, O> {
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 7.2 阶段详解
+**各阶段职责：**
 
 | 阶段 | 输入 | 处理 | 输出 |
 |------|------|------|------|
-| **OBSERVE** | 用户输入 + 上下文 | 解析意图 + 收集环境信息 | 观察报告 |
-| **THINK** | 观察报告 | 分析问题 + 识别关键点 | 思考结果 |
-| **PLAN** | 思考结果 | 生成候选方案 + 排序 | 执行计划 |
-| **BUILD** | 执行计划 | 调用工具 + 执行操作 | 执行结果 |
-| **EXECUTE** | 执行结果 | 产出实际输出 | 输出交付 |
-| **VERIFY** | 输出交付 | 验证质量 + 检查错误 | 验证报告 |
-| **LEARN** | 验证报告 | 更新记忆 + 总结经验 | 学习更新 |
+| **OBSERVE** | 用户输入 + 上下文 | 解析意图 + 设置 Effort Level + 选择 capabilities + **Memory Recall** | 观察报告 + ISA |
+| **THINK** | 观察报告 | 分析风险/假设/失败模式 + 搜索记忆 | 思考结果 + 风险列表 |
+| **PLAN** | 思考结果 | 决定 scope 策略 + 决定是否 split session | 执行计划 |
+| **BUILD** | 执行计划 | 调用工具 + 准备决策 | 执行结果 |
+| **EXECUTE** | 执行结果 | 产出实际输出 + 更新 ISA 进度 | 输出交付 |
+| **VERIFY** | 输出交付 | 验证质量 + 检查错误 + Live-Probe | 验证报告 |
+| **LEARN** | 验证报告 | 更新记忆 + Skill 自改进 + 总结经验 | 学习更新 |
 
-### 7.3 上下文管理（4 层，参考 Claude Code）
+### 7.6.1 OBSERVE 阶段的 Memory Recall（参考 mimo-code）
+
+**时机：** 每次 loop 执行时，在生成 prompt 前检查 session 是否有 memory。
+
+**机制：** 不主动塞给 agent，而是追加一个 recall reminder：
+```
+<system-reminder>
+This session has memory at ~/.pai/memory/sessions/<id>/. Recall content
+not in your context with:
+- Read(file_path="~/.pai/memory/sessions/<id>/...")
+- memory.search(query: "...")
+
+Don't ask the user about something memory may already record.
+</system-reminder>
+```
+
+**设计思路：**
+- **主动recall**而非被动注入（类似神经科学的 active recall 原理）
+- 降低 token 消耗（只有需要时才查）
+- 保持 agent 的自主性（agent 自己决定是否调用 memory.search）
+
+**触发条件：**
+- session 有 memory 目录或 tasks 记录
+- 每次 prompt 生成时检查
+
+**相关配置：**
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `memory_reconcile_on_search` | true | 搜索前是否 reconcile |
+| `memory_search_score_floor` | 0.15 | BM25 评分地板（过滤噪音） |
+
+### 7.7 上下文管理（4 层，参考 Claude Code）
 
 ```
 Level 1: 无损删除（丢弃低优先级内容）
@@ -341,7 +424,7 @@ Level 3: 结构化归档（存入记忆系统）
 Level 4: 完整压缩（保留语义，压缩存储）
 ```
 
-### 7.4 异常处理
+### 7.8 异常处理
 
 - 工具执行失败 → 重试（3次，指数退避）
 - 循环检测 → 超过 10 次迭代 → 中断 + 报告
