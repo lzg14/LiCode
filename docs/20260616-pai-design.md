@@ -424,6 +424,84 @@ Level 3: 结构化归档（存入记忆系统）
 Level 4: 完整压缩（保留语义，压缩存储）
 ```
 
+### 7.7.1 Compaction 子 Agent 机制（参考 mimo-code）
+
+**核心思想：** 上下文溢出时，自动启动 compaction 子 agent 生成摘要，替换历史消息。
+
+**触发时机：**
+| 触发 | 说明 |
+|------|------|
+| **overflow** | 上下文超过模型限制 |
+| **auto** | 上下文接近上限，自动触发 |
+
+**Compaction 子 Agent 工作流：**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Compaction 子 Agent                       │
+│                                                              │
+│   上下文溢出 ──→ 启动 compaction agent ──→ 生成摘要         │
+│       │                                    │                │
+│       │                         ┌───────────┴───────────┐   │
+│       │                         ↓                       ↓   │
+│       │                    替换历史消息           自动继续  │
+│       │                         │                       │   │
+│       │                         └───────────┬───────────┘   │
+│       │                                     ↓               │
+│       └─────────────────────────────────→ 继续主循环        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**摘要模板（参考 mimo-code）：**
+```markdown
+## Goal
+
+[What goal(s) is the user trying to accomplish?]
+
+## Instructions
+
+- [What important instructions did the user give you that are relevant]
+- [If there is a plan or spec, include information about it so next agent can continue using it]
+
+## Discoveries
+
+[What notable things were learned during this conversation that would be useful for the next agent to know when continuing the work]
+
+## Accomplished
+
+[What work has been completed, what work is still in progress, and what work is left?]
+
+## Relevant files / directories
+
+[Construct a structured list of relevant files that have been read, edited, or created that pertain to the task at hand.]
+```
+
+**保留机制（Prune）：**
+| 配置 | 默认值 | 说明 |
+|------|--------|------|
+| `preserve_recent_tokens` | 2000-8000 | 保留最近的 tokens 量 |
+| `tail_turns` | 2 | 保留最近的对话轮次 |
+| `PRUNE_PROTECT` | 40,000 | 工具输出保护阈值 |
+
+**Prune 规则：**
+- 保留最近 40K tokens 的工具输出
+- 更早的工具输出删除（除非是 `skill` 工具）
+- 工具输出压缩后标记 `compacted: timestamp`
+
+**Auto-Continue：**
+压缩完成后，如果 `auto=true`，自动发送：
+```
+"Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed."
+```
+
+**配置项：**
+```yaml
+compaction:
+  preserve_recent_tokens: 4000  # 保留最近的 tokens
+  tail_turns: 2                 # 保留最近的对话轮次
+  prune: true                   # 是否启用 prune
+  auto_continue: true           # 压缩后自动继续
+```
+
 ### 7.8 异常处理
 
 - 工具执行失败 → 重试（3次，指数退避）
