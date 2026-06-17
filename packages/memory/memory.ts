@@ -20,8 +20,4 @@ export class Memory {
     const results = await this.search(query)
     return results.map(r => r.content)
   }
-
-  close(): void {
-    this.fts.close()
-  }
 }

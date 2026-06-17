@@ -1,5 +1,6 @@
 export interface ReviewResult {
   status: 'approved' | 'blocked' | 'converged'
+  approved: boolean
   issues: string[]
   pendingIssues?: string[]
   message?: string
@@ -15,6 +16,7 @@ export async function planReview(ctx: any, plan: { steps: string[] }): Promise<R
     if (result.approved) {
       return {
         status: 'approved',
+        approved: true,
         issues: [],
       }
     }
@@ -23,6 +25,7 @@ export async function planReview(ctx: any, plan: { steps: string[] }): Promise<R
     if (isConverged(result.issues, previousIssues)) {
       return {
         status: 'converged',
+        approved: false,
         issues: result.issues,
         pendingIssues: previousIssues,
       }
@@ -35,6 +38,7 @@ export async function planReview(ctx: any, plan: { steps: string[] }): Promise<R
   // 3 次后仍未通过
   return {
     status: 'blocked',
+    approved: false,
     issues: previousIssues,
     message: '请人工决策',
   }

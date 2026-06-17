@@ -5,8 +5,8 @@ export class Storage {
   private path: string
   private cache = new Map<string, unknown>()
 
-  constructor(path: string) {
-    this.path = join(process.env.HOME ?? '.', '.licode', path)
+  constructor(name: string = 'tui') {
+    this.path = join(process.env.HOME ?? '.', '.licode', `${name}.json`)
     this.load()
   }
 
@@ -46,4 +46,4 @@ export class Storage {
   }
 }
 
-export const storage = new Storage('tui.json')
+export const storage = new Storage()

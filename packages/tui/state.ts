@@ -1,8 +1,8 @@
-import type { Theme } from './theme'
+import { themes } from './theme'
 import type { Phase } from '../core/types'
 
 export interface AppState {
-  theme: Theme
+  theme: typeof themes.dark
   phase: Phase
   currentInput: string
   isProcessing: boolean
@@ -25,5 +25,3 @@ export const state: AppState = {
   messages: [],
   activeDialog: null,
 }
-
-import { themes } from './theme'

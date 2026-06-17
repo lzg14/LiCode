@@ -1,5 +1,6 @@
 import { LoopContext } from '../loop'
-import { existsSync, execSync } from 'child_process'
+import { existsSync } from 'fs'
+import { execSync } from 'child_process'
 import { join } from 'path'
 import { checkSensitivePath } from '../../security/sensitive'
 
@@ -12,7 +13,8 @@ export async function observe(ctx: LoopContext): Promise<Partial<LoopContext>> {
   await ensureGitInitialized(ctx.cwd)
 
   // 4. 敏感目录检查
-  const sensitiveWarning = checkSensitivePath(ctx.cwd)
+  const sw = checkSensitivePath(ctx.cwd)
+  const sensitiveWarning = sw ? `${sw.reason} (${sw.path})` : undefined
 
   return {
     effortLevel,

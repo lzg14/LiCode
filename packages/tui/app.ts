@@ -39,7 +39,7 @@ export async function runTUI(): Promise<void> {
     console.log('\x1b[32m[✓]\x1b[0m Config loaded')
   } catch {
     config = {
-      llm: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', apiKeyEnv: 'ANTHROPIC_API_KEY' },
+      llm: { provider: 'anthropic' as const, model: 'claude-sonnet-4-20250514', apiKeyEnv: 'ANTHROPIC_API_KEY' },
       security: { commandWhitelist: [], allowedPaths: [], deniedPaths: [] },
       memory: { path: './licode-memory.db', retentionDays: 30 },
       subagent: { maxConcurrent: 3, maxDepth: 1, timeoutMs: 900000, blockedTools: [] },

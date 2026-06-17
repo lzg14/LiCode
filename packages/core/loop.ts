@@ -15,6 +15,16 @@ export interface LoopContext {
   phase: Phase
   cwd: string
   llm?: LLMProvider
+  // Phase-specific fields
+  sensitiveWarning?: string
+  risks?: string[]
+  pendingQuestions?: string[]
+  antiCriteria?: string[]
+  plan?: { steps: string[] }
+  pendingReview?: { status: string; issues: string[] }
+  reviewResult?: { approved: boolean; issues: string[]; status: string }
+  intermediateResults?: unknown[]
+  deliverable?: unknown[]
 }
 
 const PHASE_ORDER: Phase[] = ['OBSERVE', 'THINK', 'PLAN', 'BUILD', 'EXECUTE', 'VERIFY', 'LEARN']

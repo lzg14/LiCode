@@ -7,17 +7,18 @@
     "licode": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --skipLibCheck",
     "test": "vitest",
-    "cli": "node ./dist/cli/index.js"
+    "cli": "node --import tsx src/cli/index.ts",
+    "dev": "node --import tsx src/cli/index.ts"
   },
   "dependencies": {
-    "zod": "^3.23.0",
-    "effect": "^3.0.0",
-    "better-sqlite3": "^11.0.0",
-    "glob": "^11.0.0"
+    "glob": "^11.0.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   }

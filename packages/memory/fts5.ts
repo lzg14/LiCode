@@ -1,56 +1,56 @@
-import Database from 'better-sqlite3'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import { dirname, join } from 'path'
+
+interface MemoryDoc {
+  id: string
+  content: string
+}
 
 export class FTS5Search {
-  private db: Database.Database
+  private indexPath: string
+  private documents: Map<string, string> = new Map()
 
-  constructor(dbPath: string) {
-    this.db = new Database(dbPath)
-    this.init()
+  constructor(private dbPath: string) {
+    this.indexPath = dbPath.replace('.db', '.index.json')
+    this.load()
   }
 
-  private init(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS memory (
-        id TEXT PRIMARY KEY,
-        scope TEXT NOT NULL,
-        type TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        access_count INTEGER DEFAULT 0
-      )
-    `)
-
-    this.db.exec(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
-        content,
-        content='memory',
-        content_rowid='rowid'
-      )
-    `)
+  private load(): void {
+    try {
+      if (existsSync(this.indexPath)) {
+        const data = JSON.parse(readFileSync(this.indexPath, 'utf-8'))
+        this.documents = new Map(data)
+      }
+    } catch {
+      // ignore
+    }
   }
 
-  search(query: string, limit = 10): MemorySearchResult[] {
-    const stmt = this.db.prepare(`
-      SELECT m.id, m.content, bm25(memory_fts) as score
-      FROM memory_fts
-      JOIN memory m ON m.rowid = memory_fts.rowid
-      WHERE memory_fts MATCH ?
-      ORDER BY score
-      LIMIT ?
-    `)
-    return stmt.all(query, limit) as MemorySearchResult[]
+  private persist(): void {
+    try {
+      mkdirSync(dirname(this.indexPath), { recursive: true })
+      writeFileSync(this.indexPath, JSON.stringify([...this.documents.entries()]))
+    } catch {
+      // ignore
+    }
+  }
+
+  search(query: string, limit = 10): { id: string; content: string; score: number }[] {
+    const results: { id: string; content: string; score: number }[] = []
+    const q = query.toLowerCase()
+
+    for (const [id, content] of this.documents.entries()) {
+      if (content.toLowerCase().includes(q)) {
+        results.push({ id, content, score: 1 })
+      }
+      if (results.length >= limit) break
+    }
+
+    return results
   }
 
   index(id: string, content: string): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO memory_fts(rowid, content)
-      SELECT rowid, content FROM memory WHERE id = ?
-    `)
-    stmt.run(id)
-  }
-
-  close(): void {
-    this.db.close()
+    this.documents.set(id, content)
+    this.persist()
   }
 }
