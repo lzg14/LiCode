@@ -3,14 +3,19 @@
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "licode": "./dist/cli/index.js"
+  },
   "scripts": {
     "build": "tsc",
-    "test": "vitest"
+    "test": "vitest",
+    "cli": "node ./dist/cli/index.js"
   },
   "dependencies": {
     "zod": "^3.23.0",
     "effect": "^3.0.0",
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^11.0.0",
+    "glob": "^11.0.0"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
