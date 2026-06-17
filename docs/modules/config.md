@@ -174,3 +174,74 @@ export const ModelConfig = Schema.Struct({
 | 必需字段 | 明确标记可选 vs 必需 |
 | 默认值 | 缺失字段使用默认值 |
 | 覆盖规则 | 项目配置 > 全局配置 > 默认值 |
+
+### 7.1 验证失败处理
+
+```typescript
+// 验证失败时
+interface ConfigValidationError {
+  path: string        // 配置路径
+  expected: string     // 期望类型
+  actual: any         // 实际值
+  reason: string      // 失败原因
+}
+
+// 错误处理策略
+const onValidationError = (err: ConfigValidationError) => {
+  if (err.path.startsWith("security")) {
+    // 安全配置失败 → 使用安全默认值 + 警告
+    return safeDefaults[err.path]
+  }
+  if (err.path.startsWith("llm")) {
+    // LLM 配置失败 → 终止启动
+    throw new Error(`Config invalid: ${err.path}`)
+  }
+}
+```
+
+### 7.2 环境变量替换
+
+```yaml
+# config.yaml
+llm:
+  api_key: "${ANTHROPIC_API_KEY}"   # 环境变量替换
+  model: "${DEFAULT_MODEL:-claude-sonnet}"  # 支持默认值
+```
+
+```typescript
+// 替换规则: ${VAR:-default} → process.env[VAR] || "default"
+```
+
+### 7.3 热更新机制
+
+配置文件修改后自动重新加载：
+
+| 配置类型 | 热更新 | 说明 |
+|----------|--------|------|
+| `audit.*` | ✅ 立即 | 审计配置可以随时改 |
+| `tools.timeout` | ✅ 立即 | 工具超时可以随时改 |
+| `security.*` | ⚠️ 确认 | 安全配置需用户确认 |
+| `llm.provider` | ❌ 重启 | Provider 切换需重启 |
+| `memory.path` | ❌ 重启 | 存储路径变更需重启 |
+
+---
+
+## 8. RTK Fallback 机制
+
+### 8.1 Fallback 策略
+
+RTK 不可用时的处理：
+
+| 情况 | 处理方式 |
+|------|----------|
+| RTK 未安装 | 直接执行原生命令 |
+| RTK 超时 | fallback 到原生命令 |
+| RTK 报错 | fallback 到原生命令 |
+
+### 8.2 RTK vs Raw 输出差异
+
+| 差异 | RTK | Raw |
+|------|-----|-----|
+| Token 压缩 | 60-97% | 0% |
+| 保留信息 | 关键结果 | 全部 |
+| 使用场景 | LLM 调用 | 用户查看 |

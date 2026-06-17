@@ -25,15 +25,38 @@ audit:
 
 ## 2. 日志格式
 
+**统一使用 SecurityEvent 作为超集**，Audit 在此基础上扩展：
+
+```typescript
+// SecurityEvent（基础事件）
+interface SecurityEvent {
+  type: 'command_blocked' | 'path_violation' | 'git_dangerous' | 'network_blocked' | 'sensitive_detected'
+  timestamp: number
+  details: Record<string, any>
+  action: 'blocked' | 'warned' | 'allowed_with_log'
+}
+
+// AuditEvent（扩展事件，包含 SecurityEvent）
+interface AuditEvent extends SecurityEvent {
+  session: string
+  user: string
+  command?: string
+  resource?: string
+  duration?: number
+  cost?: number
+}
+```
+
+**JSON 格式**：
 ```json
 {
   "timestamp": "2026-06-17T10:30:00.000Z",
-  "level": "BLOCKED",
-  "event": "command_blocked",
+  "type": "command_blocked",
   "session": "sess_abc123",
   "user": "lzg14",
   "command": "rm -rf /",
   "reason": "dangerous command",
+  "action": "blocked",
   "details": {}
 }
 ```
