@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
-import { join, homedir } from 'path'
+import { join } from 'path'
+import { homedir } from 'os'
 import { ConfigSchema, type Config } from './schema'
 import { importClaudeCodeConfig } from './external'
 
@@ -47,7 +48,7 @@ export class ConfigLoader {
         llm: {
           provider: 'anthropic',
           model: claudeConfig.model,
-          apiKeyEnv: '',  // 直接使用，不通过 env
+          apiKeyEnv: 'ANTHROPIC_API_KEY',
           apiKey: claudeConfig.apiKey,
           baseUrl: claudeConfig.baseUrl,
         },

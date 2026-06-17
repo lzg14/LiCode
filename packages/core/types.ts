@@ -23,7 +23,9 @@ export interface Config {
 export interface LLMConfig {
   provider: 'anthropic' | 'openai' | 'local'
   model: string
-  apiKeyEnv: string
+  apiKeyEnv?: string
+  apiKey?: string
+  baseUrl?: string
 }
 
 export interface SecurityConfig {

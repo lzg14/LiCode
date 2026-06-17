@@ -2,7 +2,9 @@ import { z } from 'zod';
 export const LLMConfigSchema = z.object({
     provider: z.enum(['anthropic', 'openai', 'local']),
     model: z.string(),
-    apiKeyEnv: z.string(),
+    apiKeyEnv: z.string().optional(),
+    apiKey: z.string().optional(), // 直接传入的 API key
+    baseUrl: z.string().optional(), // 自定义端点
 });
 export const SecurityConfigSchema = z.object({
     commandWhitelist: z.array(z.string()),

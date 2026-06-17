@@ -8,13 +8,24 @@ import { AnthropicProvider } from '../llm/anthropic';
 import { OpenAIProvider } from '../llm/openai';
 import { registerBuiltinTools } from '../tools/builtin';
 import { globalToolRegistry } from '../tools/registry';
-async function createLLMProvider() {
-    const config = {
-        llm: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', apiKeyEnv: 'ANTHROPIC_API_KEY' },
-    };
-    const apiKey = process.env[config.llm.apiKeyEnv] ?? '';
+async function createLLMProvider(config) {
+    let apiKey = '';
+    let baseUrl = 'https://api.anthropic.com/v1';
+    // 优先使用直接传入的 apiKey
+    if (config.llm.apiKey) {
+        apiKey = config.llm.apiKey;
+    }
+    else if (config.llm.apiKeyEnv) {
+        apiKey = process.env[config.llm.apiKeyEnv] ?? '';
+    }
+    if (config.llm.baseUrl) {
+        baseUrl = config.llm.baseUrl;
+    }
+    if (!apiKey) {
+        throw new Error('No API key available');
+    }
     if (config.llm.provider === 'anthropic') {
-        return new AnthropicProvider(apiKey);
+        return new AnthropicProvider(apiKey, baseUrl);
     }
     return new OpenAIProvider(apiKey);
 }
@@ -42,7 +53,7 @@ export async function runTUI() {
         console.log('\x1b[33m[!]\x1b[0m Using default config');
     }
     // 创建 LLM
-    const llm = await createLLMProvider();
+    const llm = await createLLMProvider(config);
     console.log(`\x1b[32m[✓]\x1b[0m LLM: ${config.llm.provider} / ${config.llm.model}\n`);
     // 创建 Core Loop
     const loop = new CoreLoop(config);

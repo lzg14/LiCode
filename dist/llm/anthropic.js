@@ -1,9 +1,11 @@
 export class AnthropicProvider {
     name = 'anthropic';
     apiKey;
-    baseUrl = 'https://api.anthropic.com/v1';
-    constructor(apiKey) {
+    baseUrl;
+    constructor(apiKey, baseUrl = 'https://api.anthropic.com/v1') {
         this.apiKey = apiKey;
+        // 兼容处理：如果传入的是完整 URL，直接使用
+        this.baseUrl = baseUrl.includes('/messages') ? baseUrl : `${baseUrl}/v1`;
     }
     async complete(request) {
         const response = await fetch(`${this.baseUrl}/messages`, {
