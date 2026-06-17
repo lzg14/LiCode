@@ -755,6 +755,23 @@ pai/
 - [oh-my-claudecode](https://github.com/oh-my-code/oh-my-claudecode) - 插件编排参考
 - [Claude Code](https://github.com/anthropics/claude-code) - 架构设计参考（闭源）
 - [awesome-ai-anatomy](https://github.com/awesome-ai-anatomy/awesome-ai-anatomy) - 源码分析参考
+- [RTK (Rust Token Killer)](https://github.com/rtk-ai/rtk) - CLI 输出 token 优化，60-97% 压缩率
+
+### 11.1 RTK 集成方案
+
+RTK 可作为 Pai 的外部工具集成，在执行 Shell 命令时自动进行输出过滤：
+
+| 命令 | Token 压缩率 |
+|------|-------------|
+| `cargo test` | 97.8% |
+| `env` | 99.3% |
+| `cargo clippy` | 92.5% |
+| `git status` | ~78% |
+| `grep` | 64.4% |
+
+**集成方式**：Pai 执行命令时通过 `rtk <cmd>` 调用，fallback 到原生命令
+
+**安全机制**：RTK-MCP 提供了命令白名单校验（git, cargo, npm, pytest 等），可借鉴
 
 ---
 

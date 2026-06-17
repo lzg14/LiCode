@@ -541,6 +541,7 @@ const RETRY_CONFIG = {
 | **Claude Code** | 上下文管理策略 | 借鉴：4 层上下文管理（无损删除→缓存隐藏→归档→压缩） |
 | **Hermes Agent** | 子 Agent 安全限制 | 启发：子 agent 权限限制、安全扫描 |
 | **awesome-ai-anatomy** | 源码分析 | 辅助参考：各项目设计分析 |
+| **RTK (Rust Token Killer)** | CLI 输出过滤 | 辅助参考：Shell 输出 token 压缩（60-97%），可作为外部工具集成 |
 
 **Claude Code 借鉴说明：**
 Claude Code 是闭源产品，以下机制基于 awesome-ai-anatomy 的逆向分析：
