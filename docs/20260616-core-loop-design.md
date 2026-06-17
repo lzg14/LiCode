@@ -1,8 +1,8 @@
 # Pai Core Loop 设计文档
 
-**版本**: v1.6.0
+**版本**: v1.7.0
 **日期**: 2026-06-17
-**状态**: 新增反向追问机制（Anti-criteria）
+**状态**: 新增 Safe Provider-Turn Boundary 和 Tool 权限保留机制
 
 ---
 
@@ -273,6 +273,78 @@ OBSERVE 和 THINK 阶段内置需求理解逻辑：
 **核心原则**：
 - **不只问"要什么"，还要问"能接受什么弊端"**
 - **用户不了解弊端 = 不完整的理解 = 不能动手**
+
+### 3.5 Safe Provider-Turn Boundary（参考 opencode）
+
+**定义**：Provider LLM 调用前的安全边界，在此之前所有上下文变更必须被 admitted。
+
+```
+用户输入 → Admit → Safe Boundary → 上下文变更 admitted → LLM 调用
+```
+
+**核心概念（参考 opencode V2 Session）**：
+
+| 概念 | 说明 |
+|------|------|
+| **Context Epoch** | 上下文周期，拥有不可变的 baseline 和可变的 snapshot |
+| **Baseline System Context** | Provider 调用前完整的系统上下文快照 |
+| **Mid-Conversation System Message** | 上下文变更时的持久化通知消息 |
+| **Snapshot** | 模型不可见的 JSON 状态，用于比较上下文变更 |
+
+**Boundary 行为**：
+
+1. **Admit Phase**：用户输入 admitted 到 durable inbox
+2. **Observe Phase**：观察所有 Context Source（环境、日期、指令等）
+3. **Safe Boundary**：所有变更在此 admitted
+4. **LLM Call**：基于完整的 Baseline System Context 调用 LLM
+
+**对我们的意义**：
+
+| 问题 | 解决方案 |
+|------|----------|
+| 何时 compaction？ | 在 Safe Boundary 前检查 context budget |
+| 何时发送系统消息？ | Context Source 变更时发送 Mid-Conversation System Message |
+| 如何跨 provider 切换？ | 创建新 Context Epoch，保留 Session History |
+
+### 3.6 Tool 调用权限保留（参考 opencode）
+
+**核心原则**：工具调用期间的权限由发起调用的 Agent 决定，不受后续 Agent 切换影响。
+
+```
+Agent A 发起工具调用
+    │
+    ├── 工具执行期间 Agent 切换为 B
+    │
+    └── 工具结果返回给 A（不是 B）
+             │
+             └── B 不能改变 A 发起的调用策略
+```
+
+**实现规则**：
+
+| 场景 | 行为 |
+|------|------|
+| Agent A 发起工具调用 | 使用 A 的权限策略 |
+| 调用期间 Agent 切换 | 切换被阻塞直到调用完成 |
+| 调用完成返回结果 | 结果返回给 A，不是 B |
+| 工具输出截断 | 由发起调用的 Agent 的策略决定 |
+
+**Reasoning 跨 Boundary 保留规则（参考 opencode）**：
+
+| 类型 | 保留跨 compaction？ |
+|------|---------------------|
+| 用户消息 | ✅ 保留 |
+| Assistant 消息 | ✅ 保留（可见的） |
+| Provider-native reasoning | ❌ 不保留（跨 boundary 丢弃） |
+| Tool 结果 | ✅ 保留 |
+| System Context | ✅ 保留（baseline 不可变） |
+
+**Doom Loop 检测**：
+
+| 配置 | 值 | 说明 |
+|------|-----|------|
+| `DOOM_LOOP_THRESHOLD` | 3 | 连续重试次数上限 |
+| `MAX_ITERATION` | 10 | 单次任务最大迭代 |
 
 ---
 
