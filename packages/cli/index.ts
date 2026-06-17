@@ -58,7 +58,7 @@ async function main() {
   }
 
   // 创建 Core Loop
-  const loop = new CoreLoop(config)
+  const loop = new CoreLoop(config, llm)
 
   // 交互式循环
   const rl = readline.createInterface({

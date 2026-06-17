@@ -1,4 +1,5 @@
 import type { Phase, Config } from './types'
+import type { LLMProvider } from '../llm/types'
 import { observe } from './phases/observe'
 import { think } from './phases/think'
 import { plan } from './phases/plan'
@@ -13,14 +14,19 @@ export interface LoopContext {
   effortLevel: number
   phase: Phase
   cwd: string
+  llm?: LLMProvider
 }
 
 const PHASE_ORDER: Phase[] = ['OBSERVE', 'THINK', 'PLAN', 'BUILD', 'EXECUTE', 'VERIFY', 'LEARN']
 
 export class CoreLoop {
-  constructor(private config: Config) {}
+  constructor(private config: Config, private llm?: LLMProvider) {}
 
   async run(ctx: LoopContext): Promise<string> {
+    // 如果外部没有传入 llm，使用构造时注入的
+    const effectiveLlm = ctx.llm ?? this.llm
+    ctx = { ...ctx, llm: effectiveLlm }
+
     let currentPhase = ctx.phase
 
     while (currentPhase !== 'DONE') {

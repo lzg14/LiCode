@@ -1,7 +1,7 @@
 import { LoopContext } from '../loop'
 import { existsSync, execSync } from 'child_process'
 import { join } from 'path'
-import { checkSensitivePath } from '../security/sensitive'
+import { checkSensitivePath } from '../../security/sensitive'
 
 export async function observe(ctx: LoopContext): Promise<Partial<LoopContext>> {
   // 1. 解析用户输入

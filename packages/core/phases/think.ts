@@ -1,8 +1,28 @@
 import { LoopContext } from '../loop'
 
 export async function think(ctx: LoopContext): Promise<Partial<LoopContext>> {
-  // 1. 分析风险/假设/失败模式
-  const risks = analyzeRisks(ctx.userInput)
+  // 1. 使用 LLM 分析风险/假设/失败模式
+  let risks: string[] = []
+  if (ctx.llm) {
+    try {
+      const response = await ctx.llm.complete({
+        model: 'claude-sonnet-4-20250514',
+        messages: [
+          {
+            role: 'user',
+            content: `分析以下需求的潜在风险、假设和失败模式。返回 JSON 数组格式的风险列表：\n\n${ctx.userInput}`,
+          },
+        ],
+        temperature: 0.3,
+      })
+      risks = JSON.parse(response.content)
+    } catch {
+      // LLM 调用失败时使用本地分析
+      risks = analyzeRisks(ctx.userInput)
+    }
+  } else {
+    risks = analyzeRisks(ctx.userInput)
+  }
 
   // 2. E3+ 触发 grill-me 追问
   if (ctx.effortLevel >= 3) {

@@ -1,5 +1,5 @@
 import type { Agent, SpawnInput } from './types'
-import { isBlockedTool } from './blocked-tools'
+import { isBlockedTool, SUBAGENT_BLOCKED_TOOLS } from './blocked-tools'
 import { limitManager, DEFAULT_LIMITS } from './limits'
 
 export class AgentManager {
