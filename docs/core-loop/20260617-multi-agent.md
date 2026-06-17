@@ -1,6 +1,6 @@
 # 多 Agent 协调与 Task 生命周期
 
-**版本**: v1.7.0
+**版本**: v1.8.0
 **日期**: 2026-06-17
 
 ---
@@ -77,7 +77,38 @@ interface ForkContext {
 
 **用途**：检查点写入 Agent 需要看到与父 Agent 相同的上下文。
 
-### 1.7 Structured Output
+### 1.7 权限继承规则
+
+**核心原则**：
+- 子 Agent 权限**不能超过**父 Agent 权限
+- 子 Agent 可以请求更低权限（降级）
+- 权限不足时**默认拒绝**，不是降级
+
+**权限请求流程**：
+```
+子 Agent 请求更高权限
+    │
+    ├── 检查 parentPermission
+    │
+    ├── 如果请求 <= parentPermission → 允许
+    │
+    └── 如果请求 > parentPermission
+              │
+              ├── 用户确认 → 临时提升
+              │
+              └── 用户拒绝 → 拒绝请求
+```
+
+**权限级别**：
+| 级别 | 说明 |
+|------|------|
+| L1 | 只读（grep, read, glob） |
+| L2 | L1 + 文件操作（write, edit） |
+| L3 | L2 + 危险操作（delete, exec） |
+| L4 | L3 + 系统操作（sudo, chmod） |
+| L5 | 完整权限 |
+
+### 1.8 Structured Output
 
 支持 schema-based 结构化输出：
 
@@ -167,6 +198,26 @@ interface TaskEvent {
   summary?: string
 }
 ```
+
+**存储策略**：
+| 存储位置 | 说明 |
+|----------|------|
+| **内存** | 当前 session 活跃的 Task 事件 |
+| **SQLite** | 持久化到 `~/.pai/data/tasks.db` |
+| **Session 绑定** | 事件与 session 关联，可跨 session 查询 |
+
+**存储设计**：
+```
+~/.pai/data/
+└── tasks.db
+    ├── task_events     # Task 事件表
+    ├── tasks          # Task 状态表
+    └── task_summaries # Task 摘要表（用于跨 session 恢复）
+```
+
+**清理策略**：
+- `archive_days: 7` — 超过 7 天的非活跃 Task 归档
+- `cleanup_days: 30` — 超过 30 天的历史数据清理
 
 ### 2.5 清理策略
 
