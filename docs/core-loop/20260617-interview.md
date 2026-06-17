@@ -187,7 +187,7 @@
 
 ## 4. 与 grill-me Skill 的关系
 
-grill-me 是一个独立的 Skill，可以作为 Pai 的内置 Skill 之一调用。
+grill-me 是一个独立的 Skill，可以作为 licode 的内置 Skill 之一调用。
 
 但 **Interview 机制的核心逻辑是内置在 OBSERVE 和 THINK 阶段的**，不是作为外部 Skill。
 

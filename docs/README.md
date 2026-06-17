@@ -1,6 +1,6 @@
-# Pai 设计文档
+# licode 设计文档
 
-**Pai** - Personal AI OS
+**licode** - Personal AI OS
 
 ## 文档结构
 
@@ -31,13 +31,15 @@ docs/
 
 ## Core Loop 核心特性
 
-Pai 的 Core Loop 与其他 Agent 的核心差异：
+licode 的 Core Loop 与其他 Agent 的核心差异：
 
 | 特性 | 说明 |
 |------|------|
 | **E1-E5 Effort Level** | 自动判断任务复杂度，无需用户手动切换模式 |
 | **grill-me Interview** | 内置追问机制，一次只问一个问题 |
 | **Anti-criteria** | 反向追问，展示弊端，确保用户充分了解 |
+| **Review Agent** | 自动触发反方视角评审，发现方案漏洞 |
+| **多 Agent 协调** | 子 Agent 完全隔离，MAX_DEPTH=1，MAX_CONCURRENT=3 |
 | **Safe Boundary** | Provider 调用前的安全边界 |
 | **Tool 权限保留** | 发起 Agent 的权限不变 |
 
@@ -53,7 +55,7 @@ Pai 的 Core Loop 与其他 Agent 的核心差异：
 | **Integration** | Git/DB/Notes/MCP/RTK | opencode |
 | **Security** | 命令白名单、文件系统、网络限制 | RTK-MCP |
 | **Audit** | 审计日志、费用追踪、安全事件 | DevEco Code |
-| **Config** | 多层配置、Provider 切换 | opencode V2 |
+| **Config** | 多层配置、外部配置自动发现、Provider 切换 | opencode V2, mimo-code |
 
 ---
 
@@ -117,13 +119,7 @@ Pai 的 Core Loop 与其他 Agent 的核心差异：
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v2.0.0 | 2026-06-17 | 多 Agent 设计强化：Blocked Tools、并发控制、隔离策略 |
+| v1.9.0 | 2026-06-17 | 添加 Anti-criteria 机制 |
 | v1.8.0 | 2026-06-17 | 处理审阅反馈，添加模块依赖图 |
-| v1.0.0 | 2026-06-17 | 初始版本 |
-
----
-
-## 版本历史
-
-| 版本 | 日期 | 说明 |
-|------|------|------|
 | v1.0.0 | 2026-06-17 | 初始版本，文档结构完整 |

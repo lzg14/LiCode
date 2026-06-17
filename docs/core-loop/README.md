@@ -1,4 +1,4 @@
-# Pai Core Loop 设计文档
+# licode Core Loop 设计文档
 
 **版本**: v1.8.0
 **日期**: 2026-06-17

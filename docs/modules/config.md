@@ -1,8 +1,8 @@
 # 配置层设计
 
-**版本**: v1.0.0
+**版本**: v1.1.0
 **日期**: 2026-06-17
-**参考**: opencode V2 config
+**参考**: opencode V2 config, mimo-code
 
 ---
 
@@ -15,6 +15,147 @@
   ↓
 --cli-args                   # 命令行参数（最高优先级）
 ```
+
+---
+
+## 1.5 外部配置自动发现（参考 mimo-code）
+
+**mimo-code 的核心易用性设计：自动发现并导入外部 Agent 的配置和 Session。**
+
+licode 支持自动读取以下外部配置：
+
+| 来源 | 路径 | 自动发现内容 |
+|------|------|-------------|
+| **Claude Code** | `~/.claude/projects/*.jsonl` | Session 历史、对话记录 |
+| **opencode** | `~/.opencode/settings/*` | 配置、记忆、Skills |
+| **hermes-agent** | `~/.hermes/*` | MEMORY.md、USER.md、Skills |
+
+### 1.5.1 Claude Code Session 导入
+
+```typescript
+// mimo-code 的实现：扫描 ~/.claude/projects/*.jsonl
+const root = path.join(Global.Path.home, ".claude", "projects")
+const files = await Glob.scan("*/*.jsonl", { cwd: root, absolute: true })
+```
+
+**licode 的实现**：
+
+```typescript
+interface ExternalSource {
+  type: 'claude-code' | 'opencode' | 'hermes'
+  path: string
+  lastModified: number
+  sessionCount: number
+}
+
+// 自动扫描
+async function discoverExternalSources(): Promise<ExternalSource[]> {
+  const sources: ExternalSource[] = []
+  
+  // Claude Code
+  const claudeProjects = path.join(home, ".claude", "projects")
+  if (existsSync(claudeProjects)) {
+    const files = await Glob.scan("*/*.jsonl", { cwd: claudeProjects })
+    sources.push({
+      type: 'claude-code',
+      path: claudeProjects,
+      lastModified: await getDirMtime(claudeProjects),
+      sessionCount: files.length
+    })
+  }
+  
+  // opencode
+  const opencodePath = path.join(home, ".opencode")
+  if (existsSync(opencodePath)) {
+    sources.push({
+      type: 'opencode',
+      path: opencodePath,
+      lastModified: await getDirMtime(opencodePath),
+      sessionCount: 0  // 待实现
+    })
+  }
+  
+  // hermes-agent
+  const hermesPath = path.join(home, ".hermes")
+  if (existsSync(hermesPath)) {
+    sources.push({
+      type: 'hermes',
+      path: hermesPath,
+      lastModified: await getDirMtime(hermesPath),
+      sessionCount: 0  // 待实现
+    })
+  }
+  
+  return sources
+}
+```
+
+### 1.5.2 配置合并策略
+
+```typescript
+interface ConfigMergeStrategy {
+  // 优先级从低到高
+  sources: [
+    { type: 'opencode'; priority: 1 },      // 最低：opencode 配置
+    { type: 'hermes'; priority: 2 },        // hermes 记忆
+    { type: 'claude-code'; priority: 3 },    // Claude Code session
+    { type: 'pai-global'; priority: 4 },     // licode 全局配置
+    { type: 'pai-project'; priority: 5 },    // licode 项目配置
+    { type: 'cli-args'; priority: 6 },       // 命令行参数
+  ]
+}
+```
+
+### 1.5.3 增量同步
+
+通过 `mtime` 检测变更，只同步新增/修改的内容：
+
+```typescript
+interface ImportState {
+  sourceType: string
+  sourcePath: string
+  lastMtime: number
+  importedSessionIds: string[]
+}
+
+// 增量同步
+async function syncIfChanged(source: ExternalSource): Promise<SyncResult> {
+  const state = await loadImportState(source.type)
+  
+  if (state?.lastMtime === source.lastModified) {
+    return { changed: false }
+  }
+  
+  // 增量导入新增/修改的 session
+  const newSessions = await detectNewSessions(source, state)
+  for (const session of newSessions) {
+    await importSession(session)
+  }
+  
+  await saveImportState({ ...source, lastMtime: source.lastModified })
+  return { changed: true, newCount: newSessions.length }
+}
+```
+
+### 1.5.4 用户交互
+
+```bash
+# 首次启动时提示发现外部配置
+$ pai
+🤖 检测到以下外部配置：
+1. Claude Code: 12 个 Session (最后同步: 2天前)
+2. opencode: 配置 + 记忆
+3. hermes-agent: 3 个 Skills
+
+是否导入？ [Y/n]
+```
+
+| 选项 | 行为 |
+|------|------|
+| `Y` | 导入所有外部配置 |
+| `n` | 跳过，不导入 |
+| `1` | 只导入 Claude Code |
+| `2` | 只导入 opencode |
 
 ---
 
@@ -67,7 +208,7 @@ tools:
 ```yaml
 # 正确做法
 llm:
-  api_key_env: "ANTHROPIC_API_KEY"   # Pai 从环境变量读取
+  api_key_env: "ANTHROPIC_API_KEY"   # licode 从环境变量读取
 
 # 错误做法（禁止）
 llm:
@@ -109,7 +250,7 @@ rtk:
 
 ### 5.1 多 Model 用例配置
 
-Claude Code 支持在不同场景用不同 Model，Pai 同样支持：
+Claude Code 支持在不同场景用不同 Model，licode 同样支持：
 
 ```yaml
 models:

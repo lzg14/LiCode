@@ -1,7 +1,8 @@
 # 多 Agent 协调与 Task 生命周期
 
-**版本**: v1.8.0
+**版本**: v2.0.0
 **日期**: 2026-06-17
+**参考**: hermes-agent, DeerFlow, awesome-ai-anatomy/subagent-delegation
 
 ---
 
@@ -9,7 +10,19 @@
 
 ### 1.1 设计背景
 
-opencode 的架构证明：复杂任务需要多个 Agent 协同工作。单个 Agent 受限于单一上下文，多 Agent 可以并行处理不同子任务。
+**参考 hermes-agent 和 DeerFlow 的子 Agent 设计。**
+
+| 框架 | MAX_CONCURRENT | MAX_DEPTH | 隔离策略 | Blocked Tools |
+|------|---------------|-----------|----------|---------------|
+| **hermes-agent** | 3 | 1 | 完全隔离 | delegate_task, clarify, memory, send_message, execute_code |
+| **DeerFlow** | 3 | 1 | 共享父线程状态 | 无 self-delegation |
+| **OpenClaw** | 可配置 | 可配置 | 可配置隔离 | 无 |
+| **licode** | 3 | 1 | 可配置隔离 | 见 1.9 节 |
+
+**核心原则**：
+1. 子 Agent **不能递归派生**（MAX_DEPTH = 1）
+2. 子 Agent **完全隔离**，不共享内存
+3. 限制并发数量，防止资源耗尽
 
 ### 1.2 Agent 类型定义
 
@@ -108,7 +121,69 @@ interface ForkContext {
 | L4 | L3 + 系统操作（sudo, chmod） |
 | L5 | 完整权限 |
 
-### 1.8 Structured Output
+### 1.8 Subagent Blocked Tools（hermes-agent 模式）
+
+**子 Agent 禁止使用的工具**（防止递归和危险操作）：
+
+```typescript
+const SUBAGENT_BLOCKED_TOOLS = frozenset([
+  "delegate_task",   // 禁止递归派生子 Agent
+  "clarify",        // 禁止用户交互
+  "memory_write",   // 禁止写入共享内存
+  "send_message",   // 禁止跨平台副作用
+  "execute_code",   // 禁止执行脚本（应 step-by-step 推理）
+])
+```
+
+**设计理由**：
+
+| 工具 | 禁止原因 |
+|------|----------|
+| `delegate_task` | 防止无限递归，MAX_DEPTH = 1 |
+| `clarify` | 子 Agent 不能向用户提问 |
+| `memory_write` | 防止并发写入导致数据竞争 |
+| `send_message` | 防止跨会话副作用 |
+| `execute_code` | 子 Agent 应推理而非写脚本执行 |
+
+### 1.9 Subagent 并发控制
+
+```typescript
+interface SubagentLimits {
+  maxConcurrent: 3       // 最大并发数（hermes-agent/DeerFlow 一致）
+  maxDepth: 1             // 最大深度（禁止递归）
+  timeoutMs: 900000       // 15 分钟超时
+}
+```
+
+**执行模型**（DeerFlow 双线程池模式）：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Subagent 执行池                          │
+│                                                             │
+│  _scheduler_pool (max_workers=3) ──► 调度任务               │
+│                                                             │
+│  _execution_pool (max_workers=3) ──► 执行任务               │
+│                         │                                   │
+│                         ▼                                   │
+│               ┌─────────────────┐                          │
+│               │  子 Agent 执行   │                          │
+│               │  (隔离上下文)    │                          │
+│               └─────────────────┘                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 1.10 隔离策略
+
+| 隔离级别 | 说明 | 使用场景 |
+|----------|------|----------|
+| **isolated** | 完全隔离，无共享内存 | 默认模式，安全性最高 |
+| **shared_state** | 共享父线程状态 | DeerFlow 模式，有数据竞争风险 |
+| **optional_stream** | 隔离但可选流式传输 | OpenClaw 模式 |
+
+**licode 默认使用 `isolated` 模式**（参考 hermes-agent）。
+
+### 1.11 Structured Output
 
 支持 schema-based 结构化输出：
 
@@ -266,4 +341,55 @@ interface Checkpoint {
   messages: ModelMessage[]
   created_at: number
 }
+```
+
+---
+
+## 4. 多 Agent 设计决策总结
+
+### 4.1 设计来源
+
+| 特性 | 来自 | 理由 |
+|------|------|------|
+| MAX_CONCURRENT = 3 | hermes-agent + DeerFlow | 防止资源耗尽 |
+| MAX_DEPTH = 1 | hermes-agent + DeerFlow | 禁止递归派生 |
+| Blocked Tools | hermes-agent | 防止危险操作 |
+| 双线程池 | DeerFlow | 调度与执行分离 |
+| 完全隔离 | hermes-agent | 安全性优先 |
+
+### 4.2 三种隔离策略对比
+
+| 策略 | 优点 | 缺点 | 适用场景 |
+|------|------|------|----------|
+| **DeerFlow (共享状态)** | 子 Agent 可共享发现 | 有数据竞争风险 | 信任 LLM |
+| **Hermes (完全隔离)** | 安全，无竞争 | 子 Agent 不能共享发现 | 高安全场景 |
+| **OpenClaw (可配置)** | 灵活 | 需要配置 | 高级用户 |
+
+**licode 默认使用 Hermes 模式（完全隔离）**。
+
+### 4.3 子 Agent 不能做的事
+
+| 限制 | 原因 |
+|------|------|
+| 不能派生子 Agent | MAX_DEPTH = 1 |
+| 不能向用户提问 | clarify 被阻止 |
+| 不能写共享内存 | memory_write 被阻止 |
+| 不能执行代码 | execute_code 被阻止 |
+| 不能发消息 | send_message 被阻止 |
+
+### 4.4 推荐配置
+
+```yaml
+subagent:
+  max_concurrent: 3
+  max_depth: 1
+  timeout_ms: 900000  # 15 分钟
+  isolation: "isolated"  # 完全隔离
+
+  blocked_tools:
+    - delegate_task
+    - clarify
+    - memory_write
+    - send_message
+    - execute_code
 ```

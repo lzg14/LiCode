@@ -1,6 +1,6 @@
 # 记忆系统设计
 
-**版本**: v1.0.0
+**版本**: v1.1.0
 **日期**: 2026-06-17
 **参考**: mimo-code, opencode
 
@@ -127,7 +127,42 @@ Don't ask the user about something memory may already record.
 
 ---
 
-## 8. 与 opencode Session 的关系
+## 8. 跨会话搜索（Session Search）
+
+**参考 hermes-agent 的 FTS5 + LLM summarization 机制。**
+
+当用户问"上次我做了什么？"时，不只是搜索 MEMORY.md，而是搜索完整的会话记录：
+
+```
+用户: "上次我做了什么？"
+    │
+    ▼
+FTS5 搜索历史会话（SQLite）
+    │
+    ▼
+按相关性排序，取 Top N 会话
+    │
+    ▼
+用低成本 Model（Flash）生成摘要
+    │
+    ▼
+返回每个会话的摘要 + 元数据
+```
+
+**实现**：
+
+| 组件 | 说明 |
+|------|------|
+| FTS5 | SQLite 全文搜索，低成本 |
+| BM25 | 相关性排序 |
+| LLM Summarization | Gemini Flash 生成摘要 |
+
+**优势**：
+- 不依赖向量数据库，SQLite 原生支持
+- 搜索完整对话，而非只搜索记忆
+- 低成本 Model 处理摘要
+
+## 9. 与 opencode Session 的关系
 
 opencode 的 Session 历史记录在 Session 层管理，不属于 Memory 系统。
 
