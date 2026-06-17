@@ -1,8 +1,23 @@
 # Pai Core Loop 设计文档
 
-**版本**: v1.2.0
-**日期**: 2026-06-16
-**状态**: 评审已处理
+**版本**: v1.4.0
+**日期**: 2026-06-17
+**状态**: 强化需求理解机制
+
+---
+
+## 0. 核心理念
+
+**宁可慢，不要白干。宁可多问，不要假设。**
+
+- 不理解就反复问，直到理解清楚
+- 不清楚就默认走完整流程
+- 做出来发现不是想要的 = 垃圾 = 浪费
+
+**强制理解原则**：
+- E1/E2：影响范围明确，可以快速执行
+- E3+：**强制需求澄清**，不理解不继续
+- E4/E5：**强制 Interview**，必须完整理解才能动手
 
 ---
 
@@ -38,9 +53,9 @@
 |------|--------|---------|------|
 | **E1** | Minimal | 简单命令、单工具调用、纯查询 | Fast-path |
 | **E2** | Light | 简单修改、单文件、已知模式 | Standard |
-| **E3** | Medium | 多文件修改、常规开发任务 | Standard |
-| **E4** | Deep | 架构变更、多系统协作 | Full Algorithm |
-| **E5** | Comprehensive | 关键系统变更、不可逆操作 | Full Algorithm + Interview |
+| **E3** | Medium | 多文件修改、常规开发任务 | Standard + **需求确认** |
+| **E4** | Deep | 架构变更、多系统协作 | Full Algorithm + **强制 Interview** |
+| **E5** | Comprehensive | 关键系统变更、不可逆操作 | Full Algorithm + **完整 Interview** |
 
 ### 2.3 Mode 压缩路径
 
@@ -70,10 +85,15 @@ E4/E5 任务必须通过以下门禁才能进入 BUILD：
 
 | 门禁 | 要求 |
 |------|------|
+| **需求理解** | **必须完整澄清需求**，不清楚就反复问，直到理解 |
 | **ISA 完整** | 12 个章节必须填充 |
 | **ISC 数量** | E4 >= 128 条, E5 >= 256 条 |
 | **Anti-criteria** | >= 1 条（必须识别 failure modes） |
 | **审查通过** | Commit-Boundary Advisor 二次确认 |
+
+**核心原则**：
+- **不理解不继续**：需求不清晰，强制 Interview，直到完全理解
+- **做出来发现不是想要的 = 失败**：宁可多问，不要假设
 
 #### ISA 的 12 个章节
 
@@ -532,12 +552,244 @@ const RETRY_CONFIG = {
 
 ---
 
-## 10. 参考项目
+## 10. 多 Agent 协调机制（Multi-Agent Coordination）
+
+### 10.1 设计背景
+
+opencode 的架构证明：复杂任务需要多个 Agent 协同工作。单个 Agent 受限于单一上下文，多 Agent 可以并行处理不同子任务。
+
+### 10.2 Agent 类型定义
+
+| Agent 类型 | 说明 | 权限 |
+|------------|------|------|
+| **primary** | 主 Agent，直接与用户交互 | 完整权限 |
+| **subagent** | 子 Agent，由 primary 派生 | 受限权限 |
+| **fork** | 检查点写入 Agent，复制父上下文 | 受限权限 |
+
+### 10.3 内置 Agent 类型
+
+| Agent | 类型 | 用途 |
+|--------|------|------|
+| **build** | primary | 主执行 Agent |
+| **plan** | primary | 只读计划模式 |
+| **explore** | subagent | 代码探索 |
+| **compaction** | subagent | 上下文压缩 |
+| **checkpoint-writer** | fork | 检查点写入 |
+| **dream** | subagent | 创意生成 |
+| **distill** | subagent | 内容提炼 |
+
+### 10.4 Spawn 参数
+
+```typescript
+interface SpawnInput {
+  mode: 'primary' | 'subagent'
+  agentType: string
+  task: string
+  description?: string
+  context: 'full' | 'minimal' | 'fork'
+  tools: string[] | 'inherit'
+  model?: { provider: string; model: string }
+  background: boolean
+  task_id?: string
+  cwd?: string
+  timeoutMs?: number
+  format?: OutputFormat  // Structured Output
+}
+```
+
+### 10.5 并发控制
+
+| 配置 | 默认值 | 说明 |
+|------|--------|------|
+| `maxConcurrentAgents` | 16 | 单次运行最大并发 Agent 数 |
+| `maxLifecycleAgents` | 1000 | 整个生命周期最大 Agent 数（硬上限） |
+| `agentTimeoutMs` | undefined | 单个 Agent 超时（默认无限） |
+| `maxPreReact` | 3 | 单次 Spawn 最大 ReAct 重入次数 |
+| `maxPostReact` | 3 | Stop 后最大 ReAct 重入次数 |
+
+### 10.6 Fork Context（上下文复制）
+
+当 spawn fork 类型 Agent 时，复制父 Agent 的完整上下文：
+
+```typescript
+interface ForkContext {
+  system: string[]           // 系统提示
+  tools: Tool[]              // 工具 schema
+  parentPermission: Permission.Ruleset  // 父权限
+  inheritedMessages: ModelMessage[]     // 消息历史
+  watermarkMsgID: string      // 水印标记
+  model: { providerID, modelID }
+}
+```
+
+**用途**：检查点写入 Agent 需要看到与父 Agent 相同的上下文。
+
+### 10.7 Structured Output
+
+支持 schema-based 结构化输出：
+
+```typescript
+interface StructuredOutputRequest {
+  format: {
+    type: 'json_schema'
+    name: string
+    schema: object
+  }
+}
+
+// Agent 返回格式
+interface AgentOutcome {
+  status: 'success' | 'partial' | 'failed' | 'blocked'
+  finalText?: string
+  structured?: unknown  // 验证后的结构化对象
+  incompleteTasks?: string[]
+}
+```
+
+---
+
+## 11. Task 生命周期管理
+
+### 11.1 Task 状态机
+
+```
+         create
+    ┌──────────────┐
+    │   pending    │
+    └──────┬───────┘
+           │ start
+           ▼
+    ┌──────────────┐
+    │   running    │◄─────┐
+    └──────┬───────┘      │
+           │              │
+     ┌─────┴─────┐        │
+     │           │        │
+     ▼           ▼        │ continue
+  block      unblock      │
+    │           │        │
+    └─────┬─────┘        │
+          │              │
+          ▼              │
+    ┌──────────────┐     │
+    │   waiting    │─────┘
+    └──────┬───────┘
+           │
+           ▼
+    ┌──────────────┐
+    │    done      │ (terminal)
+    └──────────────┘
+
+    abandon ──► abandoned (terminal)
+```
+
+### 11.2 Task 操作
+
+| 操作 | 说明 |
+|------|------|
+| `create` | 创建 Task |
+| `start` | 开始执行 |
+| `block` | 阻塞等待 |
+| `unblock` | 解锁继续 |
+| `done` | 标记完成 |
+| `abandon` | 放弃任务 |
+| `rename` | 重命名 |
+
+### 11.3 Task 层级
+
+- Task ID 格式：`T1.T1.1`（树形层级）
+- 支持 parent_task_id 关联
+- 支持 task_id 绑定用户任务
+
+### 11.4 Task 事件
+
+每个 Task 维护事件日志：
+
+```typescript
+interface TaskEvent {
+  id: string
+  task_id: string
+  at: number
+  kind: 'created' | 'started' | 'blocked' | 'unblocked' | 'done' | 'abandoned'
+  summary?: string
+}
+```
+
+### 11.5 清理策略
+
+```yaml
+task:
+  archive_days: 7      # 归档前保留天数
+  cleanup_days: 7      # 清理前保留天数
+```
+
+---
+
+## 12. Session 嵌套机制
+
+### 12.1 Session 类型
+
+| 类型 | 说明 |
+|------|------|
+| **parent session** | 顶层会话，直接与用户交互 |
+| **child session** | 子会话，由 spawn 创建 |
+
+### 12.2 Session 层级
+
+```
+用户 Session (parent)
+    │
+    ├── Agent A (subagent) → Session A (child)
+    │       │
+    │       └── Task → Session B (grandchild)
+    │
+    └── Agent B (subagent) → Session C (child)
+```
+
+### 12.3 Session 隔离
+
+- child session 写入 parent 的 checkpoint/memory
+- parent session 可查看所有 child session 状态
+- child session 共享 parent 的 memory 路径权限
+
+### 12.4 Checkpoint 机制
+
+```typescript
+interface Checkpoint {
+  session_id: string
+  parent_id?: string
+  state: SessionRunState
+  messages: ModelMessage[]
+  created_at: number
+}
+```
+
+---
+
+## 14. 参考项目
 
 | 项目 | 参考内容 | 说明 |
 |------|----------|------|
 | **Personal AI Infrastructure** | Effort Level 系统 | 核心参考：E1-E5 分级、Mode 压缩路径 |
 | **mimo-code** | Memory Recall、Compaction | 核心参考：两阶段压缩、摘要模板、Prune 机制 |
+| **opencode** | 多 Agent 协调 | 核心参考：Agent 类型、Spawn 机制、Fork Context、Task 状态机 |
+| **Claude Code** | 上下文管理策略 | 借鉴：4 层上下文管理（无损删除→缓存隐藏→归档→压缩） |
+| **Hermes Agent** | 子 Agent 安全限制 | 启发：子 agent 权限限制、安全扫描 |
+| **RTK (Rust Token Killer)** | CLI 输出过滤 | 辅助参考：Shell 输出 token 压缩（60-97%），可作为外部工具集成 |
+
+### 14.1 opencode 关键机制分析
+
+| 机制 | 实现 | Pai 现状 |
+|------|------|----------|
+| Agent 类型 | build/plan/compose/explore/compaction 等 | 已定义，需实现 |
+| MAX_PRE_REACT | 3 | 已设计（Auto-Continue） |
+| MAX_LIFECYCLE_AGENTS | 1000 | 需实现 |
+| MAX_CONCURRENT | 16 | 需实现 |
+| agentTimeoutMs | per-agent timeout | 需实现 |
+| Fork Context | 父上下文复制 | 需实现 |
+| Structured Output | schema-based | 需实现 |
+| Task 状态机 | block/unblock/done/abandon | 需实现 |
+| Session 嵌套 | parent/child session | 需实现 |
 | **Claude Code** | 上下文管理策略 | 借鉴：4 层上下文管理（无损删除→缓存隐藏→归档→压缩） |
 | **Hermes Agent** | 子 Agent 安全限制 | 启发：子 agent 权限限制、安全扫描 |
 | **awesome-ai-anatomy** | 源码分析 | 辅助参考：各项目设计分析 |
