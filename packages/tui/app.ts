@@ -10,14 +10,27 @@ import { registerBuiltinTools } from '../tools/builtin'
 import { globalToolRegistry } from '../tools/registry'
 import type { LLMProvider } from '../llm/types'
 
-async function createLLMProvider(): Promise<LLMProvider> {
-  const config = {
-    llm: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', apiKeyEnv: 'ANTHROPIC_API_KEY' },
+async function createLLMProvider(config: any): Promise<LLMProvider> {
+  let apiKey = ''
+  let baseUrl = 'https://api.anthropic.com/v1'
+
+  // 优先使用直接传入的 apiKey
+  if (config.llm.apiKey) {
+    apiKey = config.llm.apiKey
+  } else if (config.llm.apiKeyEnv) {
+    apiKey = process.env[config.llm.apiKeyEnv] ?? ''
   }
-  const apiKey = process.env[config.llm.apiKeyEnv] ?? ''
+
+  if (config.llm.baseUrl) {
+    baseUrl = config.llm.baseUrl
+  }
+
+  if (!apiKey) {
+    throw new Error('No API key available')
+  }
 
   if (config.llm.provider === 'anthropic') {
-    return new AnthropicProvider(apiKey)
+    return new AnthropicProvider(apiKey, baseUrl)
   }
   return new OpenAIProvider(apiKey)
 }
@@ -48,7 +61,7 @@ export async function runTUI(): Promise<void> {
   }
 
   // 创建 LLM
-  const llm = await createLLMProvider()
+  const llm = await createLLMProvider(config)
   console.log(`\x1b[32m[✓]\x1b[0m LLM: ${config.llm.provider} / ${config.llm.model}\n`)
 
   // 创建 Core Loop

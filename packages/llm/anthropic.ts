@@ -3,10 +3,12 @@ import type { LLMProvider, LLMRequest, LLMResponse } from './types'
 export class AnthropicProvider implements LLMProvider {
   name = 'anthropic'
   private apiKey: string
-  private baseUrl = 'https://api.anthropic.com/v1'
+  private baseUrl: string
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, baseUrl = 'https://api.anthropic.com/v1') {
     this.apiKey = apiKey
+    // 兼容处理：如果传入的是完整 URL，直接使用
+    this.baseUrl = baseUrl.includes('/messages') ? baseUrl : `${baseUrl}/v1`
   }
 
   async complete(request: LLMRequest): Promise<LLMResponse> {
