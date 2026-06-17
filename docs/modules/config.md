@@ -107,6 +107,68 @@ rtk:
 | openai | GPT 系列 |
 | local | 本地模型（Ollama 等） |
 
+### 5.1 多 Model 用例配置
+
+Claude Code 支持在不同场景用不同 Model，Pai 同样支持：
+
+```yaml
+models:
+  # 默认 model（简单任务）
+  default:
+    provider: "anthropic"
+    model: "claude-haiku-4-20250514"
+
+  # 复杂任务用更强的 model
+  complex:
+    provider: "anthropic"
+    model: "claude-opus-4-20250514"
+
+  # 评审用独立 model
+  review:
+    provider: "anthropic"
+    model: "claude-sonnet-4-20250514"
+
+  # 本地快速 model
+  fast:
+    provider: "local"
+    model: "qwen2.5-72b"
+
+  # 代码生成用专用 model
+  code:
+    provider: "anthropic"
+    model: "claude-sonnet-4-20250514"
+```
+
+### 5.2 场景路由规则
+
+```yaml
+model_routing:
+  # 简单命令/查询 → 用 fast model
+  - pattern: "E1|E2"
+    model: "fast"
+
+  # E4/E5/评审 → 用 strong model
+  - pattern: "E4|E5|review"
+    model: "complex"
+
+  # 代码生成 → 用 code model
+  - pattern: "write|edit|refactor"
+    model: "code"
+
+  # 默认 → default model
+  - pattern: "*"
+    model: "default"
+```
+
+### 5.3 模型成本优先级
+
+| 优先级 | 使用场景 |
+|----------|----------|
+| 1. 成本优先 | 简单任务、快速查询 |
+| 2. 质量优先 | 复杂任务、评审 |
+| 3. 速度优先 | 实时交互、lint/check |
+| 4. 平衡 | 默认场景 |
+
 ---
 
 ## 6. 配置 Schema（参考 opencode）
