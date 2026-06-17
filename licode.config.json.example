@@ -1,0 +1,22 @@
+{
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "apiKeyEnv": "ANTHROPIC_API_KEY"
+  },
+  "security": {
+    "commandWhitelist": ["git", "npm", "pnpm"],
+    "allowedPaths": ["D:/ProjectFile"],
+    "deniedPaths": ["C:/Users"]
+  },
+  "memory": {
+    "path": "./licode-memory.db",
+    "retentionDays": 30
+  },
+  "subagent": {
+    "maxConcurrent": 3,
+    "maxDepth": 1,
+    "timeoutMs": 900000,
+    "blockedTools": ["delegate_task", "clarify", "memory_write", "send_message", "execute_code"]
+  }
+}
