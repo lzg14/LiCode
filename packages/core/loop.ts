@@ -15,6 +15,11 @@ export interface LoopContext {
   phase: Phase
   cwd: string
   llm?: LLMProvider
+  // 回调函数
+  onPhaseChange?: (phase: Phase) => void
+  onStreamText?: (text: string) => void
+  onToolCall?: (toolName: string) => void
+  onToolResult?: (result: unknown) => void
   // Phase-specific fields
   sensitiveWarning?: string
   risks?: string[]
@@ -25,6 +30,8 @@ export interface LoopContext {
   reviewResult?: { approved: boolean; issues: string[]; status: string }
   intermediateResults?: unknown[]
   deliverable?: unknown[]
+  // AI 回复
+  aiResponse?: string
 }
 
 const PHASE_ORDER: Phase[] = ['OBSERVE', 'THINK', 'PLAN', 'BUILD', 'EXECUTE', 'VERIFY', 'LEARN']
@@ -47,10 +54,14 @@ export class CoreLoop {
       currentPhase = nextIndex < PHASE_ORDER.length ? PHASE_ORDER[nextIndex] : 'DONE'
     }
 
-    return ctx.userInput
+    // 返回 AI 回复，如果没有则返回用户输入
+    return ctx.aiResponse ?? ctx.userInput
   }
 
   private async executePhase(phase: Phase, ctx: LoopContext): Promise<Partial<LoopContext>> {
+    // 通知阶段变化
+    ctx.onPhaseChange?.(phase)
+
     switch (phase) {
       case 'OBSERVE':
         return observe(ctx)
@@ -68,6 +79,31 @@ export class CoreLoop {
         return learn(ctx)
       default:
         throw new Error(`Unknown phase: ${phase}`)
+    }
+  }
+
+  /**
+   * 调用 LLM 生成回复
+   */
+  async callLLM(ctx: LoopContext, systemPrompt: string): Promise<string> {
+    if (!ctx.llm) {
+      return '请配置 LLM provider'
+    }
+
+    try {
+      const response = await ctx.llm.complete({
+        model: this.config.llm.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: ctx.userInput },
+        ],
+        temperature: 0.7,
+      })
+      return response.content
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e)
+      ctx.onStreamText?.(`[LLM Error] ${error}\n`)
+      return `抱歉，AI 调用失败: ${error}`
     }
   }
 }

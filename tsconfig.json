@@ -5,7 +5,8 @@
     "moduleResolution": "bundler",
     "strict": true,
     "outDir": "dist",
-    "rootDir": "packages"
+    "rootDir": "packages",
+    "jsx": "react-jsx"
   },
-  "include": ["packages/**/*.ts"]
+  "include": ["packages/**/*.ts", "packages/**/*.tsx"]
 }
