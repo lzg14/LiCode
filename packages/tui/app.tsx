@@ -67,7 +67,7 @@ export async function runTUI(): Promise<void> {
 function renderLogo(): string {
   return `${c.cyan}${c.bold}
   _      _     ___  ____  ____
- | |    | |   / _ \\/ ___||  _ \\
+ | |    | |   / _ \\| ___||  _ \\
  | |    | |  | | | \\___ \\| |_) |
  | |___ | |__| |_| |___) |  __/
  |_____|_____|\\___/|____/|_|
