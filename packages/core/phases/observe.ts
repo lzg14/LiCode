@@ -16,6 +16,9 @@ export async function observe(ctx: LoopContext): Promise<Partial<LoopContext>> {
   const sw = checkSensitivePath(ctx.cwd)
   const sensitiveWarning = sw ? `${sw.reason} (${sw.path})` : undefined
 
+  // 5. 流式输出观察结果
+  ctx.onStreamText?.(`观察完成: Effort Level ${effortLevel}\n`)
+
   return {
     effortLevel,
     phase: 'THINK',

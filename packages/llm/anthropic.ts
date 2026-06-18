@@ -8,7 +8,12 @@ export class AnthropicProvider implements LLMProvider {
   constructor(apiKey: string, baseUrl = 'https://api.anthropic.com/v1') {
     this.apiKey = apiKey
     // 兼容处理：如果传入的是完整 URL，直接使用
-    this.baseUrl = baseUrl.includes('/messages') ? baseUrl : `${baseUrl}/v1`
+    // 如果已经包含 /v1 或 /messages，不追加
+    if (baseUrl.includes('/v1') || baseUrl.includes('/messages')) {
+      this.baseUrl = baseUrl
+    } else {
+      this.baseUrl = `${baseUrl}/v1`
+    }
   }
 
   async complete(request: LLMRequest): Promise<LLMResponse> {
@@ -33,9 +38,10 @@ export class AnthropicProvider implements LLMProvider {
       throw new Error(`Anthropic API error: ${response.status} ${error}`)
     }
 
-    const data = await response.json() as { content: { text: string }[]; usage: { input_tokens: number; output_tokens: number } }
+    const data = await response.json() as { content: { type: string; text?: string; thinking?: string }[]; usage: { input_tokens: number; output_tokens: number } }
+    const textBlock = data.content.find(b => b.type === 'text')
     return {
-      content: data.content[0]?.text ?? '',
+      content: textBlock?.text ?? '',
       usage: {
         inputTokens: data.usage.input_tokens,
         outputTokens: data.usage.output_tokens,

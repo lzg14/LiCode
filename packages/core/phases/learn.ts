@@ -1,8 +1,10 @@
 import { LoopContext } from '../loop'
 
 export async function learn(ctx: LoopContext): Promise<Partial<LoopContext>> {
+  ctx.onStreamText?.('学习中...\n')
   await updateMemory(ctx)
   await summarizeExperience(ctx)
+  ctx.onStreamText?.('学习完成\n')
 
   return {
     phase: 'DONE' as any,
