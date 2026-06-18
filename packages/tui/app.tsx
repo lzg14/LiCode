@@ -105,7 +105,7 @@ function App({ config, llm, loop }: AppProps) {
         llm,
         onPhaseChange: (newPhase: Phase) => {
           setPhase(newPhase)
-          addMessage({ role: 'phase', content: PHASE_LABELS[newPhase], phase: newPhase })
+          // 阶段是内化逻辑，不显示给用户
         },
         onStreamText: (text: string) => {
           setStreamingText(prev => prev + text)
@@ -368,9 +368,7 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop): Pr
           cwd: process.cwd(),
           llm,
           onPhaseChange: (phase) => {
-            const color = phaseColors[phase] || c.reset
-            const label = phaseLabels[phase] || phase
-            console.log(`  ${color}${label}${c.reset}`)
+            // 阶段是内化逻辑，不显示给用户
           },
           onStreamText: (text) => {
             process.stdout.write(renderMarkdown(text))
@@ -413,9 +411,7 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop): Pr
         cwd: process.cwd(),
         llm,
         onPhaseChange: (phase) => {
-          const color = phaseColors[phase] || c.reset
-          const label = phaseLabels[phase] || phase
-          console.log(`  ${color}${label}${c.reset}`)
+          // 阶段是内化逻辑，不显示给用户
         },
         onStreamText: (text) => {
           process.stdout.write(renderMarkdown(text))
