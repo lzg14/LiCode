@@ -4,9 +4,12 @@ import { AnthropicProvider } from '../llm/anthropic'
 import { OpenAIProvider } from '../llm/openai'
 import { registerBuiltinTools } from '../tools/builtin'
 import { globalToolRegistry } from '../tools/registry'
+import { skillLoader } from '../skills/loader'
 import { renderMarkdown, c } from './markdown'
 import type { LLMProvider } from '../llm/types'
 import type { Phase } from '../core/types'
+import { join } from 'path'
+import { homedir } from 'os'
 
 const PHASE_LABELS: Record<Phase, string> = {
   OBSERVE: '观察',
@@ -46,6 +49,10 @@ async function createLLMProvider(config: any): Promise<LLMProvider> {
 export async function runTUI(): Promise<void> {
   registerBuiltinTools()
 
+  // 加载技能
+  const skillsDir = join(homedir(), '.licode', 'skills', 'builtin')
+  const skillCount = await skillLoader.loadFromDir(skillsDir)
+
   let config
   try {
     config = await configLoader.discoverAndLoad(process.env.HOME ?? '')
@@ -61,7 +68,7 @@ export async function runTUI(): Promise<void> {
   const llm = await createLLMProvider(config)
   const loop = new CoreLoop(config, llm)
 
-  await runReadlineTUI(config, llm, loop)
+  await runReadlineTUI(config, llm, loop, skillCount)
 }
 
 function renderLogo(): string {
@@ -72,12 +79,12 @@ function renderLogo(): string {
 ${c.gray}           谋定而后动${c.reset}`
 }
 
-function renderStatusBar(toolCount: number, model: string): string {
+function renderStatusBar(toolCount: number, model: string, skillCount: number): string {
   return `${c.gray}────────────────────────────────────────${c.reset}
-${c.gray} ${toolCount} tools · ${model} · ↑↓ history${c.reset}`
+${c.gray} ${toolCount} tools · ${skillCount} skills · ${model}${c.reset}`
 }
 
-async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop): Promise<void> {
+async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop, skillCount: number): Promise<void> {
   const readline = await import('readline')
   const rl = readline.createInterface({
     input: process.stdin,
@@ -86,7 +93,7 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop): Pr
 
   // 显示 Logo
   console.log(renderLogo())
-  console.log(renderStatusBar(globalToolRegistry.list().length, config.llm.model))
+  console.log(renderStatusBar(globalToolRegistry.list().length, config.llm.model, skillCount))
   console.log()
 
   const commandHistory: string[] = []
