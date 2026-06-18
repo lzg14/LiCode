@@ -1,40 +1,21 @@
 import { LoopContext } from '../loop'
-import { existsSync } from 'fs'
-import { execSync } from 'child_process'
-import { join } from 'path'
 import { checkSensitivePath } from '../../security/sensitive'
 
 export async function observe(ctx: LoopContext): Promise<Partial<LoopContext>> {
-  // 1. 解析用户输入
-  // 2. 判断 Effort Level
+  // 1. 判断 Effort Level
   const effortLevel = estimateEffortLevel(ctx.userInput)
 
-  // 3. Git 自动初始化（内置，不需要用户确认）
-  await ensureGitInitialized(ctx.cwd)
-
-  // 4. 敏感目录检查
+  // 2. 敏感目录检查
   const sw = checkSensitivePath(ctx.cwd)
   const sensitiveWarning = sw ? `${sw.reason} (${sw.path})` : undefined
 
-  // 5. 流式输出观察结果
+  // 3. 流式输出观察结果
   ctx.onStreamText?.(`观察完成: Effort Level ${effortLevel}\n`)
 
   return {
     effortLevel,
     phase: 'THINK',
     sensitiveWarning,
-  }
-}
-
-async function ensureGitInitialized(cwd: string): Promise<void> {
-  const gitDir = join(cwd, '.git')
-  if (!existsSync(gitDir)) {
-    try {
-      execSync('git init', { cwd, stdio: 'pipe' })
-      execSync('git add -A && git commit -m "Initial commit by licode"', { cwd, stdio: 'pipe' })
-    } catch {
-      // 失败只记录警告，不阻止流程
-    }
   }
 }
 
