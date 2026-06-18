@@ -1,9 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { render, Box, Text } from 'ink'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { render, Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
-import { bus, TUI_EVENTS } from './bus'
-import { state, type Message } from './state'
-import { themes } from './theme'
 import { CoreLoop } from '../core/loop'
 import { configLoader } from '../config/loader'
 import { AnthropicProvider } from '../llm/anthropic'
@@ -24,10 +21,45 @@ const PHASE_LABELS: Record<Phase, string> = {
   DONE: '✓ 完成',
 }
 
+const PHASE_COLORS: Record<Phase, string> = {
+  OBSERVE: 'cyan',
+  THINK: 'yellow',
+  PLAN: 'blue',
+  BUILD: 'magenta',
+  EXECUTE: 'green',
+  VERIFY: 'cyan',
+  LEARN: 'white',
+  DONE: 'green',
+}
+
+interface Message {
+  id: string
+  role: 'user' | 'assistant' | 'system' | 'tool' | 'phase'
+  content: string
+  timestamp: number
+  phase?: Phase
+  toolName?: string
+  toolStatus?: 'pending' | 'running' | 'completed' | 'error'
+}
+
 interface AppProps {
   config: any
   llm: LLMProvider
   loop: CoreLoop
+}
+
+function Spinner({ color = 'cyan' }: { color?: string }) {
+  const [frame, setFrame] = useState(0)
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setFrame(f => (f + 1) % frames.length)
+    }, 80)
+    return () => clearInterval(timer)
+  }, [])
+
+  return <Text color={color}>{frames[frame]}</Text>
 }
 
 function App({ config, llm, loop }: AppProps) {
@@ -36,6 +68,10 @@ function App({ config, llm, loop }: AppProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [phase, setPhase] = useState<Phase>('OBSERVE')
   const [streamingText, setStreamingText] = useState('')
+  const [toolCalls, setToolCalls] = useState<Map<string, string>>(new Map())
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [commandHistory, setCommandHistory] = useState<string[]>([])
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const addMessage = useCallback((msg: Omit<Message, 'id' | 'timestamp'>) => {
     setMessages(prev => [...prev, {
@@ -45,27 +81,13 @@ function App({ config, llm, loop }: AppProps) {
     }])
   }, [])
 
-  useEffect(() => {
-    const unsubscribes = [
-      bus.subscribe(TUI_EVENTS.PHASE_CHANGE, (newPhase: Phase) => {
-        setPhase(newPhase)
-      }),
-      bus.subscribe(TUI_EVENTS.TOOL_CALL, (toolName: string) => {
-        addMessage({ role: 'system', content: `🔧 调用工具: ${toolName}` })
-      }),
-      bus.subscribe(TUI_EVENTS.TOOL_RESULT, (result: any) => {
-        addMessage({ role: 'system', content: `✓ 工具完成` })
-      }),
-    ]
-
-    return () => unsubscribes.forEach(unsub => unsub())
-  }, [addMessage])
-
   const handleSubmit = async (value: string) => {
     if (!value.trim() || isProcessing) return
 
     const userInput = value.trim()
     setInput('')
+    setCommandHistory(prev => [...prev, userInput])
+    setHistoryIndex(-1)
     addMessage({ role: 'user', content: userInput })
     setIsProcessing(true)
     setStreamingText('')
@@ -73,7 +95,6 @@ function App({ config, llm, loop }: AppProps) {
     try {
       const sessionId = crypto.randomUUID()
 
-      // 创建流式上下文
       const ctx = {
         sessionId,
         userInput,
@@ -83,22 +104,23 @@ function App({ config, llm, loop }: AppProps) {
         llm,
         onPhaseChange: (newPhase: Phase) => {
           setPhase(newPhase)
-          bus.emit(TUI_EVENTS.PHASE_CHANGE, newPhase)
+          addMessage({ role: 'phase', content: PHASE_LABELS[newPhase], phase: newPhase })
         },
         onStreamText: (text: string) => {
           setStreamingText(prev => prev + text)
         },
         onToolCall: (toolName: string) => {
-          bus.emit(TUI_EVENTS.TOOL_CALL, toolName)
+          const callId = crypto.randomUUID()
+          setToolCalls(prev => new Map(prev).set(callId, toolName))
+          addMessage({ role: 'tool', content: toolName, toolName, toolStatus: 'running' })
         },
         onToolResult: (result: any) => {
-          bus.emit(TUI_EVENTS.TOOL_RESULT, result)
+          addMessage({ role: 'tool', content: '工具完成', toolStatus: 'completed' })
         },
       }
 
       const result = await loop.run(ctx)
 
-      // 流式文本转为消息
       if (streamingText) {
         addMessage({ role: 'assistant', content: streamingText })
       } else {
@@ -110,29 +132,78 @@ function App({ config, llm, loop }: AppProps) {
     } finally {
       setIsProcessing(false)
       setStreamingText('')
+      setToolCalls(new Map())
     }
   }
+
+  useInput((input, key) => {
+    if (key.upArrow) {
+      if (historyIndex < commandHistory.length - 1) {
+        const newIndex = historyIndex + 1
+        setHistoryIndex(newIndex)
+        setInput(commandHistory[commandHistory.length - 1 - newIndex])
+      }
+    }
+    if (key.downArrow) {
+      if (historyIndex > 0) {
+        const newIndex = historyIndex - 1
+        setHistoryIndex(newIndex)
+        setInput(commandHistory[commandHistory.length - 1 - newIndex])
+      } else if (historyIndex === 0) {
+        setHistoryIndex(-1)
+        setInput('')
+      }
+    }
+  })
 
   return (
     <Box flexDirection="column" height="100%">
       {/* Header */}
-      <Box flexDirection="column" marginBottom={1}>
-        <Text color="cyan" bold>╔═══════════════════════════════════════╗</Text>
-        <Text color="cyan" bold>║         licode - Personal AI          ║</Text>
-        <Text color="cyan" bold>║     "宁可慢，不要白干"                 ║</Text>
-        <Text color="cyan" bold>╚═══════════════════════════════════════╝</Text>
+      <Box flexDirection="column" marginBottom={1} borderStyle="round" borderColor="cyan" paddingX={1}>
+        <Text bold color="cyan">
+          {' '}licode <Text color="gray">v0.1.0</Text>
+        </Text>
+        <Text color="gray">{' '}宁可慢，不要白干</Text>
       </Box>
 
       {/* Messages */}
-      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+      <Box flexDirection="column" flexGrow={1} overflow="hidden" paddingX={1}>
+        {messages.length === 0 && (
+          <Text color="gray">输入消息开始对话... (↑↓ 浏览历史)</Text>
+        )}
+
         {messages.map(msg => (
-          <Box key={msg.id} marginBottom={1}>
+          <Box key={msg.id} marginBottom={1} flexDirection="column">
             {msg.role === 'user' && (
-              <Text color="cyan">[你] {msg.content}</Text>
+              <Text>
+                <Text color="cyan" bold>❯ </Text>
+                <Text color="white">{msg.content}</Text>
+              </Text>
             )}
+
             {msg.role === 'assistant' && (
-              <Text color="green">[AI] {msg.content}</Text>
+              <Text>
+                <Text color="green" bold>AI </Text>
+                <Text color="white">{msg.content}</Text>
+              </Text>
             )}
+
+            {msg.role === 'phase' && (
+              <Text color={PHASE_COLORS[msg.phase || 'OBSERVE']}>
+                {'  '}{msg.content}
+              </Text>
+            )}
+
+            {msg.role === 'tool' && (
+              <Text>
+                <Text color="yellow">{'  '}</Text>
+                {msg.toolStatus === 'running' && <Spinner color="yellow" />}
+                {msg.toolStatus === 'completed' && <Text color="green">✓</Text>}
+                {msg.toolStatus === 'error' && <Text color="red">✗</Text>}
+                <Text color="gray"> {msg.toolName}</Text>
+              </Text>
+            )}
+
             {msg.role === 'system' && (
               <Text color="gray">{msg.content}</Text>
             )}
@@ -142,20 +213,34 @@ function App({ config, llm, loop }: AppProps) {
         {/* Streaming text */}
         {streamingText && (
           <Box marginBottom={1}>
-            <Text color="green">[AI] {streamingText}</Text>
+            <Text>
+              <Text color="green" bold>AI </Text>
+              <Text color="white">{streamingText}</Text>
+            </Text>
+          </Box>
+        )}
+
+        {/* Processing indicator */}
+        {isProcessing && !streamingText && (
+          <Box>
+            <Spinner color="cyan" />
+            <Text color="gray"> {' '}处理中...</Text>
           </Box>
         )}
       </Box>
 
       {/* Status bar */}
-      <Box marginBottom={1}>
+      <Box paddingX={1} marginBottom={1}>
         <Text color="gray">
-          Phase: {PHASE_LABELS[phase]} | Tools: {globalToolRegistry.list().length}
+          Phase: <Text color={PHASE_COLORS[phase]}>{PHASE_LABELS[phase]}</Text>
+          {' | '}
+          Tools: <Text color="yellow">{globalToolRegistry.list().length}</Text>
+          {isProcessing && <Text color="yellow"> | ⏳</Text>}
         </Text>
       </Box>
 
       {/* Input */}
-      <Box>
+      <Box paddingX={1} borderStyle="round" borderColor={isProcessing ? 'gray' : 'cyan'}>
         <Text color="cyan">❯ </Text>
         <TextInput
           value={input}
@@ -194,10 +279,8 @@ async function createLLMProvider(config: any): Promise<LLMProvider> {
 }
 
 export async function runTUI(): Promise<void> {
-  // 注册工具
   registerBuiltinTools()
 
-  // 加载配置
   let config
   try {
     config = await configLoader.discoverAndLoad(process.env.HOME ?? '')
@@ -210,15 +293,11 @@ export async function runTUI(): Promise<void> {
     }
   }
 
-  // 创建 LLM
   const llm = await createLLMProvider(config)
-
-  // 创建 Core Loop
   const loop = new CoreLoop(config, llm)
 
-  // 检查是否支持 raw mode
-  // 暂时强制使用简单模式，Ink TUI 需要在真实终端测试
-  console.log('[DEBUG] useInk = false, using simple mode')
+  // 强制使用简单模式（Ink TUI 需要在真实终端测试）
+  console.log('[licode] 简单模式')
   await runReadlineTUI(config, llm, loop)
 }
 
@@ -229,39 +308,143 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop): Pr
     output: process.stdout,
   })
 
-  console.log('\n[licode] 简单模式 (非交互式终端)\n')
+  // 彩色输出辅助
+  const c = {
+    reset: '\x1b[0m',
+    bold: '\x1b[1m',
+    dim: '\x1b[2m',
+    red: '\x1b[31m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    blue: '\x1b[34m',
+    magenta: '\x1b[35m',
+    cyan: '\x1b[36m',
+    white: '\x1b[37m',
+    gray: '\x1b[90m',
+  }
+
+  const phaseColors: Record<string, string> = {
+    OBSERVE: c.cyan,
+    THINK: c.yellow,
+    PLAN: c.blue,
+    BUILD: c.magenta,
+    EXECUTE: c.green,
+    VERIFY: c.cyan,
+    LEARN: c.white,
+  }
+
+  const phaseLabels: Record<string, string> = {
+    OBSERVE: '👀 观察',
+    THINK: '🤔 思考',
+    PLAN: '📋 规划',
+    BUILD: '🔨 构建',
+    EXECUTE: '⚡ 执行',
+    VERIFY: '✅ 验证',
+    LEARN: '📚 学习',
+  }
+
+  console.log()
+  console.log(`${c.cyan}${c.bold}╔═══════════════════════════════════════╗${c.reset}`)
+  console.log(`${c.cyan}${c.bold}║         licode - Personal AI          ║${c.reset}`)
+  console.log(`${c.cyan}${c.bold}║     "宁可慢，不要白干"                 ║${c.reset}`)
+  console.log(`${c.cyan}${c.bold}╚═══════════════════════════════════════╝${c.reset}`)
+  console.log(`${c.gray}  Tools: ${globalToolRegistry.list().length} | ↑↓ 浏览历史 | exit 退出${c.reset}`)
+  console.log()
+
+  const commandHistory: string[] = []
 
   const ask = (): Promise<string> => {
     return new Promise((resolve) => {
-      rl.question('> ', (answer) => {
+      rl.question(`${c.cyan}${c.bold}❯ ${c.reset}`, (answer) => {
         resolve(answer)
       })
     })
   }
 
-  // 一次性读取所有输入
-  const input = await ask()
+  // 一次性读取所有输入（管道模式）
+  if (!process.stdin.isTTY) {
+    const lines: string[] = []
+    rl.on('line', (line) => lines.push(line))
+    rl.on('close', async () => {
+      const input = lines[0] || ''
+      if (!input.trim()) {
+        console.log(`${c.gray}没有输入${c.reset}`)
+        return
+      }
 
-  console.log('\n处理中...\n')
+      console.log(`\n${c.gray}处理中...${c.reset}\n`)
 
-  try {
-    const result = await loop.run({
-      sessionId: crypto.randomUUID(),
-      userInput: input,
-      effortLevel: 1,
-      phase: 'OBSERVE',
-      cwd: process.cwd(),
-      llm,
-      onPhaseChange: (phase) => {
-        console.log(`[Phase] ${phase}`)
-      },
-      onStreamText: (text) => {
-        process.stdout.write(text)
-      },
+      try {
+        const result = await loop.run({
+          sessionId: crypto.randomUUID(),
+          userInput: input,
+          effortLevel: 1,
+          phase: 'OBSERVE',
+          cwd: process.cwd(),
+          llm,
+          onPhaseChange: (phase) => {
+            const color = phaseColors[phase] || c.reset
+            const label = phaseLabels[phase] || phase
+            console.log(`  ${color}${label}${c.reset}`)
+          },
+          onStreamText: (text) => {
+            process.stdout.write(`${c.green}${text}${c.reset}`)
+          },
+          onToolCall: (toolName) => {
+            console.log(`  ${c.yellow}🔧 ${toolName}${c.reset}`)
+          },
+        })
+
+        console.log(`\n${c.gray}${'─'.repeat(40)}${c.reset}\n`)
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e)
+        console.error(`\n${c.red}❌ 错误: ${error}${c.reset}\n`)
+      }
     })
-    console.log('\n[完成]', result)
-  } catch (e) {
-    console.error('\n[错误]', e)
+    return
+  }
+
+  // 交互模式
+  while (true) {
+    const input = await ask()
+
+    if (input.toLowerCase() === 'exit') {
+      console.log(`\n${c.gray}再见！${c.reset}`)
+      break
+    }
+
+    if (!input.trim()) continue
+
+    commandHistory.push(input)
+
+    console.log(`\n${c.gray}处理中...${c.reset}\n`)
+
+    try {
+      const result = await loop.run({
+        sessionId: crypto.randomUUID(),
+        userInput: input,
+        effortLevel: 1,
+        phase: 'OBSERVE',
+        cwd: process.cwd(),
+        llm,
+        onPhaseChange: (phase) => {
+          const color = phaseColors[phase] || c.reset
+          const label = phaseLabels[phase] || phase
+          console.log(`  ${color}${label}${c.reset}`)
+        },
+        onStreamText: (text) => {
+          process.stdout.write(`${c.green}${text}${c.reset}`)
+        },
+        onToolCall: (toolName) => {
+          console.log(`  ${c.yellow}🔧 ${toolName}${c.reset}`)
+        },
+      })
+
+      console.log(`\n${c.gray}${'─'.repeat(40)}${c.reset}\n`)
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e)
+      console.error(`\n${c.red}❌ 错误: ${error}${c.reset}\n`)
+    }
   }
 
   rl.close()
