@@ -9,6 +9,8 @@ import { verify } from './phases/verify'
 import { learn } from './phases/learn'
 import { Memory } from '../memory/memory'
 import { auditLogger } from '../audit/logger'
+import { GitIntegration } from '../integration/git'
+import { pluginManager } from '../integration/plugin'
 
 export interface LoopContext {
   sessionId: string
@@ -44,9 +46,16 @@ const FAST_PATH: Phase[] = ['OBSERVE', 'EXECUTE', 'VERIFY']
 
 export class CoreLoop {
   private memory: Memory
+  private git?: GitIntegration
 
   constructor(private config: Config, private llm?: LLMProvider) {
     this.memory = new Memory(config.cwd)
+
+    // 初始化 Git 集成
+    if (config.cwd) {
+      this.git = new GitIntegration(config.cwd)
+      this.git.connect().catch(() => {})
+    }
   }
 
   async run(ctx: LoopContext): Promise<string> {
@@ -55,6 +64,9 @@ export class CoreLoop {
     // 如果外部没有传入 llm，使用构造时注入的
     const effectiveLlm = ctx.llm ?? this.llm
     ctx = { ...ctx, llm: effectiveLlm, memory: this.memory }
+
+    // 触发 session:start hook
+    await pluginManager.emit('session:start', ctx.sessionId)
 
     // 记录会话开始
     auditLogger.logSessionStart(ctx.sessionId)
@@ -86,6 +98,9 @@ export class CoreLoop {
     // 记录会话结束
     const duration = Date.now() - startTime
     auditLogger.logSessionEnd(ctx.sessionId, 1)
+
+    // 触发 session:end hook
+    await pluginManager.emit('session:end', ctx.sessionId)
 
     // 返回 AI 回复，如果没有则返回用户输入
     return ctx.aiResponse ?? ctx.userInput
