@@ -8,6 +8,7 @@ import { execute } from './phases/execute'
 import { verify } from './phases/verify'
 import { learn } from './phases/learn'
 import { Memory } from '../memory/memory'
+import { auditLogger } from '../audit/logger'
 
 export interface LoopContext {
   sessionId: string
@@ -49,9 +50,14 @@ export class CoreLoop {
   }
 
   async run(ctx: LoopContext): Promise<string> {
+    const startTime = Date.now()
+
     // 如果外部没有传入 llm，使用构造时注入的
     const effectiveLlm = ctx.llm ?? this.llm
     ctx = { ...ctx, llm: effectiveLlm, memory: this.memory }
+
+    // 记录会话开始
+    auditLogger.logSessionStart(ctx.sessionId)
 
     // 先执行 OBSERVE 判断 Effort Level
     ctx.onPhaseChange?.('OBSERVE')
@@ -76,6 +82,10 @@ export class CoreLoop {
         content: `User: ${ctx.userInput}\nAI: ${ctx.aiResponse}`,
       })
     }
+
+    // 记录会话结束
+    const duration = Date.now() - startTime
+    auditLogger.logSessionEnd(ctx.sessionId, 1)
 
     // 返回 AI 回复，如果没有则返回用户输入
     return ctx.aiResponse ?? ctx.userInput
