@@ -65,12 +65,10 @@ export async function runTUI(): Promise<void> {
 }
 
 function renderLogo(): string {
-  return `${c.cyan}${c.bold}
-    _      _     ___  ___  ____
-   | |    | |   / _ \\/ _ \\|  _ \\
-   | |    | |  | |_| | |_| | | | |
-   | |___ | |__|  __/|  __/| |_| |
-   |_____|_____|_|   |_|   |____/${c.reset}
+  return `${c.cyan}${c.bold} _    _  ___         _     
+| |  (_)/ __|___  __| |___ 
+| |__| | (__/ _ \\/ _\` / -_)
+|____|_|\\___\\___/\\__,_|\\___|${c.reset}
 ${c.gray}           谋定而后动${c.reset}`
 }
 
