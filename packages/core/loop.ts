@@ -7,6 +7,7 @@ import { build } from './phases/build'
 import { execute } from './phases/execute'
 import { verify } from './phases/verify'
 import { learn } from './phases/learn'
+import { Memory } from '../memory/memory'
 
 export interface LoopContext {
   sessionId: string
@@ -15,6 +16,7 @@ export interface LoopContext {
   phase: Phase
   cwd: string
   llm?: LLMProvider
+  memory?: Memory
   // 回调函数
   onPhaseChange?: (phase: Phase) => void
   onStreamText?: (text: string) => void
@@ -40,12 +42,16 @@ const PHASE_ORDER: Phase[] = ['OBSERVE', 'THINK', 'PLAN', 'BUILD', 'EXECUTE', 'V
 const FAST_PATH: Phase[] = ['OBSERVE', 'EXECUTE', 'VERIFY']
 
 export class CoreLoop {
-  constructor(private config: Config, private llm?: LLMProvider) {}
+  private memory: Memory
+
+  constructor(private config: Config, private llm?: LLMProvider) {
+    this.memory = new Memory(config.cwd)
+  }
 
   async run(ctx: LoopContext): Promise<string> {
     // 如果外部没有传入 llm，使用构造时注入的
     const effectiveLlm = ctx.llm ?? this.llm
-    ctx = { ...ctx, llm: effectiveLlm }
+    ctx = { ...ctx, llm: effectiveLlm, memory: this.memory }
 
     // 先执行 OBSERVE 判断 Effort Level
     ctx.onPhaseChange?.('OBSERVE')
@@ -60,6 +66,15 @@ export class CoreLoop {
       const phase = phases[i]
       const result = await this.executePhase(phase, ctx)
       ctx = { ...ctx, ...result }
+    }
+
+    // 存储记忆
+    if (ctx.aiResponse) {
+      await this.memory.store({
+        scope: 'session',
+        type: 'memory',
+        content: `User: ${ctx.userInput}\nAI: ${ctx.aiResponse}`,
+      })
     }
 
     // 返回 AI 回复，如果没有则返回用户输入
