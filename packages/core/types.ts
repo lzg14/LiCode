@@ -18,6 +18,7 @@ export interface Config {
   security: SecurityConfig
   memory: MemoryConfig
   subagent: SubagentConfig
+  cwd?: string
 }
 
 export interface LLMConfig {
