@@ -7,6 +7,7 @@ import { AnthropicProvider } from '../llm/anthropic'
 import { OpenAIProvider } from '../llm/openai'
 import { registerBuiltinTools } from '../tools/builtin'
 import { globalToolRegistry } from '../tools/registry'
+import { renderMarkdown, c } from './markdown'
 import type { LLMProvider } from '../llm/types'
 import type { Phase } from '../core/types'
 
@@ -308,21 +309,6 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop): Pr
     output: process.stdout,
   })
 
-  // 彩色输出辅助
-  const c = {
-    reset: '\x1b[0m',
-    bold: '\x1b[1m',
-    dim: '\x1b[2m',
-    red: '\x1b[31m',
-    green: '\x1b[32m',
-    yellow: '\x1b[33m',
-    blue: '\x1b[34m',
-    magenta: '\x1b[35m',
-    cyan: '\x1b[36m',
-    white: '\x1b[37m',
-    gray: '\x1b[90m',
-  }
-
   const phaseColors: Record<string, string> = {
     OBSERVE: c.cyan,
     THINK: c.yellow,
@@ -388,7 +374,7 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop): Pr
             console.log(`  ${color}${label}${c.reset}`)
           },
           onStreamText: (text) => {
-            process.stdout.write(`${c.green}${text}${c.reset}`)
+            process.stdout.write(renderMarkdown(text))
           },
           onToolCall: (toolName) => {
             console.log(`  ${c.yellow}🔧 ${toolName}${c.reset}`)
@@ -433,7 +419,7 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop): Pr
           console.log(`  ${color}${label}${c.reset}`)
         },
         onStreamText: (text) => {
-          process.stdout.write(`${c.green}${text}${c.reset}`)
+          process.stdout.write(renderMarkdown(text))
         },
         onToolCall: (toolName) => {
           console.log(`  ${c.yellow}🔧 ${toolName}${c.reset}`)
