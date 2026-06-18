@@ -66,10 +66,12 @@ export async function runTUI(): Promise<void> {
 
 function renderLogo(): string {
   return `
-${c.cyan}${c.bold}  ╦╔╗╔╔╦╗╔═╗╦═╗╔╗╔╔═╗╔═╗╦ ╦${c.reset}
-${c.cyan}${c.bold}  ║║║║ ║ ║╣ ╠╦╝║║║╚═╗║  ╠═╣${c.reset}
-${c.cyan}${c.bold}  ╩╝╚╝ ╩ ╚═╝╩╚═╝╚╝╚═╝╚═╝╩ ╩${c.reset}
-${c.gray}     宁可慢，不要白干${c.reset}`
+${c.cyan}${c.bold}  ┌─────────────────────────────────┐
+  │                                 │
+  │    l i c o d e                  │
+  │                                 │
+  └─────────────────────────────────┘${c.reset}
+${c.gray}     谋定而后动${c.reset}`
 }
 
 function renderStatusBar(toolCount: number, model: string): string {
