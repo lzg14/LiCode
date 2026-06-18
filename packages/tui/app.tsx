@@ -297,8 +297,7 @@ export async function runTUI(): Promise<void> {
   const llm = await createLLMProvider(config)
   const loop = new CoreLoop(config, llm)
 
-  // 强制使用简单模式（Ink TUI 需要在真实终端测试）
-  console.log('[licode] 简单模式')
+  // 直接使用简单模式（Ink TUI 渲染有问题，需要修复）
   await runReadlineTUI(config, llm, loop)
 }
 

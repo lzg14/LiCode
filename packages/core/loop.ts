@@ -36,6 +36,9 @@ export interface LoopContext {
 
 const PHASE_ORDER: Phase[] = ['OBSERVE', 'THINK', 'PLAN', 'BUILD', 'EXECUTE', 'VERIFY', 'LEARN']
 
+// E1 快速路径：跳过 THINK/PLAN/BUILD
+const FAST_PATH: Phase[] = ['OBSERVE', 'EXECUTE', 'VERIFY']
+
 export class CoreLoop {
   constructor(private config: Config, private llm?: LLMProvider) {}
 
@@ -44,14 +47,19 @@ export class CoreLoop {
     const effectiveLlm = ctx.llm ?? this.llm
     ctx = { ...ctx, llm: effectiveLlm }
 
-    let currentPhase = ctx.phase
+    // 先执行 OBSERVE 判断 Effort Level
+    ctx.onPhaseChange?.('OBSERVE')
+    const observeResult = await observe(ctx)
+    ctx = { ...ctx, ...observeResult }
 
-    while (currentPhase !== 'DONE') {
-      const result = await this.executePhase(currentPhase, ctx)
+    // 根据 Effort Level 选择路径
+    const phases = ctx.effortLevel === 1 ? FAST_PATH : PHASE_ORDER
+    const startIndex = 1 // 从 THINK 开始
+
+    for (let i = startIndex; i < phases.length; i++) {
+      const phase = phases[i]
+      const result = await this.executePhase(phase, ctx)
       ctx = { ...ctx, ...result }
-
-      const nextIndex = PHASE_ORDER.indexOf(currentPhase) + 1
-      currentPhase = nextIndex < PHASE_ORDER.length ? PHASE_ORDER[nextIndex] : 'DONE'
     }
 
     // 返回 AI 回复，如果没有则返回用户输入
