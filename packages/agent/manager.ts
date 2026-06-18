@@ -1,0 +1,190 @@
+import type { Agent, SpawnInput, AgentOutcome } from './types'
+import { AGENT_TYPES, SUBAGENT_BLOCKED_TOOLS } from './types'
+
+/**
+ * Agent 管理器 - 多 Agent 协调、并发控制、隔离策略
+ */
+
+export class AgentManager {
+  private agents = new Map<string, Agent>()
+  private runningCount = 0
+
+  constructor(
+    private maxConcurrent = 3,
+    private maxDepth = 1,
+    private timeoutMs = 900000
+  ) {}
+
+  /**
+   * 派生子 Agent
+   */
+  async spawn(input: SpawnInput,父agentId?: string): Promise<Agent | null> {
+    // 检查并发限制
+    if (this.runningCount >= this.maxConcurrent) {
+      console.log(`[Agent] 达到并发限制 (${this.maxConcurrent})，等待中...`)
+      return null
+    }
+
+    // 检查深度限制
+    const父agent = 父agentId ? this.agents.get(父agentId) : null
+    const depth = (父agent?.depth ?? -1) + 1
+    if (depth > this.maxDepth) {
+      console.log(`[Agent] 达到深度限制 (${this.maxDepth})，无法派生`)
+      return null
+    }
+
+    // 生成 Agent ID
+    const agentId = `agent_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+    // 获取 Agent 类型配置
+    const typeConfig = AGENT_TYPES[input.mode] || { type: input.mode, description: '' }
+
+    // 确定工具列表
+    let tools: string[]
+    if (input.tools === 'inherit' && 父agent) {
+      tools = 父agent.tools.filter(t => !SUBAGENT_BLOCKED_TOOLS.includes(t))
+    } else if (Array.isArray(input.tools)) {
+      tools = input.tools
+    } else {
+      tools = ['read', 'glob', 'grep', 'bash', 'write', 'edit']
+    }
+
+    // 子 Agent 阻止特定工具
+    const blockedTools = input.mode === 'subagent' ? SUBAGENT_BLOCKED_TOOLS : []
+
+    const agent: Agent = {
+      id: agentId,
+      type: typeConfig.type,
+      parentId: 父agentId,
+      depth,
+      sessionId: `session_${agentId}`,
+      tools,
+      blockedTools,
+      status: 'idle',
+      createdAt: Date.now(),
+    }
+
+    this.agents.set(agentId, agent)
+    this.runningCount++
+
+    return agent
+  }
+
+  /**
+   * 开始执行 Agent
+   */
+  start(agentId: string): boolean {
+    const agent = this.agents.get(agentId)
+    if (!agent) return false
+
+    agent.status = 'running'
+    return true
+  }
+
+  /**
+   * 完成 Agent
+   */
+  complete(agentId: string, outcome: AgentOutcome): boolean {
+    const agent = this.agents.get(agentId)
+    if (!agent) return false
+
+    agent.status = outcome.status === 'success' ? 'completed' : 'failed'
+    agent.completedAt = Date.now()
+    this.runningCount--
+
+    return true
+  }
+
+  /**
+   * 阻塞 Agent
+   */
+  block(agentId: string): boolean {
+    const agent = this.agents.get(agentId)
+    if (!agent) return false
+
+    agent.status = 'blocked'
+    return true
+  }
+
+  /**
+   * 解除阻塞
+   */
+  unblock(agentId: string): boolean {
+    const agent = this.agents.get(agentId)
+    if (!agent) return false
+
+    agent.status = 'running'
+    return true
+  }
+
+  /**
+   * 获取 Agent
+   */
+  get(agentId: string): Agent | undefined {
+    return this.agents.get(agentId)
+  }
+
+  /**
+   * 获取所有 Agent
+   */
+  list(): Agent[] {
+    return Array.from(this.agents.values())
+  }
+
+  /**
+   * 获取运行中的 Agent
+   */
+  getRunning(): Agent[] {
+    return this.list().filter(a => a.status === 'running')
+  }
+
+  /**
+   * 获取子 Agent
+   */
+  getChildren(parentId: string): Agent[] {
+    return this.list().filter(a => a.parentId === parentId)
+  }
+
+  /**
+   * 检查工具是否可用
+   */
+  canUseTool(agentId: string, toolName: string): boolean {
+    const agent = this.agents.get(agentId)
+    if (!agent) return false
+
+    // 检查是否在阻止列表中
+    if (agent.blockedTools.includes(toolName)) {
+      return false
+    }
+
+    // 检查是否在允许列表中（空列表表示允许所有）
+    if (agent.tools.length > 0 && !agent.tools.includes(toolName)) {
+      return false
+    }
+
+    return true
+  }
+
+  /**
+   * 清理已完成的 Agent
+   */
+  cleanup(maxAgeMs: number = 3600000): number {
+    const now = Date.now()
+    let count = 0
+
+    for (const [id, agent] of this.agents.entries()) {
+      if (
+        (agent.status === 'completed' || agent.status === 'failed') &&
+        agent.completedAt &&
+        now - agent.completedAt > maxAgeMs
+      ) {
+        this.agents.delete(id)
+        count++
+      }
+    }
+
+    return count
+  }
+}
+
+export const agentManager = new AgentManager()
