@@ -180,6 +180,16 @@ export class AgentManager {
       ) {
         this.agents.delete(id)
         count++
+      } else if (
+        agent.status === 'running' &&
+        now - agent.createdAt > maxAgeMs
+      ) {
+        // 清理超时未完成的 running agent，防止 runningCount 泄漏
+        agent.status = 'failed'
+        agent.completedAt = now
+        this.agents.delete(id)
+        this.runningCount--
+        count++
       }
     }
 

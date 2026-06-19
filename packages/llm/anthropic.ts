@@ -34,18 +34,31 @@ export class AnthropicProvider implements LLMProvider {
     })
 
     if (!response.ok) {
-      const error = await response.text()
+      let error = ''
+      try {
+        error = await response.text()
+      } catch {
+        error = response.statusText
+      }
       throw new Error(`Anthropic API error: ${response.status} ${error}`)
     }
 
-    const data = await response.json() as { content: { type: string; text?: string; thinking?: string }[]; usage: { input_tokens: number; output_tokens: number } }
-    const textBlock = data.content.find(b => b.type === 'text')
+    let data: { content?: { type: string; text?: string; thinking?: string }[]; usage?: { input_tokens: number; output_tokens: number } }
+    try {
+      data = await response.json() as typeof data
+    } catch {
+      throw new Error('Anthropic API error: 无法解析响应 JSON')
+    }
+
+    const contentBlocks = data.content ?? []
+    const textBlock = contentBlocks.find(b => b.type === 'text')
+
     return {
       content: textBlock?.text ?? '',
-      usage: {
+      usage: data.usage ? {
         inputTokens: data.usage.input_tokens,
         outputTokens: data.usage.output_tokens,
-      },
+      } : undefined,
     }
   }
 }

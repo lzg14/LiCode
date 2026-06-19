@@ -17,10 +17,14 @@ export async function think(ctx: LoopContext): Promise<Partial<LoopContext>> {
         ],
         temperature: 0.3,
       })
-      risks = JSON.parse(response.content)
+      const parsed = JSON.parse(response.content)
+      if (!Array.isArray(parsed)) {
+        throw new Error('返回结果不是数组')
+      }
+      risks = parsed.filter((item): item is string => typeof item === 'string')
       ctx.onStreamText?.(`发现 ${risks.length} 个风险点\n`)
     } catch {
-      // LLM 调用失败时使用本地分析
+      // LLM 调用失败或 JSON 解析失败时使用本地分析
       risks = analyzeRisks(ctx.userInput)
     }
   } else {
