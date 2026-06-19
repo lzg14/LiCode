@@ -6,24 +6,16 @@ import { BaseIntegration, type HealthStatus } from './types'
  */
 
 export interface MCPConfig {
-  /** 服务器命令 */
   command: string
-  /** 命令参数 */
   args?: string[]
-  /** 环境变量 */
   env?: Record<string, string>
-  /** 连接超时（毫秒） */
   timeout?: number
-  /** 安全配置 */
   security?: MCPSecurityConfig
 }
 
 export interface MCPSecurityConfig {
-  /** 自动批准本地工具调用 */
   auto_approve_local?: boolean
-  /** 要求工具清单文件 */
   require_manifest?: boolean
-  /** 阻止外部网络调用 */
   block_external?: boolean
 }
 
@@ -39,14 +31,50 @@ export interface MCPToolCallResult {
   isError?: boolean
 }
 
+export interface MCPResource {
+  uri: string
+  name: string
+  description?: string
+  mimeType?: string
+}
+
+export interface MCPPrompt {
+  name: string
+  description?: string
+  arguments?: Array<{
+    name: string
+    description?: string
+    required?: boolean
+  }>
+}
+
+export interface MCPServerCapabilities {
+  tools?: Record<string, unknown>
+  resources?: Record<string, unknown>
+  prompts?: Record<string, unknown>
+  logging?: Record<string, unknown>
+}
+
+export interface MCPInitializeResult {
+  protocolVersion: string
+  capabilities: MCPServerCapabilities
+  serverInfo?: { name: string; version: string }
+}
+
 export class MCPIntegration extends BaseIntegration {
   name = 'mcp'
   private config: MCPConfig
   private process: ChildProcess | null = null
   private tools = new Map<string, MCPTool>()
+  private resources = new Map<string, MCPResource>()
+  private prompts = new Map<string, MCPPrompt>()
+  private capabilities: MCPServerCapabilities = {}
   private requestId = 0
   private pendingRequests = new Map<number, { resolve: (value: unknown) => void; reject: (reason: unknown) => void }>()
+  private notificationHandlers = new Map<string, (params: unknown) => void>()
   private buffer = ''
+  private serverInfo?: { name: string; version: string }
+  private initialized = false
 
   constructor(config: MCPConfig) {
     super()
@@ -84,6 +112,7 @@ export class MCPIntegration extends BaseIntegration {
         this.process.on('close', (_code) => {
           this.enabled = false
           this.process = null
+          this.initialized = false
         })
 
         this.process.stdout?.on('data', (data: Buffer) => {
@@ -96,17 +125,26 @@ export class MCPIntegration extends BaseIntegration {
 
         this.sendRequest('initialize', {
           protocolVersion: '2024-11-05',
-          capabilities: { tools: {} },
+          capabilities: {
+            tools: {},
+            resources: {},
+            prompts: {},
+          },
           clientInfo: { name: 'licode', version: '0.1.0' },
         }).then((response: unknown) => {
-          const result = response as { capabilities?: { tools?: unknown } }
-          if (result?.capabilities?.tools) {
+          const result = response as MCPInitializeResult
+          if (result?.capabilities) {
+            this.capabilities = result.capabilities
+            this.serverInfo = result.serverInfo
+            this.initialized = true
             this.enabled = true
             clearTimeout(timer)
+
+            this.sendNotification('notifications/initialized', {}).catch(() => {})
             resolve()
           } else {
             clearTimeout(timer)
-            reject(new Error('MCP server does not support tools'))
+            reject(new Error('MCP server returned invalid capabilities'))
           }
         }).catch((error) => {
           clearTimeout(timer)
@@ -125,8 +163,12 @@ export class MCPIntegration extends BaseIntegration {
       this.process = null
     }
     this.enabled = false
+    this.initialized = false
     this.tools.clear()
+    this.resources.clear()
+    this.prompts.clear()
     this.pendingRequests.clear()
+    this.notificationHandlers.clear()
   }
 
   async health(): Promise<HealthStatus> {
@@ -142,11 +184,21 @@ export class MCPIntegration extends BaseIntegration {
     }
   }
 
-  /**
-   * 发现服务器提供的工具
-   */
+  getServerInfo(): { name: string; version: string } | undefined {
+    return this.serverInfo
+  }
+
+  getCapabilities(): MCPServerCapabilities {
+    return this.capabilities
+  }
+
+  isInitialized(): boolean {
+    return this.initialized
+  }
+
   async discoverTools(): Promise<MCPTool[]> {
     return this.withConnection(async () => {
+      if (!this.capabilities.tools) return []
       const response = await this.sendRequest('tools/list', {}) as { tools?: MCPTool[] }
       const tools = response?.tools || []
       this.tools.clear()
@@ -157,9 +209,6 @@ export class MCPIntegration extends BaseIntegration {
     })
   }
 
-  /**
-   * 调用工具
-   */
   async callTool(name: string, args: Record<string, unknown> = {}): Promise<MCPToolCallResult> {
     return this.withConnection(async () => {
       this.validateSecurity(name, args)
@@ -168,23 +217,90 @@ export class MCPIntegration extends BaseIntegration {
     })
   }
 
-  /**
-   * 获取已发现的工具列表
-   */
+  async discoverResources(): Promise<MCPResource[]> {
+    return this.withConnection(async () => {
+      if (!this.capabilities.resources) return []
+      const response = await this.sendRequest('resources/list', {}) as { resources?: MCPResource[] }
+      const resources = response?.resources || []
+      this.resources.clear()
+      for (const resource of resources) {
+        this.resources.set(resource.uri, resource)
+      }
+      return resources
+    })
+  }
+
+  async readResource(uri: string): Promise<{ contents: Array<{ uri: string; mimeType?: string; text?: string; blob?: string }> }> {
+    return this.withConnection(async () => {
+      const response = await this.sendRequest('resources/read', { uri })
+      return response as { contents: Array<{ uri: string; mimeType?: string; text?: string; blob?: string }> }
+    })
+  }
+
+  async subscribeResource(uri: string): Promise<void> {
+    return this.withConnection(async () => {
+      await this.sendRequest('resources/subscribe', { uri })
+    })
+  }
+
+  async unsubscribeResource(uri: string): Promise<void> {
+    return this.withConnection(async () => {
+      await this.sendRequest('resources/unsubscribe', { uri })
+    })
+  }
+
+  async discoverPrompts(): Promise<MCPPrompt[]> {
+    return this.withConnection(async () => {
+      if (!this.capabilities.prompts) return []
+      const response = await this.sendRequest('prompts/list', {}) as { prompts?: MCPPrompt[] }
+      const prompts = response?.prompts || []
+      this.prompts.clear()
+      for (const prompt of prompts) {
+        this.prompts.set(prompt.name, prompt)
+      }
+      return prompts
+    })
+  }
+
+  async getPrompt(name: string, args?: Record<string, string>): Promise<{ messages: Array<{ role: string; content: unknown }> }> {
+    return this.withConnection(async () => {
+      const response = await this.sendRequest('prompts/get', { name, arguments: args || {} })
+      return response as { messages: Array<{ role: string; content: unknown }> }
+    })
+  }
+
+  onNotification(method: string, handler: (params: unknown) => void): void {
+    this.notificationHandlers.set(method, handler)
+  }
+
+  removeNotificationHandler(method: string): void {
+    this.notificationHandlers.delete(method)
+  }
+
   getTools(): MCPTool[] {
     return Array.from(this.tools.values())
   }
 
-  /**
-   * 获取指定工具
-   */
   getTool(name: string): MCPTool | undefined {
     return this.tools.get(name)
   }
 
-  /**
-   * 安全校验
-   */
+  getResources(): MCPResource[] {
+    return Array.from(this.resources.values())
+  }
+
+  getResource(uri: string): MCPResource | undefined {
+    return this.resources.get(uri)
+  }
+
+  getPrompts(): MCPPrompt[] {
+    return Array.from(this.prompts.values())
+  }
+
+  getPromptByName(name: string): MCPPrompt | undefined {
+    return this.prompts.get(name)
+  }
+
   private validateSecurity(toolName: string, args: Record<string, unknown>): void {
     const security = this.config.security || {}
     const tool = this.tools.get(toolName)
@@ -204,9 +320,27 @@ export class MCPIntegration extends BaseIntegration {
     }
   }
 
-  /**
-   * 发送 JSON-RPC 请求
-   */
+  private sendNotification(method: string, params: unknown): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.process?.stdin) {
+        reject(new Error('MCP not connected'))
+        return
+      }
+
+      const notification = {
+        jsonrpc: '2.0',
+        method,
+        params,
+      }
+
+      const message = JSON.stringify(notification) + '\n'
+      this.process.stdin.write(message, (err) => {
+        if (err) reject(err)
+        else resolve()
+      })
+    })
+  }
+
   private sendRequest(method: string, params: unknown): Promise<unknown> {
     return new Promise((resolve, reject) => {
       if (!this.process?.stdin) {
@@ -229,9 +363,6 @@ export class MCPIntegration extends BaseIntegration {
     })
   }
 
-  /**
-   * 处理接收到的数据
-   */
   private handleData(data: string): void {
     this.buffer += data
     const lines = this.buffer.split('\n')
@@ -241,6 +372,7 @@ export class MCPIntegration extends BaseIntegration {
       if (line.trim()) {
         try {
           const message = JSON.parse(line)
+
           if (message.id !== undefined && this.pendingRequests.has(message.id)) {
             const pending = this.pendingRequests.get(message.id)!
             this.pendingRequests.delete(message.id)
@@ -248,6 +380,11 @@ export class MCPIntegration extends BaseIntegration {
               pending.reject(new Error(message.error.message || 'MCP request failed'))
             } else {
               pending.resolve(message.result)
+            }
+          } else if (message.method && !message.id) {
+            const handler = this.notificationHandlers.get(message.method)
+            if (handler) {
+              handler(message.params)
             }
           }
         } catch (e) {
@@ -258,9 +395,6 @@ export class MCPIntegration extends BaseIntegration {
   }
 }
 
-/**
- * 创建 MCP 集成实例
- */
 export function createMCP(config: MCPConfig): MCPIntegration {
   return new MCPIntegration(config)
 }
