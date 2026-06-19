@@ -1,3 +1,5 @@
 export * from './schema'
 export * from './loader'
 export * from './external'
+export * from './validator'
+export * from './defaults'
