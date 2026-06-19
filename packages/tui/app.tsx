@@ -1,25 +1,222 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { render, Box, Text, useInput, useApp, Static } from 'ink'
+import TextInput from 'ink-text-input'
+import Spinner from 'ink-spinner'
 import { CoreLoop } from '../core/loop'
 import { configLoader } from '../config/loader'
 import { AnthropicProvider } from '../llm/anthropic'
 import { OpenAIProvider } from '../llm/openai'
 import { registerBuiltinTools } from '../tools/builtin'
 import { globalToolRegistry } from '../tools/registry'
-import { skillLoader } from '../skills/loader'
 import { renderMarkdown, c } from './markdown'
 import type { LLMProvider } from '../llm/types'
 import type { Phase } from '../core/types'
-import { join } from 'path'
 import { homedir } from 'os'
+import { join } from 'path'
 
-const PHASE_LABELS: Record<Phase, string> = {
-  OBSERVE: '观察',
-  THINK: '思考',
-  PLAN: '规划',
-  BUILD: '构建',
-  EXECUTE: '执行',
-  VERIFY: '验证',
-  LEARN: '学习',
-  DONE: '完成',
+interface Message {
+  id: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string
+  timestamp: number
+  toolName?: string
+  toolStatus?: 'pending' | 'running' | 'completed' | 'error'
+  duration?: number
+}
+
+interface AppProps {
+  config: any
+  llm: LLMProvider
+  loop: CoreLoop
+}
+
+// Agent 颜色
+const AGENT_COLORS = {
+  build: '#fb8147',
+  plan: '#c7e2a8',
+  explore: '#f5c9b0',
+  default: '#aac4e1',
+}
+
+function App({ config, llm, loop }: AppProps) {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
+  const [agent] = useState('build')
+  const [model] = useState(config.llm.model)
+  const [elapsed, setElapsed] = useState(0)
+  const startTimeRef = useRef<number>(0)
+
+  const addMessage = useCallback((msg: Omit<Message, 'id' | 'timestamp'>) => {
+    setMessages(prev => [...prev, {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      ...msg,
+    }])
+  }, [])
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout
+    if (isProcessing && startTimeRef.current) {
+      timer = setInterval(() => {
+        setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
+      }, 1000)
+    }
+    return () => clearInterval(timer)
+  }, [isProcessing])
+
+  const handleSubmit = async (value: string) => {
+    if (!value.trim() || isProcessing) return
+
+    const userInput = value.trim()
+    setInput('')
+    addMessage({ role: 'user', content: userInput })
+    setIsProcessing(true)
+    setStreamingText('')
+    startTimeRef.current = Date.now()
+
+    try {
+      const sessionId = crypto.randomUUID()
+
+      const ctx = {
+        sessionId,
+        userInput,
+        effortLevel: 1,
+        phase: 'OBSERVE' as Phase,
+        cwd: process.cwd(),
+        llm,
+        onPhaseChange: () => {},
+        onStreamText: (text: string) => {
+          setStreamingText(prev => prev + text)
+        },
+        onToolCall: (toolName: string) => {
+          addMessage({ role: 'tool', content: toolName, toolName, toolStatus: 'running' })
+        },
+        onToolResult: () => {
+          setMessages(prev => {
+            const last = prev[prev.length - 1]
+            if (last?.role === 'tool') {
+              return [...prev.slice(0, -1), { ...last, toolStatus: 'completed' }]
+            }
+            return prev
+          })
+        },
+      }
+
+      const result = await loop.run(ctx)
+
+      if (streamingText) {
+        addMessage({ role: 'assistant', content: streamingText, duration: elapsed })
+      } else {
+        addMessage({ role: 'assistant', content: result, duration: elapsed })
+      }
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e)
+      addMessage({ role: 'system', content: `Error: ${error}` })
+    } finally {
+      setIsProcessing(false)
+      setStreamingText('')
+      startTimeRef.current = 0
+      setElapsed(0)
+    }
+  }
+
+  return (
+    <Box flexDirection="column" height="100%">
+      {/* 消息列表 */}
+      <Box flexDirection="column" flexGrow={1} overflow="hidden" paddingX={1}>
+        {messages.length === 0 && (
+          <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
+            <Text color="cyan" bold>
+              {'  _      _     ___  ___  ____'}
+            </Text>
+            <Text color="cyan" bold>
+              {' | |    | |   / _ \\/ _ \\|  _ \\'}
+            </Text>
+            <Text color="cyan" bold>
+              {' | |    | |  | |_| | |_| | | | |'}
+            </Text>
+            <Text color="cyan" bold>
+              {' | |___ | |__|  __/|  __/| |_| |'}
+            </Text>
+            <Text color="cyan" bold>
+              {' |_____|_____|\\___/|____/|____/'}
+            </Text>
+            <Text color="gray">{'           谋定而后动'}</Text>
+            <Text color="gray">{' '}</Text>
+            <Text color="gray">{`  ${globalToolRegistry.list().length} tools · ${model}`}</Text>
+          </Box>
+        )}
+
+        {messages.map((msg, i) => (
+          <Box key={msg.id} marginBottom={1} flexDirection="column">
+            {msg.role === 'user' && (
+              <Box borderStyle="single" borderLeft={true} borderColor={AGENT_COLORS[agent as keyof typeof AGENT_COLORS] || AGENT_COLORS.default} paddingLeft={1}>
+                <Text>{msg.content}</Text>
+              </Box>
+            )}
+
+            {msg.role === 'assistant' && (
+              <Box flexDirection="column">
+                <Text>{renderMarkdown(msg.content)}</Text>
+                {msg.duration !== undefined && i === messages.length - 1 && (
+                  <Text color="gray" dimColor>{`▣ ${agent} · ${model} · ${msg.duration}s`}</Text>
+                )}
+              </Box>
+            )}
+
+            {msg.role === 'tool' && (
+              <Box>
+                {msg.toolStatus === 'running' && <Spinner type="dots" />}
+                {msg.toolStatus === 'completed' && <Text color="green">✓</Text>}
+                {msg.toolStatus === 'error' && <Text color="red">✗</Text>}
+                <Text color="gray">{` ${msg.toolName}`}</Text>
+              </Box>
+            )}
+
+            {msg.role === 'system' && (
+              <Text color="red">{msg.content}</Text>
+            )}
+          </Box>
+        ))}
+
+        {/* 流式文本 */}
+        {streamingText && (
+          <Box>
+            <Text>{renderMarkdown(streamingText)}</Text>
+          </Box>
+        )}
+
+        {/* 处理中指示器 */}
+        {isProcessing && !streamingText && (
+          <Box>
+            <Spinner type="dots" />
+            <Text color="gray"> Thinking...</Text>
+          </Box>
+        )}
+      </Box>
+
+      {/* 底部状态栏 */}
+      <Box paddingX={1} borderStyle="single" borderTop={true} borderColor="gray">
+        <Box justifyContent="space-between" width="100%">
+          <Text color="gray">{`❯ ${agent} · ${model}`}</Text>
+          <Text color="gray">{`${globalToolRegistry.list().length} tools`}</Text>
+        </Box>
+      </Box>
+
+      {/* 输入框 */}
+      <Box paddingX={1}>
+        <TextInput
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSubmit}
+          placeholder={isProcessing ? 'Processing...' : 'Type a message...'}
+          showCursor={!isProcessing}
+        />
+      </Box>
+    </Box>
+  )
 }
 
 async function createLLMProvider(config: any): Promise<LLMProvider> {
@@ -49,10 +246,6 @@ async function createLLMProvider(config: any): Promise<LLMProvider> {
 export async function runTUI(): Promise<void> {
   registerBuiltinTools()
 
-  // 加载技能
-  const skillsDir = join(homedir(), '.licode', 'skills', 'builtin')
-  const skillCount = await skillLoader.loadFromDir(skillsDir)
-
   let config
   try {
     config = await configLoader.discoverAndLoad(process.env.HOME ?? '')
@@ -68,35 +261,33 @@ export async function runTUI(): Promise<void> {
   const llm = await createLLMProvider(config)
   const loop = new CoreLoop(config, llm)
 
-  await runReadlineTUI(config, llm, loop, skillCount)
+  // 检查是否支持 Ink（需要 TTY）
+  if (process.stdin.isTTY) {
+    render(<App config={config} llm={llm} loop={loop} />)
+  } else {
+    // 回退到简单模式
+    await runSimpleMode(config, llm, loop)
+  }
 }
 
-function renderLogo(): string {
-  return `${c.cyan}${c.bold} _    _  ___         _     
-| |  (_)/ __|___  __| |___ 
-| |__| | (__/ _ \\/ _\` / -_)
-|____|_|\\___\\___/\\__,_|\\___|${c.reset}
-${c.gray}           谋定而后动${c.reset}`
-}
-
-function renderStatusBar(toolCount: number, model: string, skillCount: number): string {
-  return `${c.gray}────────────────────────────────────────${c.reset}
-${c.gray} ${toolCount} tools · ${skillCount} skills · ${model}${c.reset}`
-}
-
-async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop, skillCount: number): Promise<void> {
+// 简单模式（非 TTY 环境）
+async function runSimpleMode(config: any, llm: LLMProvider, loop: CoreLoop): Promise<void> {
   const readline = await import('readline')
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   })
 
-  // 显示 Logo
-  console.log(renderLogo())
-  console.log(renderStatusBar(globalToolRegistry.list().length, config.llm.model, skillCount))
-  console.log()
-
-  const commandHistory: string[] = []
+  console.log(`
+${c.cyan}${c.bold}  _      _     ___  ___  ____
+ | |    | |   / _ \\/ _ \\|  _ \\
+ | |    | |  | |_| | |_| | | | |
+ | |___ | |__|  __/|  __/| |_| |
+ |_____|_____|\\___/|____/|____/${c.reset}
+${c.gray}           谋定而后动${c.reset}
+${c.gray}────────────────────────────────────────${c.reset}
+${c.gray} ${globalToolRegistry.list().length} tools · ${config.llm.model}${c.reset}
+`)
 
   const ask = (): Promise<string> => {
     return new Promise((resolve) => {
@@ -106,20 +297,15 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop, ski
     })
   }
 
-  // 一次性读取所有输入（管道模式）
   if (!process.stdin.isTTY) {
     const lines: string[] = []
     rl.on('line', (line) => lines.push(line))
     rl.on('close', async () => {
       const input = lines[0] || ''
-      if (!input.trim()) {
-        return
-      }
+      if (!input.trim()) return
 
       console.log()
-
       try {
-        let streamedText = ''
         const result = await loop.run({
           sessionId: crypto.randomUUID(),
           userInput: input,
@@ -128,21 +314,9 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop, ski
           cwd: process.cwd(),
           llm,
           onPhaseChange: () => {},
-          onStreamText: (text) => {
-            streamedText += text
-          },
-          onToolCall: (toolName) => {
-            console.log(`  ${c.yellow}⚙ ${toolName}${c.reset}`)
-          },
+          onStreamText: (text) => process.stdout.write(renderMarkdown(text)),
         })
-
-        // 显示最终回复
-        const response = streamedText || result
-        if (response) {
-          console.log(renderMarkdown(response))
-        }
-
-        console.log()
+        console.log(`\n${c.gray}────────────────────────────────────────${c.reset}\n`)
       } catch (e) {
         const error = e instanceof Error ? e.message : String(e)
         console.error(`\n${c.red}✗ ${error}${c.reset}\n`)
@@ -151,20 +325,15 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop, ski
     return
   }
 
-  // 交互模式
   while (true) {
     const input = await ask()
-
     if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'quit') {
       console.log(`\n${c.gray}再见！${c.reset}\n`)
       break
     }
-
     if (!input.trim()) continue
 
-    commandHistory.push(input)
     console.log()
-
     try {
       let streamedText = ''
       const result = await loop.run({
@@ -179,16 +348,10 @@ async function runReadlineTUI(config: any, llm: LLMProvider, loop: CoreLoop, ski
           streamedText += text
           process.stdout.write(renderMarkdown(text))
         },
-        onToolCall: (toolName) => {
-          console.log(`\n  ${c.yellow}⚙ ${toolName}${c.reset}`)
-        },
       })
-
-      // 如果没有流式输出，显示最终结果
       if (!streamedText && result) {
         console.log(renderMarkdown(result))
       }
-
       console.log(`\n${c.gray}────────────────────────────────────────${c.reset}\n`)
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e)
