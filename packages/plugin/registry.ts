@@ -90,16 +90,18 @@ export class PluginRegistry {
 
     // 按依赖过滤
     if (options.dependency) {
+      const dep = options.dependency
       results = results.filter(m =>
-        m.dependencies?.includes(options.dependency)
+        m.dependencies?.includes(dep)
       )
     }
 
     // 排序
     if (options.sortBy) {
+      const sortBy = options.sortBy
       results.sort((a, b) => {
-        const aVal = a[options.sortBy!] || ''
-        const bVal = b[options.sortBy!] || ''
+        const aVal = a[sortBy] || ''
+        const bVal = b[sortBy] || ''
         const comparison = String(aVal).localeCompare(String(bVal))
         return options.sortOrder === 'desc' ? -comparison : comparison
       })

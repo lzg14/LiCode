@@ -75,9 +75,9 @@ export interface Task {
   result?: AgentOutcome
 }
 
-export interface OutputSchema {
+export interface OutputSchema<T = unknown> {
   name: string
-  schema: z.ZodType
+  schema: z.ZodType<T>
   description?: string
 }
 
