@@ -83,7 +83,11 @@ export class DatabaseIntegration extends BaseIntegration {
   async query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<QueryResult<T>> {
     return this.withConnection(async () => {
       const result = this.executeSql<T>(sql, params)
-      return result
+      return {
+        rows: result.rows || [],
+        changes: result.changes || 0,
+        lastInsertRowid: result.lastInsertRowid,
+      }
     })
   }
 
@@ -252,7 +256,7 @@ export class DatabaseIntegration extends BaseIntegration {
     }
   }
 
-  private loadSqlModule(): typeof import('better-sqlite3') {
+  private loadSqlModule(): any {
     try {
       return require('better-sqlite3')
     } catch {

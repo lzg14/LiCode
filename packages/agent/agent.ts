@@ -24,6 +24,7 @@ export class AgentManager {
       sessionId: '' as any,
       tools,
       blockedTools: [...SUBAGENT_BLOCKED_TOOLS],
+      status: 'idle',
       createdAt: Date.now(),
     }
 
