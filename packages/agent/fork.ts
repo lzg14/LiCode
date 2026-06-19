@@ -12,11 +12,11 @@ export interface ForkOptions {
 export class ForkManager {
   private forks = new Map<string, ForkContext>()
 
-  createFork(
+  async createFork(
     parentAgentId: string,
     task: string,
     options: ForkOptions = {},
-  ): { agent: Agent; context: ForkContext } {
+  ): Promise<{ agent: Agent; context: ForkContext } | null> {
     const parent = agentManager.get(parentAgentId)
     if (!parent) {
       throw new Error(`Parent agent ${parentAgentId} not found`)
@@ -36,7 +36,8 @@ export class ForkManager {
       timeoutMs: options.timeoutMs,
     }
 
-    const child = agentManager.spawn(spawnInput, parent.depth)
+    const child = await agentManager.spawn(spawnInput, parentAgentId)
+    if (!child) return null
 
     const context: ForkContext = {
       parentAgentId,

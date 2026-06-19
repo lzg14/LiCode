@@ -232,10 +232,11 @@ export class PatchManager {
       newLines: [...hunk.oldLines],
     }))
 
+    const newContent = patch.hunks.flatMap(h => h.newLines).join('\n')
     return {
       id: this.generateId(),
       filePath: patch.filePath,
-      baseHash: this.computeHash(patch.newLines.join('\n')),
+      baseHash: this.computeHash(newContent),
       hunks: reversedHunks,
       timestamp: Date.now(),
       description: `Reversed: ${patch.description || 'patch'}`,
