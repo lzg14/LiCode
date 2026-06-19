@@ -1,3 +1,4 @@
+import type { z } from 'zod'
 import type { AgentType, SessionId } from '../core/types'
 
 export interface Agent {
@@ -34,15 +35,59 @@ export interface AgentOutcome {
   duration?: number
 }
 
-// 子 Agent 禁止使用的工具
+export interface ForkContext {
+  parentAgentId: string
+  childAgentId: string
+  sharedState: Record<string, unknown>
+  inheritTools: boolean
+  inheritSession: boolean
+  createdAt: number
+}
+
+export interface StructuredOutput<T = unknown> {
+  status: 'success' | 'partial' | 'failed' | 'blocked'
+  summary?: string
+  data?: T
+  error?: string
+  metadata?: Record<string, unknown>
+}
+
+export type TaskStatus = 'pending' | 'in_progress' | 'blocked' | 'done' | 'abandoned'
+
+export interface TaskEvent {
+  taskId: string
+  type: 'created' | 'started' | 'blocked' | 'unblocked' | 'completed' | 'failed' | 'abandoned' | 'renamed'
+  timestamp: number
+  detail?: string
+  previousStatus?: TaskStatus
+  newStatus?: TaskStatus
+}
+
+export interface Task {
+  id: string
+  summary: string
+  parentId?: string
+  status: TaskStatus
+  events: TaskEvent[]
+  createdAt: number
+  updatedAt: number
+  completedAt?: number
+  result?: AgentOutcome
+}
+
+export interface OutputSchema {
+  name: string
+  schema: z.ZodType
+  description?: string
+}
+
 export const SUBAGENT_BLOCKED_TOOLS = [
-  'delegate_task',   // 禁止递归派生子 Agent
-  'question',       // 禁止用户交互
-  'memory',         // 禁止写入共享内存
-  'send_message',   // 禁止跨平台副作用
+  'delegate_task',
+  'question',
+  'memory',
+  'send_message',
 ]
 
-// Agent 类型配置
 export const AGENT_TYPES: Record<string, { type: AgentType; description: string; tools?: string[] }> = {
   build: {
     type: 'primary',
