@@ -1,10 +1,18 @@
 import type { ToolDefinition, ToolResult } from './types'
+import type { ToolContext } from './context'
+import { createToolContext } from './context'
+import { truncateOutput } from './truncate'
 
 export class ToolRegistry {
   private tools = new Map<string, ToolDefinition>()
+  private defaultContext: ToolContext
 
-  register<T>(tool: ToolDefinition<T>): void {
-    this.tools.set(tool.name, tool as ToolDefinition)
+  constructor(defaultContext?: Partial<ToolContext>) {
+    this.defaultContext = createToolContext(defaultContext)
+  }
+
+  register(tool: ToolDefinition): void {
+    this.tools.set(tool.name, tool)
   }
 
   get(name: string): ToolDefinition | undefined {
@@ -15,16 +23,38 @@ export class ToolRegistry {
     return Array.from(this.tools.values())
   }
 
-  async execute(name: string, input: unknown): Promise<ToolResult> {
+  async execute(
+    name: string,
+    input: unknown,
+    ctx?: Partial<ToolContext>,
+  ): Promise<ToolResult> {
     const tool = this.tools.get(name)
     if (!tool) {
       return { success: false, error: `Tool not found: ${name}` }
     }
 
+    const mergedCtx = { ...this.defaultContext, ...ctx }
+
     try {
-      const result = await tool.handler(input)
-      return result as ToolResult
+      const parsedInput = tool.inputSchema.parse(input)
+      const result = await tool.handler(parsedInput, mergedCtx)
+
+      if (result.output && typeof result.output === 'string') {
+        const maxChars = tool.maxOutputTokens
+          ? tool.maxOutputTokens * 4
+          : 50_000
+        result.output = truncateOutput(result.output, maxChars)
+      }
+
+      if (result.success && tool.outputSchema) {
+        tool.outputSchema.parse(result.output)
+      }
+
+      return result
     } catch (error) {
+      if (error instanceof Error && error.name === 'ZodError') {
+        return { success: false, error: `Input validation failed: ${error.message}` }
+      }
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',

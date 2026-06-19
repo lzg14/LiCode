@@ -13,7 +13,17 @@ export interface LLMResponse {
   }
 }
 
+export interface StreamChunk {
+  type: 'text' | 'thinking' | 'usage' | 'done'
+  content?: string
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+  }
+}
+
 export interface LLMProvider {
   name: string
   complete(request: LLMRequest): Promise<LLMResponse>
+  stream?(request: LLMRequest): AsyncIterable<StreamChunk>
 }

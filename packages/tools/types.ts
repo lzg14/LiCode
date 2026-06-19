@@ -1,15 +1,28 @@
-export type ToolName = 'read' | 'write' | 'edit' | 'glob' | 'grep' | 'bash' | 'skill'
+import { z } from 'zod'
+import type { ToolContext } from './context'
 
-export interface ToolDefinition<Input = unknown, Output = unknown> {
-  name: string
-  description: string
-  inputSchema: Record<string, unknown>
-  outputSchema?: Record<string, unknown>
-  handler: (input: Input) => Promise<ToolResult<Output>>
-}
+export const ToolResultSchema = <T extends z.ZodTypeAny>(outputSchema: T) =>
+  z.object({
+    success: z.boolean(),
+    output: outputSchema.optional(),
+    error: z.string().optional(),
+  })
 
-export interface ToolResult<T = unknown> {
+export type ToolResult<T = unknown> = {
   success: boolean
   output?: T
   error?: string
 }
+
+export interface ToolDefinition {
+  name: string
+  description: string
+  inputSchema: z.ZodTypeAny
+  outputSchema?: z.ZodTypeAny
+  maxOutputTokens?: number
+  handler: (input: any, ctx: ToolContext) => Promise<ToolResult<any>>
+}
+
+export type ToolName =
+  | 'read' | 'write' | 'edit' | 'glob' | 'grep'
+  | 'bash' | 'skill' | 'webfetch' | 'websearch' | 'codesearch'
