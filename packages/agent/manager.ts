@@ -12,7 +12,7 @@ export class AgentManager {
   constructor(
     private maxConcurrent = 3,
     private maxDepth = 1,
-    private timeoutMs = 900000
+    private _timeoutMs = 900000
   ) {}
 
   /**

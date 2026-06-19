@@ -68,7 +68,7 @@ export interface ReviewResult {
  * 执行评审
  */
 export async function reviewPlan(ctx: LoopContext): Promise<ReviewResult> {
-  const { llm, userInput, plan, risks = [], effortLevel } = ctx
+  const { llm, userInput, plan, risks = [] } = ctx
 
   // 如果没有 LLM，使用本地评审
   if (!llm) {

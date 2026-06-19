@@ -81,7 +81,7 @@ export class MCPIntegration extends BaseIntegration {
           reject(error)
         })
 
-        this.process.on('close', (code) => {
+        this.process.on('close', (_code) => {
           this.enabled = false
           this.process = null
         })

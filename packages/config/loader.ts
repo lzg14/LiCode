@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, watch } from 'fs'
 import { join, dirname } from 'path'
-import { homedir } from 'os'
 import { ConfigSchema, type Config } from './schema'
 import { importClaudeCodeConfig } from './external'
 

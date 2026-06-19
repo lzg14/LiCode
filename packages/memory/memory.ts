@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
-import { dirname, join } from 'path'
+import { join } from 'path'
 import { homedir } from 'os'
 import type { MemoryEntry, MemorySearchResult } from './schema'
 

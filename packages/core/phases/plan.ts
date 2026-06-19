@@ -1,5 +1,5 @@
 import { LoopContext } from '../loop'
-import { planReview, type ReviewResult } from './plan-review'
+import { planReview } from './plan-review'
 
 export async function plan(ctx: LoopContext): Promise<Partial<LoopContext>> {
   ctx.onStreamText?.('制定计划...\n')
@@ -35,7 +35,7 @@ export async function plan(ctx: LoopContext): Promise<Partial<LoopContext>> {
   }
 }
 
-async function generatePlan(ctx: LoopContext): Promise<{ steps: string[] }> {
+async function generatePlan(_ctx: LoopContext): Promise<{ steps: string[] }> {
   return {
     steps: ['分析需求', '编写代码', '测试验证'],
   }

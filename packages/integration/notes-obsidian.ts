@@ -1,5 +1,5 @@
-import { readdir, readFile, stat, access } from 'fs/promises'
-import { join, extname, basename, relative } from 'path'
+import { readdir, readFile, stat } from 'fs/promises'
+import { join, extname, basename } from 'path'
 import { NotesIntegration, type Note, type SearchOptions, type NotesConfig } from './notes'
 import type { HealthStatus } from './types'
 
@@ -111,7 +111,6 @@ export class ObsidianIntegration extends NotesIntegration {
         }
 
         const entryPath = join(subDir, entry.name)
-        const fullPath = join(this.config.vaultPath, entryPath)
 
         if (entry.isDirectory()) {
           const subNotes = await this.listNotes(entryPath)
