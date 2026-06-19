@@ -18,7 +18,7 @@ export class AgentManager {
   /**
    * 派生子 Agent
    */
-  async spawn(input: SpawnInput,父agentId?: string): Promise<Agent | null> {
+  async spawn(input: SpawnInput, parentId?: string): Promise<Agent | null> {
     // 检查并发限制
     if (this.runningCount >= this.maxConcurrent) {
       console.log(`[Agent] 达到并发限制 (${this.maxConcurrent})，等待中...`)
@@ -26,8 +26,8 @@ export class AgentManager {
     }
 
     // 检查深度限制
-    const父agent = 父agentId ? this.agents.get(父agentId) : null
-    const depth = (父agent?.depth ?? -1) + 1
+    const parent = parentId ? this.agents.get(parentId) : null
+    const depth = (parent?.depth ?? -1) + 1
     if (depth > this.maxDepth) {
       console.log(`[Agent] 达到深度限制 (${this.maxDepth})，无法派生`)
       return null
@@ -41,8 +41,8 @@ export class AgentManager {
 
     // 确定工具列表
     let tools: string[]
-    if (input.tools === 'inherit' && 父agent) {
-      tools = 父agent.tools.filter(t => !SUBAGENT_BLOCKED_TOOLS.includes(t))
+    if (input.tools === 'inherit' && parent) {
+      tools = parent.tools.filter((t: string) => !SUBAGENT_BLOCKED_TOOLS.includes(t))
     } else if (Array.isArray(input.tools)) {
       tools = input.tools
     } else {
@@ -55,9 +55,9 @@ export class AgentManager {
     const agent: Agent = {
       id: agentId,
       type: typeConfig.type,
-      parentId: 父agentId,
+      parentId: parentId,
       depth,
-      sessionId: `session_${agentId}`,
+      sessionId: `session_${agentId}` as any,
       tools,
       blockedTools,
       status: 'idle',

@@ -31,7 +31,7 @@ export class LLMManager {
     if (config.provider === 'anthropic') {
       instance = new AnthropicProvider(apiKey, config.baseUrl)
     } else if (config.provider === 'openai') {
-      instance = new OpenAIProvider(apiKey, config.baseUrl)
+      instance = new OpenAIProvider(apiKey)
     } else {
       throw new Error(`Unsupported provider: ${config.provider}`)
     }
@@ -48,6 +48,7 @@ export class LLMManager {
    */
   get(name?: string): LLMProvider | undefined {
     const key = name || this.defaultProvider
+    if (!key) return undefined
     return this.providers.get(key)?.instance
   }
 
