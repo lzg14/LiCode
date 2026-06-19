@@ -19,7 +19,9 @@ const BLOCKED_COMMANDS = [
 ]
 
 export function isCommandAllowed(command: string): boolean {
-  const base = command.split(' ')[0]
+  const trimmed = command.trim()
+  if (!trimmed) return false
+  const base = trimmed.split(' ')[0]
   if (BLOCKED_COMMANDS.includes(base)) return false
   return DEFAULT_WHITELIST.includes(base)
 }

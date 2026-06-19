@@ -43,6 +43,7 @@ function App({ config, llm, loop }: AppProps) {
   const [input, setInput] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [streamingText, setStreamingText] = useState('')
+  const streamingTextRef = useRef('')
   const [agent] = useState('build')
   const [model] = useState(config.llm.model)
   const [elapsed, setElapsed] = useState(0)
@@ -88,6 +89,7 @@ function App({ config, llm, loop }: AppProps) {
         llm,
         onPhaseChange: () => {},
         onStreamText: (text: string) => {
+          streamingTextRef.current += text
           setStreamingText(prev => prev + text)
         },
         onToolCall: (toolName: string) => {
@@ -106,8 +108,8 @@ function App({ config, llm, loop }: AppProps) {
 
       const result = await loop.run(ctx)
 
-      if (streamingText) {
-        addMessage({ role: 'assistant', content: streamingText, duration: elapsed })
+      if (streamingTextRef.current) {
+        addMessage({ role: 'assistant', content: streamingTextRef.current, duration: elapsed })
       } else {
         addMessage({ role: 'assistant', content: result, duration: elapsed })
       }
@@ -117,6 +119,7 @@ function App({ config, llm, loop }: AppProps) {
     } finally {
       setIsProcessing(false)
       setStreamingText('')
+      streamingTextRef.current = ''
       startTimeRef.current = 0
       setElapsed(0)
     }

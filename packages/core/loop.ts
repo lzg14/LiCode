@@ -67,41 +67,55 @@ export class CoreLoop {
     ctx = { ...ctx, llm: effectiveLlm, memory: this.memory }
 
     // 触发 session:start hook
-    await pluginManager.emit('session:start', ctx.sessionId)
+    try {
+      await pluginManager.emit('session:start', ctx.sessionId)
+    } catch {
+      // plugin hook 失败不应阻断主流程
+    }
 
     // 记录会话开始
     auditLogger.logSessionStart(ctx.sessionId)
 
-    // 先执行 OBSERVE 判断 Effort Level
-    ctx.onPhaseChange?.('OBSERVE')
-    const observeResult = await observe(ctx)
-    ctx = { ...ctx, ...observeResult }
+    try {
+      // 先执行 OBSERVE 判断 Effort Level
+      ctx.onPhaseChange?.('OBSERVE')
+      const observeResult = await observe(ctx)
+      ctx = { ...ctx, ...observeResult }
 
-    // 根据 Effort Level 选择路径
-    const phases = ctx.effortLevel === 1 ? FAST_PATH : PHASE_ORDER
-    const startIndex = 1 // 从 THINK 开始
+      // 根据 Effort Level 选择路径
+      const phases = ctx.effortLevel === 1 ? FAST_PATH : PHASE_ORDER
+      const startIndex = 1 // 从 THINK 开始
 
-    for (let i = startIndex; i < phases.length; i++) {
-      const phase = phases[i]
-      const result = await this.executePhase(phase, ctx)
-      ctx = { ...ctx, ...result }
+      for (let i = startIndex; i < phases.length; i++) {
+        const phase = phases[i]
+        const result = await this.executePhase(phase, ctx)
+        ctx = { ...ctx, ...result }
+      }
+
+      // 存储记忆
+      if (ctx.aiResponse) {
+        try {
+          await this.memory.store({
+            scope: 'session',
+            type: 'memory',
+            content: `User: ${ctx.userInput}\nAI: ${ctx.aiResponse}`,
+          })
+        } catch {
+          // 记忆存储失败不应阻断主流程
+        }
+      }
+    } finally {
+      // 记录会话结束
+      const duration = Date.now() - startTime
+      auditLogger.logSessionEnd(ctx.sessionId, duration)
+
+      // 触发 session:end hook
+      try {
+        await pluginManager.emit('session:end', ctx.sessionId)
+      } catch {
+        // plugin hook 失败不应阻断主流程
+      }
     }
-
-    // 存储记忆
-    if (ctx.aiResponse) {
-      await this.memory.store({
-        scope: 'session',
-        type: 'memory',
-        content: `User: ${ctx.userInput}\nAI: ${ctx.aiResponse}`,
-      })
-    }
-
-    // 记录会话结束
-    const duration = Date.now() - startTime
-    auditLogger.logSessionEnd(ctx.sessionId, 1)
-
-    // 触发 session:end hook
-    await pluginManager.emit('session:end', ctx.sessionId)
 
     // 返回 AI 回复，如果没有则返回用户输入
     return ctx.aiResponse ?? ctx.userInput

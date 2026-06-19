@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
 import { dirname, join } from 'path'
 import { homedir } from 'os'
 import type { MemoryEntry, MemorySearchResult } from './schema'
@@ -93,8 +93,12 @@ export class Memory {
       dir = join(MEMORY_BASE, 'sessions')
     }
 
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, `${entry.id}.md`), entry.content)
+    try {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, `${entry.id}.md`), entry.content)
+    } catch {
+      // 磁盘 I/O 错误不应抛出，记忆已保存在内存中
+    }
   }
 
   /**
@@ -145,7 +149,32 @@ export class Memory {
    * 删除记忆
    */
   async delete(id: string): Promise<boolean> {
-    return this.entries.delete(id)
+    const entry = this.entries.get(id)
+    if (!entry) return false
+
+    this.entries.delete(id)
+
+    // 同时删除持久化文件
+    let dir: string
+    if (entry.scope === 'global') {
+      dir = join(MEMORY_BASE, 'global')
+    } else if (entry.scope === 'project' && this.projectPath) {
+      const projectId = Buffer.from(this.projectPath).toString('base64').slice(0, 16)
+      dir = join(MEMORY_BASE, 'projects', projectId)
+    } else {
+      dir = join(MEMORY_BASE, 'sessions')
+    }
+
+    const filePath = join(dir, `${id}.md`)
+    try {
+      if (existsSync(filePath)) {
+        unlinkSync(filePath)
+      }
+    } catch {
+      // 文件删除失败不应影响内存状态
+    }
+
+    return true
   }
 
   /**
@@ -154,12 +183,17 @@ export class Memory {
   async cleanup(maxAgeMs: number = 30 * 24 * 60 * 60 * 1000): Promise<number> {
     const now = Date.now()
     let count = 0
+    const expiredIds: string[] = []
 
     for (const [id, entry] of this.entries.entries()) {
       if (now - entry.updatedAt > maxAgeMs) {
-        this.entries.delete(id)
+        expiredIds.push(id)
         count++
       }
+    }
+
+    for (const id of expiredIds) {
+      await this.delete(id)
     }
 
     return count

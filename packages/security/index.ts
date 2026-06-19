@@ -41,7 +41,11 @@ export class SecurityLayer {
    * 检查命令是否允许执行
    */
   checkCommand(command: string): { allowed: boolean; reason?: string } {
-    const base = command.split(' ')[0].toLowerCase()
+    const trimmed = command.trim()
+    if (!trimmed) {
+      return { allowed: false, reason: '命令为空' }
+    }
+    const base = trimmed.split(' ')[0].toLowerCase()
 
     // 检查黑名单
     if (this.config.blockedCommands.includes(base)) {
@@ -75,9 +79,11 @@ export class SecurityLayer {
       }
     }
 
-    // 检查拒绝路径
+    // 规范化路径分隔符后检查拒绝路径
+    const normalizedPath = path.replace(/\\/g, '/')
     for (const denied of this.config.deniedPaths) {
-      if (path.startsWith(denied)) {
+      const normalizedDenied = denied.replace(/\\/g, '/')
+      if (normalizedPath.startsWith(normalizedDenied)) {
         return {
           allowed: false,
           reason: `路径 "${path}" 在拒绝列表中`,
@@ -92,6 +98,9 @@ export class SecurityLayer {
    * 检查文件大小是否允许
    */
   checkFileSize(size: number): { allowed: boolean; reason?: string } {
+    if (size < 0) {
+      return { allowed: false, reason: `文件大小 ${size} 不合法` }
+    }
     if (size > this.config.maxFileSize) {
       return {
         allowed: false,
@@ -108,7 +117,8 @@ export class SecurityLayer {
     const detected: string[] = []
 
     for (const pattern of this.config.sensitivePatterns) {
-      const regex = new RegExp(`${pattern}\\s*=\\s*['"]?[^'"]+['"]?`, 'gi')
+      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const regex = new RegExp(`${escaped}\\s*=\\s*['"]?[^'"]+['"]?`, 'gi')
       if (regex.test(content)) {
         detected.push(pattern)
       }
