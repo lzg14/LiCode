@@ -1,6 +1,6 @@
 import type { Agent, SpawnInput } from './types'
 import { isBlockedTool, SUBAGENT_BLOCKED_TOOLS } from './blocked-tools'
-import { limitManager, DEFAULT_LIMITS } from './limits'
+import { limitManager } from './limits'
 
 export class AgentManager {
   private agents = new Map<string, Agent>()

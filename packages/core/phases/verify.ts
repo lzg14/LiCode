@@ -1,5 +1,5 @@
 import { LoopContext } from '../loop'
-import { reviewPlan, type ReviewResult } from '../review'
+import { reviewPlan } from '../review'
 
 export async function verify(ctx: LoopContext): Promise<Partial<LoopContext>> {
   ctx.onStreamText?.('验证质量...\n')

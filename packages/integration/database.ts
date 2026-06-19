@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'fs'
-import { join, dirname } from 'path'
+import { existsSync, mkdirSync, copyFileSync } from 'fs'
+import { dirname } from 'path'
 import { BaseIntegration, type HealthStatus } from './types'
 
 /**

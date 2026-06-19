@@ -1,4 +1,3 @@
-import type { Phase, EffortLevel } from './types'
 import type { LoopContext } from './loop'
 
 /**

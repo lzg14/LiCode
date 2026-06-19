@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'fs'
-import { join, dirname } from 'path'
+import { join } from 'path'
 import { homedir } from 'os'
 
 export interface ExternalSource {

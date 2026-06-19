@@ -6,7 +6,7 @@ export interface ReviewResult {
   message?: string
 }
 
-export async function planReview(ctx: any, plan: { steps: string[] }): Promise<ReviewResult> {
+export async function planReview(_ctx: any, plan: { steps: string[] }): Promise<ReviewResult> {
   let iteration = 0
   let previousIssues: string[] = []
 

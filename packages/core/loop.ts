@@ -11,7 +11,7 @@ import { Memory } from '../memory/memory'
 import { auditLogger } from '../audit/logger'
 import { GitIntegration } from '../integration/git'
 import { pluginManager } from '../integration/plugin'
-import { agentManager } from '../agent/manager'
+
 
 export interface LoopContext {
   sessionId: string

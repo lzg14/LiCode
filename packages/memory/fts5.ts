@@ -1,10 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
-import { dirname, join } from 'path'
-
-interface MemoryDoc {
-  id: string
-  content: string
-}
+import { dirname } from 'path'
 
 export class FTS5Search {
   private indexPath: string

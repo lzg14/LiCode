@@ -1,5 +1,5 @@
 import { readdir, readFile, stat } from 'fs/promises'
-import { join, extname, relative } from 'path'
+import { join, extname } from 'path'
 import { BaseIntegration, type HealthStatus } from './types'
 
 /**
@@ -93,7 +93,6 @@ export class NotesIntegration extends BaseIntegration {
         }
 
         const entryPath = join(subDir, entry.name)
-        const fullPath = join(this.config.vaultPath, entryPath)
 
         if (entry.isDirectory()) {
           const subNotes = await this.listNotes(entryPath)

@@ -15,6 +15,6 @@ async function updateMemory(ctx: LoopContext): Promise<void> {
   // 写入记忆
 }
 
-async function summarizeExperience(ctx: LoopContext): Promise<void> {
+async function summarizeExperience(_ctx: LoopContext): Promise<void> {
   // 总结经验
 }
