@@ -62,6 +62,50 @@ export function Home() {
       }
       return
     }
+    if (text.startsWith('/save')) {
+      const name = text.slice(5).trim() || `session-${Date.now()}`
+      try {
+        const { writeFile } = await import("fs/promises")
+        const { join } = await import("path")
+        const dir = join(process.cwd(), '.licode-saves')
+        await import("fs").then(fs => fs.mkdirSync(dir, { recursive: true }))
+        const data = JSON.stringify({ messages: messages(), name, savedAt: Date.now() }, null, 2)
+        await writeFile(join(dir, `${name}.json`), data, 'utf-8')
+        addMessage({ role: "system", content: `会话已保存为 ${name}` })
+      } catch (e) {
+        addMessage({ role: "system", content: `保存失败: ${e}` })
+      }
+      return
+    }
+    if (text.startsWith('/load')) {
+      const name = text.slice(5).trim()
+      if (!name) {
+        // 列出可用保存
+        try {
+          const { readdir } = await import("fs/promises")
+          const { join } = await import("path")
+          const dir = join(process.cwd(), '.licode-saves')
+          const files = await readdir(dir).catch(() => [])
+          const saves = files.filter(f => f.endsWith('.json')).map(f => f.replace('.json', ''))
+          addMessage({ role: "system", content: saves.length > 0 ? `可用会话: ${saves.join(', ')}` : '没有已保存的会话' })
+        } catch {
+          addMessage({ role: "system", content: '没有已保存的会话' })
+        }
+        return
+      }
+      try {
+        const { readFile } = await import("fs/promises")
+        const { join } = await import("path")
+        const data = JSON.parse(await readFile(join(process.cwd(), '.licode-saves', `${name}.json`), 'utf-8'))
+        if (data.messages?.length) {
+          data.messages.forEach((m: any) => addMessage(m))
+          addMessage({ role: "system", content: `已加载会话 "${name}" (${data.messages.length} 条消息)` })
+        }
+      } catch (e) {
+        addMessage({ role: "system", content: `加载失败: ${e}` })
+      }
+      return
+    }
     await run(text)
   }
 
@@ -89,6 +133,8 @@ export function Home() {
       { type: 'cmd', label: '/compact', desc: '压缩对话历史' },
       { type: 'cmd', label: '/model', desc: '切换模型（当前 provider）' },
       { type: 'cmd', label: '/provider', desc: '切换 LLM provider (anthropic/openai/deepseek)' },
+      { type: 'cmd', label: '/save', desc: '保存会话 (/save 名称)' },
+      { type: 'cmd', label: '/load', desc: '加载会话 (/load 名称)' },
     ]
     for (const s of availableSkills()) {
       items.push({ type: 'skill', label: `/skill ${s}`, desc: `加载技能 ${s}` })
