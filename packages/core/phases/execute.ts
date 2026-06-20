@@ -126,23 +126,42 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
   }
 
   // 完整重建 msgs：摘要（如果存在）+ 历史 + 本轮 user 输入
-  // 过滤掉 tool 角色消息（MiniMax 等 OpenAI 兼容端点不支持 tool 角色）
-  // 同时把含 tool-call 的 assistant 消息转为纯文本（避免格式不兼容）
-  const history = (ctx.history ?? [])
-    .filter(m => m.role === 'user' || m.role === 'assistant')
-    .map(m => {
-      if (m.role === 'assistant' && Array.isArray(m.content)) {
-        const textParts = m.content.filter((p: any) => p.type === 'text')
-        if (textParts.length === 0 && m.content.some((p: any) => p.type === 'tool-call')) {
-          return { role: 'assistant', content: [{ type: 'text', text: '[已执行工具调用]' }] }
+  // 限制历史消息数量，避免上下文过大
+  const MAX_HISTORY = 100
+  const rawHistory = ctx.history ?? []
+  const history = rawHistory.length > MAX_HISTORY
+    ? rawHistory.slice(-MAX_HISTORY)
+    : rawHistory
+
+  // 从后往前找到最后一个合法的 user 消息起始点（确保 tool/tool-call 配对完整）
+  // 找到最近的 user 消息，从它开始截取（跳过前面的孤立消息）
+  function findValidStart(msgs: typeof history): number {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') {
+        // 检查从 i 开始是否 tool/tool-call 配对
+        const toolCallIds = new Set<string>()
+        const toolResultIds = new Set<string>()
+        for (let j = i; j < msgs.length; j++) {
+          const m = msgs[j]
+          if (Array.isArray(m.content)) {
+            for (const p of m.content) {
+              if (p.type === 'tool-call') toolCallIds.add(p.toolCallId)
+              if (p.type === 'tool-result') toolResultIds.add(p.toolCallId)
+            }
+          }
         }
-        if (textParts.length < m.content.length) {
-          return { role: 'assistant', content: textParts }
+        // 找到第一个 user 消息后，检查是否有孤立的 tool-result
+        for (const rid of toolResultIds) {
+          if (!toolCallIds.has(rid)) return i + 1 // 从下一个 user 消息开始
         }
+        return i
       }
-      return m
-    })
-  const lastInHistory = history[history.length - 1]
+    }
+    return 0
+  }
+  const validStart = findValidStart(history)
+  const validHistory = validStart > 0 ? history.slice(validStart) : history
+  const lastInHistory = validHistory[validHistory.length - 1]
   const isDuplicate = lastInHistory
     && lastInHistory.role === 'user'
     && Array.isArray(lastInHistory.content)
@@ -159,8 +178,8 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
   }
 
   const msgs: any[] = isDuplicate
-    ? [...history]
-    : [...history, { role: "user", content: userContent }]
+    ? [...validHistory]
+    : [...validHistory, { role: "user", content: userContent }]
 
   // 如果有 session 摘要，注入到 msgs 开头（作为 user 消息 + assistant 确认）
   if (ctx.sessionSummary) {
