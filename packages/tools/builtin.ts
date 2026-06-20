@@ -3,7 +3,8 @@ import { existsSync } from 'fs'
 import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
 import { glob } from 'glob'
-import { join, dirname } from 'path'
+import { join, dirname, resolve } from 'path'
+import { Database } from 'bun:sqlite'
 import { z } from 'zod'
 import { globalToolRegistry } from './registry'
 
@@ -171,7 +172,6 @@ export function registerBuiltinTools(): void {
           return stdout
         } catch { return null }
       }
-
       let stdout = await tryExec('rg', ['-n', pattern, cwd, ...(include ? ['-g', include] : [])])
       if (stdout === null) {
         stdout = await tryExec('grep', ['-rn', '--color=never', ...(include ? [`--include=${include}`] : []), pattern, cwd])
@@ -230,6 +230,26 @@ export function registerBuiltinTools(): void {
     handler: async ({ name }) => {
       if (name) return { success: true, output: process.env[name] ?? `${name} 不存在` }
       return { success: true, output: Object.entries(process.env).map(([k, v]) => `${k}=${v}`).join('\n') }
+    },
+  })
+
+  globalToolRegistry.register({
+    name: 'system_info',
+    description: '获取系统信息。',
+    inputSchema: z.object({}),
+    handler: async () => {
+      return { success: true, output: JSON.stringify({ platform: process.platform, arch: process.arch, node: process.version, cwd: process.cwd(), mem: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB` }, null, 2) }
+    },
+  })
+
+  globalToolRegistry.register({
+    name: 'datetime',
+    description: '获取当前日期时间。',
+    inputSchema: z.object({ format: z.string().optional() }),
+    handler: async ({ format }) => {
+      const now = new Date()
+      if (!format) return { success: true, output: now.toISOString() }
+      return { success: true, output: format.replace('YYYY', String(now.getFullYear())).replace('MM', String(now.getMonth() + 1).padStart(2, '0')).replace('DD', String(now.getDate()).padStart(2, '0')).replace('HH', String(now.getHours()).padStart(2, '0')).replace('mm', String(now.getMinutes()).padStart(2, '0')).replace('ss', String(now.getSeconds()).padStart(2, '0')) }
     },
   })
 
@@ -320,16 +340,13 @@ export function registerBuiltinTools(): void {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           },
         })
         if (!response.ok) return { success: false, error: `搜索失败: ${response.status}` }
         const html = await response.text()
-
         if (/verification|checking your browser|captcha|smartcaptcha/i.test(html)) {
           return { success: false, error: '搜索引擎返回验证页面，请稍后重试' }
         }
-
         const results: string[] = []
         const algoRe = /<li[^>]+class="[^"]*\bb_algo\b[^"]*"[^>]*>[\s\S]*?<h2[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h2>/gi
         let match
@@ -345,7 +362,6 @@ export function registerBuiltinTools(): void {
             results.push(`[${title}](${href})`)
           }
         }
-
         if (results.length === 0) {
           const fallbackRe = /<h2[^>]*>\s*<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h2>/gi
           while ((match = fallbackRe.exec(html)) !== null && results.length < numResults) {
@@ -353,7 +369,6 @@ export function registerBuiltinTools(): void {
             if (title && match[1]) results.push(`[${title}](${match[1]})`)
           }
         }
-
         return { success: true, output: results.join('\n') || '未找到结果' }
       } catch (e) { return { success: false, error: String(e) } }
     },
@@ -384,25 +399,266 @@ export function registerBuiltinTools(): void {
     },
   })
 
-  // ========== 信息 ==========
+  // ========== 开发辅助 ==========
 
   globalToolRegistry.register({
-    name: 'system_info',
-    description: '获取系统信息。',
-    inputSchema: z.object({}),
-    handler: async () => {
-      return { success: true, output: JSON.stringify({ platform: process.platform, arch: process.arch, node: process.version, cwd: process.cwd(), mem: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB` }, null, 2) }
+    name: 'format',
+    description: '格式化代码。自动检测项目配置（prettier / dprint / biome），回退到通用格式化。',
+    inputSchema: z.object({
+      path: z.string().describe('要格式化的文件或目录路径'),
+      cwd: z.string().optional().describe('工作目录'),
+      check: z.boolean().optional().describe('仅检查是否已格式化，不修改文件'),
+    }),
+    handler: async ({ path, cwd, check }, ctx) => {
+      const workDir = cwd ?? ctx.cwd
+      const tryRun = async (cmd: string): Promise<string | null> => {
+        try {
+          const { stdout, stderr } = await execAsync(cmd, { cwd: workDir, timeout: 30_000 })
+          return (stdout || stderr || '').trim()
+        } catch { return null }
+      }
+      const flag = check ? '--check' : '--write'
+      const cmds = [
+        `bun run format ${flag} "${path}" 2>&1`,
+        `npx prettier ${flag} "${path}" 2>&1`,
+        `npx dprint ${flag} "${path}" 2>&1`,
+        `bun x @biomejs/biome format ${flag} "${path}" 2>&1`,
+      ]
+      for (const c of cmds) {
+        const out = await tryRun(c)
+        if (out !== null) return { success: true, output: out || '格式化完成' }
+      }
+      return { success: true, output: '未找到格式化工具，请先配置 prettier/dprint/biome' }
     },
   })
 
   globalToolRegistry.register({
-    name: 'datetime',
-    description: '获取当前日期时间。',
-    inputSchema: z.object({ format: z.string().optional() }),
-    handler: async ({ format }) => {
-      const now = new Date()
-      if (!format) return { success: true, output: now.toISOString() }
-      return { success: true, output: format.replace('YYYY', String(now.getFullYear())).replace('MM', String(now.getMonth() + 1).padStart(2, '0')).replace('DD', String(now.getDate()).padStart(2, '0')).replace('HH', String(now.getHours()).padStart(2, '0')).replace('mm', String(now.getMinutes()).padStart(2, '0')).replace('ss', String(now.getSeconds()).padStart(2, '0')) }
+    name: 'lint',
+    description: '运行代码检查。自动检测项目配置（eslint / ruff / biome），回退到 tsconfig 检查。',
+    inputSchema: z.object({
+      path: z.string().optional().describe('要检查的文件或目录路径'),
+      cwd: z.string().optional().describe('工作目录'),
+      fix: z.boolean().optional().describe('是否自动修复问题'),
+    }),
+    handler: async ({ path, cwd, fix }, ctx) => {
+      const workDir = cwd ?? ctx.cwd
+      const tryRun = async (cmd: string): Promise<string | null> => {
+        try {
+          const { stdout, stderr } = await execAsync(cmd, { cwd: workDir, timeout: 60_000 })
+          return (stdout || stderr || '').trim()
+        } catch (e: any) { return e?.stdout || e?.stderr || e?.message || String(e) }
+      }
+      const fixFlag = fix ? '--fix' : ''
+      const cmds = [
+        `npx tsc --noEmit --skipLibCheck 2>&1`,
+        `npx eslint ${fixFlag} "${path ?? '.'}" 2>&1`,
+        `bunx eslint ${fixFlag} "${path ?? '.'}" 2>&1`,
+        `ruff check ${fixFlag} ${path ?? '.'} 2>&1`,
+        `npx @biomejs/biome lint ${fixFlag} "${path ?? '.'}" 2>&1`,
+      ]
+      for (const cmd of cmds) {
+        const out = await tryRun(cmd)
+        if (out) return { success: true, output: out }
+      }
+      return { success: true, output: '未发现问题' }
+    },
+  })
+
+  // ========== 技能 ==========
+
+  globalToolRegistry.register({
+    name: 'skill',
+    description: '加载并执行技能。技能是位于 ~/.licode/skills/ 或项目 skills/ 目录下的 .skill.json / .skill.md 文件，包含专业知识和工作流程。',
+    inputSchema: z.object({
+      name: z.string().describe('技能名称'),
+      args: z.record(z.string(), z.unknown()).optional().describe('传递给技能的参数'),
+    }),
+    handler: async ({ name, args }) => {
+      const home = process.env.HOME || process.env.USERPROFILE || ''
+      const skillDirs = [
+        join(home, '.licode', 'skills'),
+        join(process.cwd(), 'skills'),
+      ]
+
+      // 加载技能
+      const { skillLoader } = await import('../../skills/loader')
+      for (const dir of skillDirs) {
+        await skillLoader.loadFromDir(dir)
+      }
+
+      // 查找技能
+      const { globalSkillRegistry } = await import('../../skills/registry')
+      const skill = globalSkillRegistry.findByName(name)
+      if (!skill) {
+        const loaded = globalSkillRegistry.list().map(s => s.name).join(', ')
+        return { success: false, error: `技能 "${name}" 未找到。已加载: ${loaded || '(无)'}。搜索路径: ${skillDirs.join(', ')}` }
+      }
+
+      // 执行技能
+      const { SkillExecutor } = await import('../../skills/executor')
+      const executor = new SkillExecutor()
+      const result = await executor.execute(name, args ?? {})
+      return { success: result.success, output: result.output ?? result.error ?? '' }
+    },
+  })
+
+  // ========== 数据库 ==========
+
+  globalToolRegistry.register({
+    name: 'database_query',
+    description: '对 SQLite 数据库执行查询（SELECT / INSERT / UPDATE / DELETE / PRAGMA）。支持只读模式防止意外修改。',
+    inputSchema: z.object({
+      path: z.string().describe('数据库文件路径'),
+      sql: z.string().describe('SQL 语句'),
+      params: z.array(z.unknown()).optional().describe('参数化查询的参数'),
+      readonly: z.boolean().default(true).describe('是否只读（默认 true 防止意外写入）'),
+    }),
+    handler: async ({ path, sql, params, readonly }) => {
+      try {
+        const db = new Database(resolve(path), readonly ? { readonly: true } : {})
+        const stmt = db.prepare(sql)
+        const rows = params ? stmt.all(...params) : stmt.all()
+        db.close()
+        const output = JSON.stringify(rows, null, 2)
+        return { success: true, output: output || '(空结果集)' }
+      } catch (e) {
+        return { success: false, error: `数据库查询失败: ${e instanceof Error ? e.message : String(e)}` }
+      }
+    },
+  })
+
+  // ========== 补丁 ==========
+
+  globalToolRegistry.register({
+    name: 'apply_patch',
+    description: '应用补丁到文件。支持统一 diff 格式（git diff 输出）和结构化 JSON 补丁。',
+    inputSchema: z.object({
+      filePath: z.string().describe('要修补的文件路径'),
+      patch: z.string().describe('补丁内容（unified diff 格式，或 JSON Patch 格式）'),
+      reverse: z.boolean().optional().describe('是否反向应用（撤销补丁）'),
+    }),
+    handler: async ({ filePath, patch, reverse }) => {
+      try {
+        const absPath = resolve(filePath)
+        if (!existsSync(absPath)) return { success: false, error: `文件不存在: ${absPath}` }
+        const patchFile = join(process.cwd(), '.tmp_patch.tmp')
+        await writeFile(patchFile, patch, 'utf-8')
+        const args = ['apply', reverse ? '-R' : '', patchFile]
+        try {
+          const { stdout, stderr } = await execFileAsync('git', args.filter(Boolean), { cwd: dirname(absPath), timeout: 15_000 })
+          await unlink(patchFile).catch(() => {})
+          return { success: true, output: stdout || stderr || '补丁应用成功' }
+        } catch {
+          await unlink(patchFile).catch(() => {})
+        }
+        try {
+          const operations = JSON.parse(patch)
+          let content = await readFile(absPath, 'utf-8')
+          for (const op of operations) {
+            if (op.op === 'replace' && op.path && op.value !== undefined) {
+              content = content.replace(op.path, op.value)
+            }
+          }
+          await writeFile(absPath, content, 'utf-8')
+          return { success: true, output: 'JSON 补丁应用成功' }
+        } catch {}
+        return { success: false, error: '补丁格式不支持。请使用 unified diff (git diff 输出) 或 JSON Patch 格式。' }
+      } catch (e) {
+        return { success: false, error: `补丁应用失败: ${e instanceof Error ? e.message : String(e)}` }
+      }
+    },
+  })
+
+  // ========== Excel 操作 ==========
+
+  globalToolRegistry.register({
+    name: 'excel_read',
+    description: '读取 Excel 文件内容。支持 .xlsx/.xls/.csv。可指定 sheet 名称和行范围。',
+    inputSchema: z.object({
+      path: z.string().describe('Excel 文件路径'),
+      sheet: z.string().optional().describe('Sheet 名称（默认第一个）'),
+      range: z.string().optional().describe('行范围，如 "A1:D10" 或 "1-50"（第1到50行）'),
+      format: z.enum(['json', 'csv', 'markdown']).default('markdown').describe('输出格式'),
+    }),
+    handler: async ({ path, sheet, range, format }) => {
+      try {
+        const XLSX = await import('xlsx')
+        const wb = XLSX.readFile(path)
+        const sheetName = sheet || wb.SheetNames[0]
+        if (!sheetName) return { success: false, error: '文件中没有 sheet' }
+        const ws = wb.Sheets[sheetName]
+        let data: any[][]
+        if (range) {
+          const rangeMatch = range.match(/^(\d+)-(\d+)$/)
+          if (rangeMatch) {
+            const start = parseInt(rangeMatch[1]) - 1
+            const end = parseInt(rangeMatch[2])
+            const all = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' })
+            data = all.slice(start, end)
+          } else {
+            data = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '', range })
+          }
+        } else {
+          data = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' })
+        }
+        if (data.length === 0) return { success: true, output: '(空 sheet)' }
+        if (format === 'json') return { success: true, output: JSON.stringify(data, null, 2) }
+        if (format === 'csv') {
+          const csv = data.map(row => row.map(String).join(',')).join('\n')
+          return { success: true, output: csv }
+        }
+        const header = data[0].map(String)
+        const rows = data.slice(1)
+        const colWidths = header.map((h, i) => {
+          const maxLen = Math.max(h.length, ...rows.map(r => String(r[i] ?? '').length))
+          return Math.min(maxLen, 40)
+        })
+        const pad = (s: string, w: number) => s.slice(0, w).padEnd(w)
+        const lines: string[] = []
+        lines.push('| ' + header.map((h, i) => pad(h, colWidths[i])).join(' | ') + ' |')
+        lines.push('| ' + colWidths.map(w => '-'.repeat(w)).join(' | ') + ' |')
+        for (const row of rows) {
+          lines.push('| ' + header.map((_, i) => pad(String(row[i] ?? ''), colWidths[i])).join(' | ') + ' |')
+        }
+        return { success: true, output: lines.join('\n') }
+      } catch (e) {
+        return { success: false, error: String(e) }
+      }
+    },
+  })
+
+  globalToolRegistry.register({
+    name: 'excel_write',
+    description: '写入数据到 Excel 文件。支持新建或追加到已有文件。',
+    inputSchema: z.object({
+      path: z.string().describe('输出文件路径 (.xlsx/.csv)'),
+      sheet: z.string().optional().describe('Sheet 名称（默认 Sheet1）'),
+      data: z.array(z.array(z.any())).describe('二维数组数据，第一行为表头'),
+      append: z.boolean().optional().describe('是否追加到已有文件（默认覆盖）'),
+    }),
+    handler: async ({ path, sheet, data, append }) => {
+      try {
+        const XLSX = await import('xlsx')
+        let wb: any
+        if (append && existsSync(path)) {
+          wb = XLSX.readFile(path)
+        } else {
+          wb = XLSX.utils.book_new()
+        }
+        const ws = XLSX.utils.aoa_to_sheet(data)
+        const sheetName = sheet || 'Sheet1'
+        if (wb.SheetNames.includes(sheetName)) {
+          const idx = wb.SheetNames.indexOf(sheetName)
+          wb.SheetNames[idx] = sheetName
+          wb.Sheets[sheetName] = ws
+        } else {
+          XLSX.utils.book_append_sheet(wb, ws, sheetName)
+        }
+        XLSX.writeFile(wb, path)
+        return { success: true, output: `已写入 ${data.length} 行数据到 ${path}` }
+      } catch (e) {
+        return { success: false, error: String(e) }
+      }
     },
   })
 }

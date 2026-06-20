@@ -26,3 +26,4 @@ export interface ToolDefinition {
 export type ToolName =
   | 'read' | 'write' | 'edit' | 'glob' | 'grep'
   | 'bash' | 'skill' | 'webfetch' | 'websearch' | 'codesearch'
+  | 'format' | 'lint' | 'database_query' | 'apply_patch'

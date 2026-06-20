@@ -1,6 +1,8 @@
 import { createContext, useContext, createSignal, onMount, type JSX, type Accessor } from "solid-js"
 import type { Phase } from "../../core/types"
 import type { CoreLoop } from "../../core/loop"
+import { createModel } from "../../llm/provider"
+import { MODEL_CATALOG } from "../../config/schema"
 
 export interface Message {
   id: string
@@ -41,11 +43,14 @@ export interface LoopContext {
   llmCallCount: Accessor<number>
   llmTokenUsage: Accessor<{ input: number; output: number; total: number }>
   compactSession: () => Promise<void>
+  currentModel: Accessor<string>
+  switchModel: (modelId: string) => void
+  getAvailableModels: () => string[]
 }
 
 const Ctx = createContext<LoopContext>()
 
-export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; sessionId?: string }) {
+export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; provider?: string; sessionId?: string }) {
   const [phase, setPhase] = createSignal<Phase>("OBSERVE")
   const [isProcessing, setIsProcessing] = createSignal(false)
   const [elapsed, setElapsed] = createSignal(0)
@@ -55,6 +60,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const toggleToolCallExpanded = () => setToolCallExpanded(prev => !prev)
   const [llmCallCount, setLlmCallCount] = createSignal(0)
   const [llmTokenUsage, setLlmTokenUsage] = createSignal({ input: 0, output: 0, total: 0 })
+  const [currentModel, setCurrentModel] = createSignal(props.model?.modelId ?? "unknown")
 
   const [pendingCount, setPendingCount] = createSignal(0)
   const inputQueue: string[] = []
@@ -62,6 +68,18 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const toolStartTimes = new Map<string, number>()
   let abortController: AbortController | null = null
   const abort = () => { abortController?.abort() }
+  let activeModel: any = props.model
+
+  const switchModel = (modelId: string) => {
+    const provider = props.provider ?? "deepseek"
+    activeModel = createModel({ provider, model: modelId })
+    setCurrentModel(modelId)
+  }
+
+  const getAvailableModels = (): string[] => {
+    const provider = props.provider ?? "deepseek"
+    return MODEL_CATALOG[provider] ?? []
+  }
 
   // 持久化 session ID，跨轮对话复用同一个 session
   let persistentSessionId: string | undefined = props.sessionId
@@ -140,7 +158,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         effortLevel: 1,
         phase: "OBSERVE" as Phase,
         cwd: process.cwd(),
-        model: props.model,
+        model: activeModel,
         onPhaseChange: (p: Phase) => {
           setPhase(p)
         },
@@ -246,6 +264,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     llmCallCount,
     llmTokenUsage,
     compactSession,
+    currentModel,
+    switchModel,
+    getAvailableModels,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }
