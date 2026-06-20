@@ -2,27 +2,17 @@ import { LoopContext } from '../loop'
 import { planReview } from './plan-review'
 
 export async function plan(ctx: LoopContext): Promise<Partial<LoopContext>> {
-  ctx.onPhaseLog?.('制定执行计划...')
-
   const plan = await generatePlan(ctx)
 
   // E3+ 必须审核
   if (ctx.effortLevel >= 3) {
-    ctx.onPhaseLog?.('提交计划审核...')
     const reviewResult = await planReview(ctx, plan)
 
     if (reviewResult.status === 'blocked') {
-      ctx.onPhaseLog?.(`计划被阻止: ${reviewResult.issues.join('; ')}`)
       return {
         phase: 'PLAN',
         pendingReview: reviewResult,
       }
-    }
-
-    if (reviewResult.approved) {
-      ctx.onPhaseLog?.('计划审核通过 ✓')
-    } else {
-      ctx.onPhaseLog?.(`计划需修改: ${reviewResult.issues.join('; ')}`)
     }
 
     return {
@@ -33,7 +23,6 @@ export async function plan(ctx: LoopContext): Promise<Partial<LoopContext>> {
   }
 
   // E1/E2 直接执行
-  ctx.onPhaseLog?.(`执行步骤: ${plan.steps.join(' → ')}`)
   return {
     phase: 'BUILD',
     plan,
@@ -86,7 +75,6 @@ ${ctx.sensitiveWarning ? `安全警告：${ctx.sensitiveWarning}` : ''}
     if (jsonMatch) {
       const steps: PlanStep[] = JSON.parse(jsonMatch[0])
       if (Array.isArray(steps) && steps.length > 0) {
-        ctx.onPhaseLog?.(`计划: ${steps.map(s => `${s.action}(${s.target})`).join(' → ')}`)
         return {
           steps: steps.map(s => `${s.action} ${s.target}: ${s.description}`),
         }

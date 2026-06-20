@@ -1,4 +1,4 @@
-import { createSignal, Show, For } from "solid-js"
+import { createSignal, createMemo, Show, For } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import { useTheme } from "../context/theme"
 import { useLoop } from "../context/loop"
@@ -73,6 +73,59 @@ export function Home() {
     await run(text)
   }
 
+  // ===== 斜杠命令菜单 =====
+  const [slashOpen, setSlashOpen] = createSignal(false)
+  const [slashInput, setSlashInput] = createSignal("")
+  const [slashIdx, setSlashIdx] = createSignal(0)
+  const [availableSkills, setAvailableSkills] = createSignal<string[]>([])
+
+  const scanSkills = async () => {
+    const { readdir } = await import("fs/promises")
+    const { join } = await import("path")
+    const homes = process.env.HOME || process.env.USERPROFILE || ""
+    const paths = [join(homes, '.agents', 'skills'), join(process.cwd(), 'skills')]
+    const skills: string[] = []
+    for (const dir of paths) {
+      try { for (const f of await readdir(dir)) { if (f.endsWith('.md')) skills.push(f.replace(/\.md$/, '')) } } catch {}
+    }
+    setAvailableSkills(skills)
+  }
+  scanSkills()
+
+  const slashItems = createMemo(() => {
+    const items: { type: string; label: string; desc: string }[] = [
+      { type: 'cmd', label: '/compact', desc: '压缩对话历史' },
+      { type: 'cmd', label: '/model', desc: '切换模型' },
+    ]
+    for (const s of availableSkills()) {
+      items.push({ type: 'skill', label: `/skill ${s}`, desc: `加载技能 ${s}` })
+    }
+    const filter = slashInput().slice(1).toLowerCase()
+    if (!filter) return items
+    return items.filter(i => i.label.toLowerCase().includes(filter))
+  })
+
+  const handleInputChange = (text: string) => {
+    if (text.startsWith('/')) {
+      setSlashInput(text)
+      setSlashOpen(true)
+      setSlashIdx(0)
+    } else {
+      setSlashOpen(false)
+    }
+  }
+
+  const handleSlashSubmit = () => {
+    const items = slashItems()
+    const selected = items[slashIdx()]
+    if (!selected) return
+    if (selected.type === 'cmd') {
+      if (selected.label === '/compact') compactSession()
+      else if (selected.label === '/model') toggleModelPicker()
+    }
+    setSlashOpen(false)
+  }
+
   return (
     <box flexDirection="row" height="100%">
       <box flexDirection="column" flexGrow={1} backgroundColor={background()}>
@@ -96,6 +149,38 @@ export function Home() {
               {(model, i) => (
                 <text fg={i() === modelPickerIdx() ? primary() : text()}>
                   {`${i() === modelPickerIdx() ? '▸ ' : '  '}${model}${model === currentModel() ? ' (当前)' : ''}`}
+                </text>
+              )}
+            </For>
+          </box>
+        </Show>
+
+        <Show when={slashOpen()}>
+          <box
+            flexDirection="column"
+            position="absolute"
+            bottom={4}
+            left={1}
+            zIndex={5000}
+            width={50}
+            paddingX={2}
+            paddingY={1}
+            backgroundColor="#1e1e1e"
+            border={["top", "bottom", "left", "right"]}
+            borderColor={primary()}
+            onKeyDown={(e: any) => {
+              if (e.name === "up") { e.preventDefault(); setSlashIdx(prev => (prev - 1 + slashItems().length) % slashItems().length) }
+              else if (e.name === "down") { e.preventDefault(); setSlashIdx(prev => (prev + 1) % slashItems().length) }
+              else if (e.name === "return") { e.preventDefault(); handleSlashSubmit() }
+              else if (e.name === "escape") { e.preventDefault(); setSlashOpen(false) }
+            }}
+          >
+            <text fg={primary()}>命令 ({slashInput()})</text>
+            <box height={1} />
+            <For each={slashItems()}>
+              {(item, i) => (
+                <text fg={i() === slashIdx() ? primary() : text()}>
+                  {`${i() === slashIdx() ? '▸ ' : '  '}${item.label}  ${item.desc}`}
                 </text>
               )}
             </For>
@@ -127,7 +212,7 @@ export function Home() {
         </Show>
 
         <box flexShrink={0}>
-          <Prompt onSubmit={handleSubmit} disabled={isProcessing()} />
+          <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange} />
           <StatusBar />
         </box>
       </box>

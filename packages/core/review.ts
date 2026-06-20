@@ -80,7 +80,6 @@ export async function reviewPlan(ctx: LoopContext): Promise<ReviewResult> {
 
   try {
     const response = await llm.complete({
-      model: 'claude-sonnet-4-20250514',
       messages: [
         { role: 'system', content: reviewPrompt },
         { role: 'user', content: `请评审以下方案：\n\n用户需求：${userInput}\n计划：${plan?.steps?.join(' → ') || '未指定'}\n风险：${risks.join('、') || '未识别'}` },

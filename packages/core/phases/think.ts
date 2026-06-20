@@ -6,7 +6,6 @@ export async function think(ctx: LoopContext): Promise<Partial<LoopContext>> {
   if (ctx.llm) {
     try {
       const response = await ctx.llm.complete({
-        model: 'claude-sonnet-4-20250514',
         messages: [
           {
             role: 'user',
