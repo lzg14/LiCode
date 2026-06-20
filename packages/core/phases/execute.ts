@@ -125,20 +125,40 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
     })
   }
 
-  // 完整重建 msgs：摘要（如果存在）+ 历史 + 本轮 user 输入
-  // 限制历史消息数量，避免上下文过大
-  const MAX_HISTORY = 100
+  // 重建 msgs：摘要（如果存在）+ 最近消息 + 本轮 user 输入
+  // 有摘要时只保留 user/assistant 纯文本（摘要已记录工具调用历史）
+  // 无摘要时保留全部（最多 100 条）+ tool/tool-call 配对校验
   const rawHistory = ctx.history ?? []
-  const history = rawHistory.length > MAX_HISTORY
-    ? rawHistory.slice(-MAX_HISTORY)
+  const hasSummary = !!ctx.sessionSummary
+  const PRESERVE_RECENT = hasSummary ? 30 : 100
+  const sliced = rawHistory.length > PRESERVE_RECENT
+    ? rawHistory.slice(-PRESERVE_RECENT)
     : rawHistory
 
+  let history: typeof rawHistory
+  if (hasSummary) {
+    // 有摘要：只保留 user/assistant 文本消息，丢弃 tool 角色
+    // assistant 消息去掉 tool-call parts，只保留 text
+    history = sliced
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => {
+        if (Array.isArray(m.content)) {
+          const textParts = m.content.filter((p: any) => p.type === 'text')
+          if (textParts.length === 0) return null
+          return { ...m, content: textParts }
+        }
+        return m
+      })
+      .filter(Boolean)
+  } else {
+    // 无摘要：保留全部，校验 tool/tool-call 配对
+    history = sliced
+  }
+
   // 从后往前找到最后一个合法的 user 消息起始点（确保 tool/tool-call 配对完整）
-  // 找到最近的 user 消息，从它开始截取（跳过前面的孤立消息）
   function findValidStart(msgs: typeof history): number {
     for (let i = msgs.length - 1; i >= 0; i--) {
       if (msgs[i].role === 'user') {
-        // 检查从 i 开始是否 tool/tool-call 配对
         const toolCallIds = new Set<string>()
         const toolResultIds = new Set<string>()
         for (let j = i; j < msgs.length; j++) {
@@ -150,9 +170,8 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
             }
           }
         }
-        // 找到第一个 user 消息后，检查是否有孤立的 tool-result
         for (const rid of toolResultIds) {
-          if (!toolCallIds.has(rid)) return i + 1 // 从下一个 user 消息开始
+          if (!toolCallIds.has(rid)) return i + 1
         }
         return i
       }
