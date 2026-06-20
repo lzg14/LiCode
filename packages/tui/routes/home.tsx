@@ -235,12 +235,6 @@ export function Home() {
               backgroundColor={backgroundPanel()}
               border={["top", "bottom", "left", "right"]}
               borderColor={primary()}
-              onKeyDown={(e: any) => {
-                if (e.name === "up") { e.preventDefault(); setModelPickerIdx(prev => (prev - 1 + getAvailableModels().length) % getAvailableModels().length) }
-                else if (e.name === "down") { e.preventDefault(); setModelPickerIdx(prev => (prev + 1) % getAvailableModels().length) }
-                else if (e.name === "return") { e.preventDefault(); const m = getAvailableModels()[modelPickerIdx()]; if (m) { switchModel(m); setModelPickerOpen(false) } }
-                else if (e.name === "escape") { e.preventDefault(); setModelPickerOpen(false) }
-              }}
             >
               <text fg={primary()}>{`选择模型 (↑↓ 选择, Enter 确认, Esc 取消)`}</text>
               <box height={1} />
@@ -275,12 +269,6 @@ export function Home() {
               backgroundColor={backgroundPanel()}
               border={["top", "bottom", "left", "right"]}
               borderColor={primary()}
-              onKeyDown={(e: any) => {
-                if (e.name === "up") { e.preventDefault(); setProviderPickerIdx(prev => (prev - 1 + getAvailableProviders().length) % getAvailableProviders().length) }
-                else if (e.name === "down") { e.preventDefault(); setProviderPickerIdx(prev => (prev + 1) % getAvailableProviders().length) }
-                else if (e.name === "return") { e.preventDefault(); const p = getAvailableProviders()[providerPickerIdx()]; if (p) { switchProvider(p); setProviderPickerOpen(false) } }
-                else if (e.name === "escape") { e.preventDefault(); setProviderPickerOpen(false) }
-              }}
             >
               <text fg={primary()}>{`选择 Provider (↑↓ 选择, Enter 确认, Esc 取消)`}</text>
               <box height={1} />
@@ -315,12 +303,6 @@ export function Home() {
               backgroundColor={backgroundPanel()}
               border={["top", "bottom", "left", "right"]}
               borderColor={primary()}
-              onKeyDown={(e: any) => {
-                if (e.name === "up") { e.preventDefault(); setSlashIdx(prev => (prev - 1 + slashItems().length) % slashItems().length) }
-                else if (e.name === "down") { e.preventDefault(); setSlashIdx(prev => (prev + 1) % slashItems().length) }
-                else if (e.name === "return") { e.preventDefault(); handleSlashSubmit() }
-                else if (e.name === "escape") { e.preventDefault(); setSlashOpen(false) }
-              }}
             >
               <text fg={primary()}>命令 ({slashInput()})</text>
               <box height={1} />
@@ -360,7 +342,7 @@ export function Home() {
         </Show>
 
         <box flexShrink={0}>
-          <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange} />
+          <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange} pickerOpen={modelPickerOpen() || providerPickerOpen() || slashOpen()} />
           <StatusBar />
         </box>
       </box>
