@@ -46,6 +46,7 @@ export interface LoopContext {
   currentModel: Accessor<string>
   switchModel: (modelId: string) => void
   getAvailableModels: () => string[]
+  contextTokens: Accessor<number>
 }
 
 const Ctx = createContext<LoopContext>()
@@ -253,6 +254,16 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     }
   }
 
+  // 估算当前上下文的 token 数（总字符数 / 3，中英文混合粗略估）
+  const contextTokens = createMemo(() => {
+    let totalChars = 0
+    for (const msg of messages()) {
+      totalChars += msg.content.length
+      if (msg.toolArgs) totalChars += JSON.stringify(msg.toolArgs).length
+    }
+    return Math.ceil(totalChars / 3)
+  })
+
   const value: LoopContext = {
     run,
     abort,
@@ -272,6 +283,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     currentModel,
     switchModel,
     getAvailableModels,
+    contextTokens,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }
