@@ -45,11 +45,13 @@ function MessageItem(props: { msg: Message }) {
     const isLong = lineCount > 3 || props.msg.content.length > 200
     return (
       <box flexDirection="row" marginBottom={1}>
-        <text fg={primary()}>{"┃ "}</text>
+        <text fg={props.msg.queued ? textMuted() : primary()}>
+          {props.msg.queued ? "┃ [queued] " : "┃ "}
+        </text>
         <Show when={!isLong} fallback={
           <text fg={textMuted()}>[pasted ~ {lineCount} lines]</text>
         }>
-          <text fg={text()}>{props.msg.content}</text>
+          <text fg={props.msg.queued ? textMuted() : text()}>{props.msg.content}</text>
         </Show>
       </box>
     )
