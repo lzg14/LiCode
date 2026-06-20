@@ -8,7 +8,6 @@ import { DEFAULT_CONFIG } from './defaults'
  * 配置系统 - 多层级配置、环境变量替换、热更新
  */
 
-// 环境变量替换: ${VAR} 或 ${VAR:-default}
 function replaceEnvVars(value: string): string {
   return value.replace(/\$\{([^}]+)\}/g, (_, varDef) => {
     const [varName, defaultVal] = varDef.split(':-')
@@ -16,19 +15,12 @@ function replaceEnvVars(value: string): string {
   })
 }
 
-// 递归替换对象中的环境变量
 function replaceEnvVarsInObj(obj: any): any {
-  if (typeof obj === 'string') {
-    return replaceEnvVars(obj)
-  }
-  if (Array.isArray(obj)) {
-    return obj.map(replaceEnvVarsInObj)
-  }
+  if (typeof obj === 'string') return replaceEnvVars(obj)
+  if (Array.isArray(obj)) return obj.map(replaceEnvVarsInObj)
   if (obj && typeof obj === 'object') {
     const result: any = {}
-    for (const [key, value] of Object.entries(obj)) {
-      result[key] = replaceEnvVarsInObj(value)
-    }
+    for (const [key, value] of Object.entries(obj)) result[key] = replaceEnvVarsInObj(value)
     return result
   }
   return obj
@@ -39,74 +31,43 @@ export class ConfigLoader {
   private watchers = new Map<string, () => void>()
 
   async load(path: string): Promise<Config> {
-    if (!existsSync(path)) {
-      throw new Error(`Config file not found: ${path}`)
-    }
-    const file = readFileSync(path, 'utf-8')
-    const data = JSON.parse(file)
-    // 替换环境变量
-    const processedData = replaceEnvVarsInObj(data)
-    return ConfigSchema.parse(processedData)
+    if (!existsSync(path)) throw new Error(`Config file not found: ${path}`)
+    return ConfigSchema.parse(replaceEnvVarsInObj(JSON.parse(readFileSync(path, 'utf-8'))))
   }
 
-  async loadWithOverrides(
-    basePath: string,
-    overrides?: Partial<Config>
-  ): Promise<Config> {
-    const base = await this.load(basePath)
-    return { ...base, ...overrides }
+  async loadWithOverrides(basePath: string, overrides?: Partial<Config>): Promise<Config> {
+    return { ...(await this.load(basePath)), ...overrides }
   }
 
   async discoverAndLoad(home: string): Promise<Config> {
-    // 优先级:
-    // 1. ./licode.config.json (项目配置)
-    // 2. ~/.licode/config.json (全局配置)
-    // 3. Claude Code 配置 (自动导入)
-    // 4. 默认配置
-    // 5. 环境变量覆盖 (LICODE_MODEL / LICODE_PROVIDER)
-
     const globalPath = join(home, '.licode', 'config.json')
     const localPath = join(process.cwd(), 'licode.config.json')
 
     if (existsSync(localPath)) {
-      try {
-        this.config = await this.load(localPath)
-        console.log('[✓] Loaded project config')
-      } catch (e) {
-        console.warn('[!] Failed to load project config:', e)
-      }
+      try { this.config = await this.load(localPath); console.log('[✓] Loaded project config') }
+      catch (e) { console.warn('[!] Failed to load project config:', e) }
     }
 
     if (!this.config && existsSync(globalPath)) {
-      try {
-        this.config = await this.load(globalPath)
-        console.log('[✓] Loaded global config')
-      } catch (e) {
-        console.warn('[!] Failed to load global config:', e)
-      }
+      try { this.config = await this.load(globalPath); console.log('[✓] Loaded global config') }
+      catch (e) { console.warn('[!] Failed to load global config:', e) }
     }
 
     if (!this.config) {
-      const claudeConfig = importClaudeCodeConfig()
-      if (claudeConfig) {
-        const isDeepSeek = claudeConfig.baseUrl.includes('deepseek')
-        console.log('[✓] Imported LLM config from Claude Code')
+      const cc = importClaudeCodeConfig()
+      if (cc) {
+        const isDeepSeek = cc.baseUrl.includes('deepseek')
+        const isMiniMax = cc.baseUrl.includes('minimax')
+        let provider = 'anthropic'
+        let baseUrl = cc.baseUrl
+        if (isDeepSeek) { provider = 'deepseek'; baseUrl = 'https://api.deepseek.com' }
+        if (isMiniMax) { provider = 'minimax'; baseUrl = 'https://api.minimax.chat/v1' }
+        console.log(`[✓] Imported LLM config from Claude Code (${provider})`)
         this.config = {
-          llm: {
-            provider: isDeepSeek ? 'deepseek' : 'anthropic',
-            model: claudeConfig.model,
-            apiKeyEnv: 'ANTHROPIC_API_KEY',
-            apiKey: claudeConfig.apiKey,
-            baseUrl: isDeepSeek ? 'https://api.deepseek.com' : claudeConfig.baseUrl,
-          },
+          llm: { provider, model: cc.model, apiKeyEnv: 'ANTHROPIC_AUTH_TOKEN', apiKey: cc.apiKey, baseUrl },
           security: { commandWhitelist: [], allowedPaths: [], deniedPaths: [] },
           memory: { path: '~/.licode/licode-sessions.db', retentionDays: 30 },
-          subagent: {
-            maxConcurrent: 3,
-            maxDepth: 1,
-            timeoutMs: 900000,
-            blockedTools: ['delegate_task', 'clarify', 'memory_write', 'send_message', 'execute_code'],
-          },
+          subagent: { maxConcurrent: 3, maxDepth: 1, timeoutMs: 900000, blockedTools: ['delegate_task', 'clarify', 'memory_write', 'send_message', 'execute_code'] },
         }
       }
     }
@@ -116,7 +77,6 @@ export class ConfigLoader {
       console.log('[!] Using default config')
     }
 
-    // 环境变量覆盖
     if (process.env.LICODE_MODEL) this.config.llm.model = process.env.LICODE_MODEL
     if (process.env.LICODE_PROVIDER) this.config.llm.provider = process.env.LICODE_PROVIDER as any
     if (process.env.LICODE_API_KEY) this.config.llm.apiKey = process.env.LICODE_API_KEY
@@ -124,58 +84,25 @@ export class ConfigLoader {
     return this.config
   }
 
-  /**
-   * 保存配置
-   */
   save(path: string, config: Config): void {
     const dir = dirname(path)
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     writeFileSync(path, JSON.stringify(config, null, 2), 'utf-8')
   }
 
-  /**
-   * 监听配置文件变化（热更新）
-   */
   watch(path: string, onChange: (config: Config) => void): void {
-    if (this.watchers.has(path)) {
-      return
-    }
-
+    if (this.watchers.has(path)) return
     const watcher = watch(path, async (eventType) => {
       if (eventType === 'change') {
-        try {
-          const newConfig = await this.load(path)
-          this.config = newConfig
-          onChange(newConfig)
-          console.log(`[✓] Config reloaded: ${path}`)
-        } catch (e) {
-          console.error(`[!] Failed to reload config: ${e}`)
-        }
+        try { const c = await this.load(path); this.config = c; onChange(c); console.log(`[✓] Config reloaded: ${path}`) }
+        catch (e) { console.error(`[!] Failed to reload config: ${e}`) }
       }
     })
-
     this.watchers.set(path, () => watcher.close())
   }
 
-  /**
-   * 停止监听
-   */
-  unwatch(path: string): void {
-    const close = this.watchers.get(path)
-    if (close) {
-      close()
-      this.watchers.delete(path)
-    }
-  }
-
-  /**
-   * 获取当前配置
-   */
-  getConfig(): Config | null {
-    return this.config
-  }
+  unwatch(path: string): void { this.watchers.get(path)?.(); this.watchers.delete(path) }
+  getConfig(): Config | null { return this.config }
 }
 
 export const configLoader = new ConfigLoader()

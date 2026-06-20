@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const PROVIDERS = ['anthropic', 'openai', 'deepseek', 'local'] as const
+export const PROVIDERS = ['anthropic', 'openai', 'deepseek', 'MiniMax', 'local'] as const
 
 export const LLMConfigSchema = z.object({
   provider: z.enum(PROVIDERS),

@@ -10,7 +10,9 @@ export interface ModelConfig {
 
 export function createModel(config: ModelConfig) {
   const provider = config.provider.toLowerCase()
-  const apiKey = config.apiKey || process.env[`${provider.toUpperCase()}_API_KEY`] || ""
+  let apiKey = config.apiKey || process.env[`${provider.toUpperCase()}_API_KEY`] || ""
+  // fallback: 如果没找到 provider 专属 key，尝试 ANTHROPIC_AUTH_TOKEN
+  if (!apiKey) apiKey = process.env.ANTHROPIC_AUTH_TOKEN || ""
 
   if (provider === "deepseek") {
     return createOpenAI({ apiKey, baseURL: config.baseUrl ?? "https://api.deepseek.com" }).chat(config.model)
@@ -18,8 +20,8 @@ export function createModel(config: ModelConfig) {
   if (provider === "anthropic") {
     return createAnthropic({ apiKey, baseURL: config.baseUrl })(config.model)
   }
-  if (provider === "MiniMax") {
-    return createOpenAI({ apiKey, baseURL: config.baseUrl ?? "https://api.MiniMax.chat/v1" }).chat(config.model)
+  if (provider === "minimax") {
+    return createOpenAI({ apiKey, baseURL: config.baseUrl ?? "https://api.minimax.chat/v1" }).chat(config.model)
   }
   return createOpenAI({ apiKey, baseURL: config.baseUrl }).chat(config.model)
 }
