@@ -10,7 +10,7 @@ import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
 
 export function Home() {
-  const { phase, isProcessing, messages, run, compactSession, currentModel, currentProvider, switchModel, switchProvider, getAvailableModels, getAvailableProviders, addMessage, runWorkflow, listWorkflows } = useLoop()
+  const { phase, isProcessing, messages, run, compactSession, currentModel, currentProvider, switchModel, switchProvider, getAvailableModels, getAvailableProviders, addMessage, runWorkflow, listWorkflows, setActiveSkill } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [providerPickerOpen, setProviderPickerOpen] = createSignal(false)
@@ -29,6 +29,20 @@ export function Home() {
   const handleSubmit = async (text: string, images?: Array<{ base64: string; mimeType: string }>) => {
     if (text.startsWith('/compact')) {
       await compactSession()
+      return
+    }
+    if (text.startsWith('/skill')) {
+      const arg = text.slice(6).trim()
+      if (!arg || arg === 'list') {
+        const skillList = availableSkills().length > 0
+          ? availableSkills().join(', ')
+          : '无可用技能（搜索路径: ~/.licode/skills/, ./skills/）'
+        addMessage({ role: "system", content: `可用技能: ${skillList}\n\n用法: /skill <名称>` })
+        return
+      }
+      // 加载技能并设置为活跃状态
+      await setActiveSkill(arg)
+      addMessage({ role: "system", content: `技能 "${arg}" 已激活，可在侧栏查看指令` })
       return
     }
     if (text.startsWith('/model')) {
@@ -157,12 +171,23 @@ export function Home() {
     const { readdir } = await import("fs/promises")
     const { join } = await import("path")
     const homes = process.env.HOME || process.env.USERPROFILE || ""
-    const paths = [join(homes, '.agents', 'skills'), join(process.cwd(), 'skills')]
+    const paths = [
+      join(homes, '.licode', 'skills'),
+      join(homes, '.licode', 'skills', 'builtin'),
+      join(process.cwd(), 'skills'),
+    ]
     const skills: string[] = []
     for (const dir of paths) {
-      try { for (const f of await readdir(dir)) { if (f.endsWith('.md')) skills.push(f.replace(/\.md$/, '')) } } catch {}
+      try {
+        for (const f of await readdir(dir)) {
+          if (f.endsWith('.skill.md')) skills.push(f.replace('.skill.md', ''))
+          else if (f.endsWith('.skill.json')) skills.push(f.replace('.skill.json', ''))
+          else if (f.endsWith('.md') && !f.startsWith('.')) skills.push(f.replace('.md', ''))
+        }
+      } catch {}
     }
-    setAvailableSkills(skills)
+    // 去重
+    setAvailableSkills([...new Set(skills)])
   }
   scanSkills()
 
@@ -204,12 +229,24 @@ export function Home() {
       else if (selected.label === '/model') toggleModelPicker()
       else if (selected.label === '/provider') toggleProviderPicker()
       else if (selected.label === '/search') {
-        // 预填 /search + 空格，让用户继续输入关键词
         setSlashOpen(false)
         setSlashInput('')
         setPromptText('/search ')
         return
       }
+      else if (selected.label === '/workflow') {
+        setSlashOpen(false)
+        setSlashInput('')
+        setPromptText('/workflow ')
+        return
+      }
+    } else if (selected.type === 'skill') {
+      // /skill xxx → 把 /skill xxx 作为普通消息发送，LLM 会调用 skill 工具
+      const skillName = selected.label.replace('/skill ', '')
+      setSlashOpen(false)
+      setSlashInput('')
+      run(`/skill ${skillName}`)
+      return
     }
     setSlashOpen(false)
   }

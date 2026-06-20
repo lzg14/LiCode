@@ -9,8 +9,8 @@ export type EffortLevel = 1 | 2 | 3 | 4 | 5
 // Agent 类型
 export type AgentType = 'primary' | 'subagent' | 'fork'
 
-// 阶段
-export type Phase = 'OBSERVE' | 'THINK' | 'PLAN' | 'BUILD' | 'EXECUTE' | 'VERIFY' | 'LEARN' | 'DONE'
+// 阶段（简化：LLM 自己决定做什么，不再强制走流程）
+export type Phase = 'EXECUTE' | 'DONE'
 
 // 配置
 export interface Config {

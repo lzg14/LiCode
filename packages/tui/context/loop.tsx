@@ -139,7 +139,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       : undefined,
     toolExecutor: async (name, input) => {
       const { globalToolRegistry } = await import("../../tools/registry")
-      return globalToolRegistry.execute(name, input)
+      return globalToolRegistry.execute(name, input) as Promise<{ success: boolean; output?: any; error?: string }>
     },
     scriptRegistry: new BuiltinScriptRegistry(),
   })
@@ -163,14 +163,25 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       const homes = process.env.HOME || process.env.USERPROFILE || ""
       const paths = [
         join(homes, ".licode", "skills", `${name}.skill.md`),
+        join(homes, ".licode", "skills", `${name}.skill.json`),
+        join(homes, ".licode", "skills", `${name}.md`),
         join(homes, ".licode", "skills", "builtin", `${name}.skill.md`),
+        join(homes, ".licode", "skills", "builtin", `${name}.skill.json`),
         join(process.cwd(), "skills", `${name}.skill.md`),
+        join(process.cwd(), "skills", `${name}.skill.json`),
       ]
       for (const p of paths) {
         try {
           const content = await readFile(p, "utf-8")
-          setActiveSkillState(name)
-          setActiveSkillInstructions(content)
+          // 如果是 JSON 格式，提取 instructions 字段
+          if (p.endsWith('.json')) {
+            const data = JSON.parse(content)
+            setActiveSkillState(name)
+            setActiveSkillInstructions(data.instructions ?? content)
+          } else {
+            setActiveSkillState(name)
+            setActiveSkillInstructions(content)
+          }
           return
         } catch {}
       }

@@ -12,6 +12,9 @@ import { securityLayer } from '../security'
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
 
+// 支持的图片扩展名
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'])
+
 export function registerBuiltinTools(): void {
   // ========== 文件操作 ==========
 
@@ -483,6 +486,7 @@ export function registerBuiltinTools(): void {
       const home = process.env.HOME || process.env.USERPROFILE || ''
       const skillDirs = [
         join(home, '.licode', 'skills'),
+        join(home, '.licode', 'skills', 'builtin'),
         join(process.cwd(), 'skills'),
       ]
 
@@ -669,8 +673,6 @@ export function registerBuiltinTools(): void {
   })
 
   // ========== 图片 ==========
-  // 支持的图片扩展名
-  const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'])
 
   globalToolRegistry.register({
     name: 'read_image',

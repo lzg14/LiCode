@@ -87,7 +87,7 @@ export function Prompt(props: PromptProps) {
       const img = await readClipboardImage()
       if (img) {
         e.preventDefault()
-        setPendingImages(prev => [...prev, img])
+        setPendingImages(prev => [...prev, { base64: img.data, mimeType: img.mime }])
         return
       }
       // 无图片则让终端处理普通粘贴
@@ -108,7 +108,7 @@ export function Prompt(props: PromptProps) {
 
     if (e.name === "down" && (input.plainText.length === 0 || input.cursorOffset >= input.plainText.length)) {
       e.preventDefault()
-      input.setText(history.down())
+      input.setText(history.down() ?? "")
       return
     }
 

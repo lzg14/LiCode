@@ -84,7 +84,7 @@ function MessageItem(props: { msg: Message }) {
       : props.msg.toolStatus === "error" ? "✗" : ""
     const statusColor = props.msg.toolStatus === "completed" ? success()
       : props.msg.toolStatus === "error" ? error() : warning()
-    const toolArgs = props.msg.toolArgs ? formatToolArgs(props.msg.toolName, props.msg.toolArgs) : ""
+    const toolArgs = props.msg.toolArgs && props.msg.toolName ? formatToolArgs(props.msg.toolName, props.msg.toolArgs) : ""
     const durText = props.msg.duration !== undefined ? formatDuration(props.msg.duration) : ""
     return (
       <box flexDirection="column" marginBottom={0}>
