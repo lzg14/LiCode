@@ -282,9 +282,11 @@ ${extraction.conclusions.map(s => `- ${s}`).join('\n') || '(无)'}
   }
 
   private buildSummaryDocument(body: string, originalCount: number, preservedCount: number): string {
-    const now = new Date().toISOString().slice(0, 16).replace('T', ' ')
+    const now = new Date()
+    const localDate = now.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-')
+    const localTime = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false })
     return [
-      `# 对话摘要（截至 ${now}）`,
+      `# 对话摘要（截至 ${localDate} ${localTime}）`,
       ``,
       `原始消息 ${originalCount} 条，保留最近 ${preservedCount} 条完整消息。`,
       ``,
