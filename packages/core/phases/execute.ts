@@ -44,9 +44,14 @@ Web 工具：
 
 开发工具：
 - run_tests: 运行测试
-- lint: 代码检查
-- format: 格式化代码
+- lint: 代码检查（自动检测 eslint/ruff/biome）
+- format: 格式化代码（自动检测 prettier/dprint/biome）
 - install_deps: 安装依赖
+
+其他工具：
+- skill: 加载专业知识或工作流程技能
+- database_query: 查询 SQLite 数据库
+- apply_patch: 应用代码补丁（unified diff 或 JSON 格式）
 
 当你需要使用工具时，请调用相应的工具。工具调用结果会自动返回给你。`
 
@@ -160,9 +165,9 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         toolCalls: result.toolCalls?.map(tc => ({ tool: tc.toolName, input: tc.input })),
       }, duration)
 
-      // 累积每次 LLM 返回的文本（含带 tool calls 的中间推理）
+      // 只在最终轮（无 toolCalls）保留文本到 fullText，中间推理仅用于 streaming 显示
       if (result.text) {
-        fullText += result.text
+        if (!result.toolCalls?.length) fullText = result.text
         ctx.onStreamText?.(result.text)
       }
 
