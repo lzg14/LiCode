@@ -71,21 +71,23 @@ bun run dev
 ```
 licode/
 ├── packages/
-│   ├── core/           # 核心循环（loop、phases、checkpoint、compaction）
-│   ├── agent/          # Agent 系统（spawn、limits、blocked-tools）
-│   ├── llm/            # LLM Provider（Anthropic、OpenAI）
-│   ├── tools/          # 工具系统（registry、builtin）
-│   ├── memory/         # 记忆系统（FTS5、recall）
-│   ├── session/        # 会话管理（session、checkpoint、prompt）
-│   ├── security/       # 安全层（whitelist、permissions、safe-boundary）
-│   ├── audit/          # 审计日志
-│   ├── config/         # 配置管理
-│   ├── tui/            # 终端 UI（SolidJS + @opentui）
-│   ├── integration/    # 外部集成（Git、MCP）
-│   ├── skills/         # Skills 系统
-│   ├── plugin/         # 插件系统
-│   ├── server/         # HTTP API
-│   └── worktree/       # 工作树
+│   ├── core/           # ✅ 核心循环（loop、phases、checkpoint、compaction）
+│   ├── tools/          # ✅ 27 个工具（文件/搜索/Git/Web/Excel/数据库）
+│   ├── session/        # ✅ 会话管理（SQLite 持久化、历史压缩）
+│   ├── tui/            # ✅ 终端 UI（SolidJS + @opentui）
+│   ├── config/         # ✅ 配置管理（多层级/环境变量/外部导入）
+│   ├── llm/            # ✅ LLM Provider（Anthropic/OpenAI/DeepSeek）
+│   ├── security/       # ✅ 安全层（命令白名单已接线到 bash 工具）
+│   ├── skills/         # ✅ 技能系统（已接线到 skill 工具）
+│   ├── memory/         # ✅ 记忆系统（FTS5、recall）
+│   ├── audit/          # ⏸️ 审计日志（已调用但日志文件无人查看）
+│   ├── integration/    # ⏸️ 外部集成（Git 已用，MCP/Obsidian/DB 待接线）
+│   ├── agent/          # ⏸️ Agent 系统（骨架完成，未集成到 Core Loop）
+│   ├── snapshot/       # ⏸️ 文件快照（预留，供 Diff 预览使用）
+│   ├── question/       # ⏸️ 提问引擎（预留，供 Interview 阶段使用）
+│   ├── server/         # ⏸️ HTTP API（预留，独立服务）
+│   ├── plugin/         # ⏸️ 插件系统（预留，插件市场待填充）
+│   └── worktree/       # ⏸️ 工作树管理（预留）
 ├── docs/               # 设计文档
 │   ├── core-loop/      # 七阶段、Effort Level、Interview 设计
 │   └── modules/        # 各模块设计文档
