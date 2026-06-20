@@ -1,48 +1,37 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
+import { readFile, writeFile, access, mkdir, readdir, unlink } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
 import type { MemoryEntry, MemorySearchResult } from './schema'
-
-/**
- * 记忆系统 - 三层记忆架构
- * 短期：当前 session
- * 中期：项目级
- * 长期：全局
- */
 
 const MEMORY_BASE = join(homedir(), '.licode', 'memory')
 
 export class Memory {
   private entries: Map<string, MemoryEntry> = new Map()
+  private initialized = false
 
-  constructor(private projectPath?: string) {
-    this.load()
-  }
+  constructor(private projectPath?: string) {}
 
-  /**
-   * 加载记忆
-   */
-  private load(): void {
-    // 加载全局记忆
-    this.loadFromDir(join(MEMORY_BASE, 'global'))
-
-    // 加载项目记忆
+  private async ensureInit(): Promise<void> {
+    if (this.initialized) return
+    this.initialized = true
+    await this.loadFromDir(join(MEMORY_BASE, 'global'))
     if (this.projectPath) {
       const projectId = Buffer.from(this.projectPath).toString('base64').slice(0, 16)
-      this.loadFromDir(join(MEMORY_BASE, 'projects', projectId))
+      await this.loadFromDir(join(MEMORY_BASE, 'projects', projectId))
     }
   }
 
-  /**
-   * 从目录加载记忆
-   */
-  private loadFromDir(dir: string): void {
-    if (!existsSync(dir)) return
+  private async loadFromDir(dir: string): Promise<void> {
+    try {
+      await access(dir)
+    } catch {
+      return
+    }
 
     try {
-      const files = readdirSync(dir).filter(f => f.endsWith('.md'))
-      for (const file of files) {
-        const content = readFileSync(join(dir, file), 'utf-8')
+      const files = await readdir(dir)
+      for (const file of files.filter(f => f.endsWith('.md'))) {
+        const content = await readFile(join(dir, file), 'utf-8')
         const id = file.replace('.md', '')
         this.entries.set(id, {
           id,
@@ -54,8 +43,8 @@ export class Memory {
           accessCount: 0,
         })
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      console.warn(`[Memory] loadFromDir failed for ${dir}:`, e)
     }
   }
 
@@ -63,6 +52,7 @@ export class Memory {
    * 存储记忆
    */
   async store(entry: Omit<MemoryEntry, 'id' | 'createdAt' | 'updatedAt' | 'accessCount'>): Promise<string> {
+    await this.ensureInit()
     const id = `mem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const fullEntry: MemoryEntry = {
       ...entry,
@@ -73,15 +63,12 @@ export class Memory {
     }
 
     this.entries.set(id, fullEntry)
-    this.persist(fullEntry)
+    await this.persist(fullEntry)
 
     return id
   }
 
-  /**
-   * 持久化到文件
-   */
-  private persist(entry: MemoryEntry): void {
+  private async persist(entry: MemoryEntry): Promise<void> {
     let dir: string
 
     if (entry.scope === 'global') {
@@ -94,10 +81,10 @@ export class Memory {
     }
 
     try {
-      mkdirSync(dir, { recursive: true })
-      writeFileSync(join(dir, `${entry.id}.md`), entry.content)
-    } catch {
-      // 磁盘 I/O 错误不应抛出，记忆已保存在内存中
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, `${entry.id}.md`), entry.content)
+    } catch (e) {
+      console.warn(`[Memory] persist failed:`, e)
     }
   }
 
@@ -105,6 +92,7 @@ export class Memory {
    * 搜索记忆
    */
   async search(query: string, limit = 10): Promise<MemorySearchResult[]> {
+    await this.ensureInit()
     const results: MemorySearchResult[] = []
     const q = query.toLowerCase()
 
@@ -149,6 +137,7 @@ export class Memory {
    * 删除记忆
    */
   async delete(id: string): Promise<boolean> {
+    await this.ensureInit()
     const entry = this.entries.get(id)
     if (!entry) return false
 
@@ -167,9 +156,7 @@ export class Memory {
 
     const filePath = join(dir, `${id}.md`)
     try {
-      if (existsSync(filePath)) {
-        unlinkSync(filePath)
-      }
+      await unlink(filePath)
     } catch {
       // 文件删除失败不应影响内存状态
     }
@@ -181,6 +168,7 @@ export class Memory {
    * 过期清理
    */
   async cleanup(maxAgeMs: number = 30 * 24 * 60 * 60 * 1000): Promise<number> {
+    await this.ensureInit()
     const now = Date.now()
     let count = 0
     const expiredIds: string[] = []

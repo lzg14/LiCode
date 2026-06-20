@@ -1,5 +1,6 @@
 import type { Phase, Config } from './types'
 import type { LLMProvider } from '../llm/types'
+import { createModel } from '../llm/provider'
 import { observe } from './phases/observe'
 import { think } from './phases/think'
 import { plan } from './phases/plan'
@@ -7,13 +8,19 @@ import { build } from './phases/build'
 import { execute } from './phases/execute'
 import { verify } from './phases/verify'
 import { learn } from './phases/learn'
+import { devLogger } from './dev-logger'
 import { Memory } from '../memory/memory'
+import { SessionManager } from '../session/session'
 import { auditLogger } from '../audit/logger'
 import { GitIntegration } from '../integration/git'
 import { pluginManager } from '../integration/plugin'
 import { CheckpointManager, type SessionCheckpoint } from './checkpoint'
 import { Projector } from './projector'
 import { ContextCompactor } from './compaction'
+import { SessionCompactor } from './session-compactor'
+import { join } from 'path'
+import { homedir } from 'os'
+import { Timer, type PerfTrace } from './perf'
 
 
 export interface LoopContext {
@@ -23,11 +30,16 @@ export interface LoopContext {
   phase: Phase
   cwd: string
   llm?: LLMProvider
+  model?: any
   memory?: Memory
   // 回调函数
   onPhaseChange?: (phase: Phase) => void
+  onPhaseLog?: (text: string) => void
   onStreamText?: (text: string) => void
-  onToolCall?: (toolName: string) => void
+  signal?: AbortSignal
+  onLLMCall?: () => void
+  onLLMResult?: (usage: { inputTokens: number; outputTokens: number; totalTokens: number }) => void
+  onToolCall?: (toolName: string, args: Record<string, unknown>) => void
   onToolResult?: (result: unknown) => void
   // 流式输出缓冲
   streamBuffer?: string
@@ -47,6 +59,10 @@ export interface LoopContext {
   checkpoint?: SessionCheckpoint
   // 投影器输出
   projectedOutput?: string
+  // 性能埋点（每次对话结束时回调）
+  onPerfTrace?: (trace: PerfTrace) => void
+  // 历史压缩摘要（由 SessionCompactor 注入）
+  sessionSummary?: string
 }
 
 const PHASE_ORDER: Phase[] = ['OBSERVE', 'THINK', 'PLAN', 'BUILD', 'EXECUTE', 'VERIFY', 'LEARN']
@@ -56,16 +72,22 @@ const FAST_PATH: Phase[] = ['OBSERVE', 'EXECUTE', 'VERIFY']
 
 export class CoreLoop {
   private memory: Memory
+  private sessionManager: SessionManager
   private git?: GitIntegration
   private checkpointManager: CheckpointManager
   private projector: Projector
   private compactor: ContextCompactor
+  private sessionCompactor: SessionCompactor
 
   constructor(private config: Config, private llm?: LLMProvider) {
     this.memory = new Memory(config.cwd)
+    this.sessionManager = new SessionManager(
+      config.memory?.path?.replace(/\.\w+$/, '.sessions.db') ?? './licode-sessions.db'
+    )
     this.checkpointManager = new CheckpointManager(config.cwd)
     this.projector = new Projector()
     this.compactor = new ContextCompactor()
+    this.sessionCompactor = new SessionCompactor({ dataDir: join(homedir(), '.licode') })
 
     // 初始化 Git 集成
     if (config.cwd) {
@@ -74,12 +96,74 @@ export class CoreLoop {
     }
   }
 
-  async run(ctx: LoopContext): Promise<string> {
+  /**
+   * 获取最近一次会话的 ID（按 updated_at 降序）。
+   * 如果 directory 为空，取全局最近的一条；否则取指定目录下最近的一条。
+   */
+  getLastSessionId(directory?: string): string | null {
+    return this.sessionManager.getLastSession(directory)?.id ?? null
+  }
+
+  getSessionMessages(sessionId: string): Array<{ role: string; content: string }> {
+    return this.sessionManager.getMessagesAsModelMessages(sessionId).map(m => {
+      let text = ''
+      if (Array.isArray(m.content)) {
+        for (const part of m.content) {
+          if (part.type === 'text') text += part.text
+        }
+      } else if (typeof m.content === 'string') {
+        text = m.content
+      }
+      return { role: m.role, content: text }
+    }).filter(m => m.content.trim())
+  }
+
+  /**
+   * 手动触发 session 压缩（供 /compact 命令调用）
+   */
+  async compactSession(sessionId: string): Promise<{ summary: string; saved: number } | null> {
+    const session = this.sessionManager.getSession(sessionId)
+    if (!session) return null
+
+    const history = this.sessionManager.getMessagesAsModelMessages(sessionId)
+    if (!this.sessionCompactor.shouldCompact(history, sessionId)) {
+      return { summary: '消息数未达压缩阈值，无需压缩', saved: 0 }
+    }
+
+    const llmProvider = this.llm
+    const result = await this.sessionCompactor.compact(history, sessionId, llmProvider)
+    return {
+      summary: result.summary,
+      saved: result.originalCount - result.preservedCount,
+    }
+  }
+
+  async run(ctx: LoopContext): Promise<{ text: string; sessionId: string }> {
     const startTime = Date.now()
+    const timer = new Timer(0)
 
     // 如果外部没有传入 llm，使用构造时注入的
     const effectiveLlm = ctx.llm ?? this.llm
-    ctx = { ...ctx, llm: effectiveLlm, memory: this.memory }
+    const model = ctx.model ?? (this.llm ? createModel({ provider: this.config.llm.provider, model: this.config.llm.model, apiKey: this.config.llm.apiKey, baseUrl: this.config.llm.baseUrl }) : undefined)
+    ctx = { ...ctx, llm: effectiveLlm, model, memory: this.memory }
+
+    // 复用已有 session（跨轮对话），或创建新 session
+    let session = ctx.sessionId ? this.sessionManager.getSession(ctx.sessionId) : null
+    if (!session) {
+      session = this.sessionManager.createSession({
+        directory: ctx.cwd,
+        model: this.config.llm.model,
+        provider: this.config.llm.provider,
+      })
+      ctx.sessionId = session.id
+    }
+
+    // 记录用户消息
+    this.sessionManager.addMessage({
+      sessionId: session.id,
+      role: 'user',
+      content: ctx.userInput,
+    })
 
     // 尝试恢复最近的 checkpoint
     const restoredCheckpoint = await this.checkpointManager.restore(ctx.sessionId)
@@ -91,18 +175,18 @@ export class CoreLoop {
     // 触发 session:start hook
     try {
       await pluginManager.emit('session:start', ctx.sessionId)
-    } catch {
-      // plugin hook 失败不应阻断主流程
+    } catch (e) {
+      devLogger.debug('PLUGIN', 'session:start hook failed', e)
     }
-
-    // 记录会话开始
     auditLogger.logSessionStart(ctx.sessionId)
 
     try {
       // 先执行 OBSERVE 判断 Effort Level
+      timer.checkpoint('phase.OBSERVE.start')
       ctx.onPhaseChange?.('OBSERVE')
       const observeResult = await observe(ctx)
       ctx = { ...ctx, ...observeResult }
+      timer.checkpoint('phase.OBSERVE.end')
 
       // 根据 Effort Level 选择路径
       const phases = ctx.effortLevel === 1 ? FAST_PATH : PHASE_ORDER
@@ -110,7 +194,8 @@ export class CoreLoop {
 
       for (let i = startIndex; i < phases.length; i++) {
         const phase = phases[i]
-        
+        const phaseStartId = timer.start(`phase.${phase}`, { effortLevel: ctx.effortLevel })
+
         // 在每个阶段开始前创建 checkpoint
         if (phase === 'EXECUTE' || phase === 'VERIFY') {
           await this.checkpointManager.save(ctx.sessionId, {
@@ -119,38 +204,66 @@ export class CoreLoop {
             timestamp: Date.now(),
           })
         }
-        
-        const result = await this.executePhase(phase, ctx)
+
+        const result = await this.executePhase(phase, ctx, timer)
         ctx = { ...ctx, ...result }
-        
+        timer.end(phaseStartId)
+
         // 检查是否需要压缩上下文
         if (ctx.streamBuffer && ctx.streamBuffer.length > 10000) {
+          const compactId = timer.start('phase.compact')
           ctx = await this.compactContext(ctx)
+          timer.end(compactId)
         }
+      }
+
+      // 记录 AI 回复
+      if (ctx.aiResponse) {
+        const saveId = timer.start('save.assistant')
+        this.sessionManager.addMessage({
+          sessionId: session.id,
+          role: 'assistant',
+          content: ctx.aiResponse,
+          model: this.config.llm.model,
+        })
+        timer.end(saveId)
       }
 
       // 存储记忆
       if (ctx.aiResponse) {
+        const memId = timer.start('memory.store')
         try {
           await this.memory.store({
             scope: 'session',
             type: 'memory',
             content: `User: ${ctx.userInput}\nAI: ${ctx.aiResponse}`,
           })
-        } catch {
-          // 记忆存储失败不应阻断主流程
+        } catch (e) {
+          devLogger.debug('MEMORY', 'memory store failed', e)
         }
+        timer.end(memId)
       }
     } finally {
+      // 更新 session 状态
+      this.sessionManager.updateSession(session.id, { status: 'completed' })
+
       // 记录会话结束
       const duration = Date.now() - startTime
       auditLogger.logSessionEnd(ctx.sessionId, duration)
 
+      // 构建并回调 perf trace
+      const trace = timer.buildTrace(ctx.sessionId)
+      try {
+        ctx.onPerfTrace?.(trace)
+      } catch (e) {
+        devLogger.debug('PERF', 'onPerfTrace callback failed', e)
+      }
+
       // 触发 session:end hook
       try {
         await pluginManager.emit('session:end', ctx.sessionId)
-      } catch {
-        // plugin hook 失败不应阻断主流程
+      } catch (e) {
+        devLogger.debug('PLUGIN', 'session:end hook failed', e)
       }
     }
 
@@ -159,7 +272,7 @@ export class CoreLoop {
     ctx.projectedOutput = projected
 
     // 返回 AI 回复，如果没有则返回用户输入
-    return projected || (ctx.aiResponse ?? ctx.userInput)
+    return { text: projected || (ctx.aiResponse ?? ctx.userInput), sessionId: ctx.sessionId }
   }
 
   private async compactContext(ctx: LoopContext): Promise<LoopContext> {
@@ -175,7 +288,7 @@ export class CoreLoop {
     return ctx
   }
 
-  private async executePhase(phase: Phase, ctx: LoopContext): Promise<Partial<LoopContext>> {
+  private async executePhase(phase: Phase, ctx: LoopContext, timer: Timer): Promise<Partial<LoopContext>> {
     // 通知阶段变化
     ctx.onPhaseChange?.(phase)
 
@@ -188,8 +301,47 @@ export class CoreLoop {
         return plan(ctx)
       case 'BUILD':
         return build(ctx)
-      case 'EXECUTE':
-        return execute(ctx)
+      case 'EXECUTE': {
+        // 加载 session 历史消息
+        const historyStartId = timer.start('history.load')
+        const history = this.sessionManager.getMessagesAsModelMessages(ctx.sessionId)
+        timer.end(historyStartId, { count: history.length })
+
+        // 检查是否需要压缩历史
+        // 同步部分立即执行（规则提取），异步部分（LLM 精炼）走子 agent 不阻塞
+        if (this.sessionCompactor.shouldCompact(history, ctx.sessionId)) {
+          devLogger.debug('COMPACT', `History ${history.length} messages, triggering compaction agent`)
+          // 先加载已有摘要（如果有）
+          ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
+          // 异步触发压缩，走子 agent（便宜模型），不阻塞主流程
+          this.sessionCompactor.compact(history, ctx.sessionId, this.llm).catch((e) => {
+            devLogger.debug('COMPACT', 'Background compaction failed', e)
+          })
+        } else {
+          // 即使不需要压缩，也尝试加载已有摘要（跨启动恢复时）
+          if (!ctx.sessionSummary && this.sessionCompactor.hasSummary(ctx.sessionId)) {
+            ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
+          }
+        }
+
+        const aiResponse = await execute({
+          model: ctx.model,
+          userInput: ctx.userInput,
+          history,
+          sessionSummary: ctx.sessionSummary,
+          sessionId: ctx.sessionId,
+          sessionManager: this.sessionManager,
+          cwd: ctx.cwd,
+          onStreamText: ctx.onStreamText,
+          onLLMCall: ctx.onLLMCall,
+          onLLMResult: ctx.onLLMResult,
+          onToolCall: ctx.onToolCall,
+          onToolResult: ctx.onToolResult,
+          signal: ctx.signal,
+          timer,
+        })
+        return { phase: 'VERIFY', aiResponse, deliverable: ctx.intermediateResults }
+      }
       case 'VERIFY':
         return verify(ctx)
       case 'LEARN':
@@ -199,118 +351,4 @@ export class CoreLoop {
     }
   }
 
-  /**
-   * 调用 LLM 生成回复（支持流式输出）
-   */
-  async callLLM(ctx: LoopContext, systemPrompt: string): Promise<string> {
-    if (!ctx.llm) {
-      return '请配置 LLM provider'
-    }
-
-    try {
-      // 检查是否支持流式输出
-      if ('stream' in ctx.llm) {
-        const stream = (ctx.llm as any).stream({
-          model: this.config.llm.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: ctx.userInput },
-          ],
-          temperature: 0.7,
-        })
-
-        let fullContent = ''
-        for await (const chunk of stream) {
-          const text = chunk.content || ''
-          if (text) {
-            fullContent += text
-            ctx.onStreamText?.(text)
-            // 缓冲流式输出
-            ctx.streamBuffer = (ctx.streamBuffer || '') + text
-          }
-        }
-        return fullContent
-      }
-
-      // 回退到非流式调用
-      const response = await ctx.llm.complete({
-        model: this.config.llm.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: ctx.userInput },
-        ],
-        temperature: 0.7,
-      })
-      
-      // 一次性输出全部内容
-      ctx.onStreamText?.(response.content)
-      ctx.streamBuffer = response.content
-      
-      return response.content
-    } catch (e) {
-      const error = e instanceof Error ? e.message : String(e)
-      ctx.onStreamText?.(`[LLM Error] ${error}\n`)
-      return `抱歉，AI 调用失败: ${error}`
-    }
-  }
-
-  /**
-   * 流式调用 LLM 并逐块处理
-   */
-  async callLLMStream(
-    ctx: LoopContext,
-    systemPrompt: string,
-    onChunk: (chunk: string) => void
-  ): Promise<string> {
-    if (!ctx.llm) {
-      return '请配置 LLM provider'
-    }
-
-    try {
-      if ('stream' in ctx.llm) {
-        const stream = (ctx.llm as any).stream({
-          model: this.config.llm.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: ctx.userInput },
-          ],
-          temperature: 0.7,
-        })
-
-        let fullContent = ''
-        for await (const chunk of stream) {
-          const text = chunk.content || ''
-          if (text) {
-            fullContent += text
-            onChunk(text)
-            ctx.onStreamText?.(text)
-            ctx.streamBuffer = (ctx.streamBuffer || '') + text
-          }
-        }
-        return fullContent
-      }
-
-      // 回退到非流式调用
-      const response = await ctx.llm.complete({
-        model: this.config.llm.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: ctx.userInput },
-        ],
-        temperature: 0.7,
-      })
-      
-      onChunk(response.content)
-      ctx.onStreamText?.(response.content)
-      ctx.streamBuffer = response.content
-      
-      return response.content
-    } catch (e) {
-      const error = e instanceof Error ? e.message : String(e)
-      const errorText = `[LLM Error] ${error}\n`
-      onChunk(errorText)
-      ctx.onStreamText?.(errorText)
-      return errorText
-    }
-  }
 }

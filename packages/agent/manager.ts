@@ -1,5 +1,6 @@
 import type { Agent, SpawnInput, AgentOutcome } from './types'
 import { AGENT_TYPES, SUBAGENT_BLOCKED_TOOLS } from './types'
+import { PermissionManager, PERMISSION_PRESETS, createPermissionManager } from '../security/permission'
 
 /**
  * Agent 管理器 - 多 Agent 协调、并发控制、隔离策略
@@ -8,6 +9,7 @@ import { AGENT_TYPES, SUBAGENT_BLOCKED_TOOLS } from './types'
 export class AgentManager {
   private agents = new Map<string, Agent>()
   private runningCount = 0
+  private permissions = new Map<string, PermissionManager>()
 
   constructor(
     private maxConcurrent = 3,
@@ -46,11 +48,15 @@ export class AgentManager {
     } else if (Array.isArray(input.tools)) {
       tools = input.tools
     } else {
-      tools = ['read', 'glob', 'grep', 'bash', 'write', 'edit']
+      tools = typeConfig.tools ?? ['read', 'glob', 'grep', 'bash', 'write', 'edit']
     }
 
     // 子 Agent 阻止特定工具
     const blockedTools = input.mode === 'subagent' ? SUBAGENT_BLOCKED_TOOLS : []
+
+    // 创建权限管理器
+    const permissionPreset = input.mode === 'subagent' ? 'subagent' : 'primary'
+    const permission = createPermissionManager(permissionPreset)
 
     const agent: Agent = {
       id: agentId,
@@ -65,6 +71,7 @@ export class AgentManager {
     }
 
     this.agents.set(agentId, agent)
+    this.permissions.set(agentId, permission)
     this.runningCount++
 
     return agent
@@ -162,7 +169,23 @@ export class AgentManager {
       return false
     }
 
+    // 检查权限系统
+    const permission = this.permissions.get(agentId)
+    if (permission) {
+      const result = permission.check({ tool: toolName })
+      if (result.action === 'deny') {
+        return false
+      }
+    }
+
     return true
+  }
+
+  /**
+   * 获取 Agent 的权限管理器
+   */
+  getPermission(agentId: string): PermissionManager | undefined {
+    return this.permissions.get(agentId)
   }
 
   /**
@@ -179,6 +202,7 @@ export class AgentManager {
         now - agent.completedAt > maxAgeMs
       ) {
         this.agents.delete(id)
+        this.permissions.delete(id)
         count++
       } else if (
         agent.status === 'running' &&
@@ -188,6 +212,7 @@ export class AgentManager {
         agent.status = 'failed'
         agent.completedAt = now
         this.agents.delete(id)
+        this.permissions.delete(id)
         this.runningCount--
         count++
       }

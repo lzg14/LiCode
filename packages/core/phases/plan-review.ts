@@ -45,7 +45,6 @@ export async function planReview(_ctx: any, plan: { steps: string[] }): Promise<
 }
 
 async function triggerReview(plan: { steps: string[] }): Promise<{ approved: boolean; issues: string[] }> {
-  // 模拟审核
   return { approved: true, issues: [] }
 }
 

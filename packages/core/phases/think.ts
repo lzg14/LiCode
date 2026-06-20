@@ -2,11 +2,9 @@ import { LoopContext } from '../loop'
 import { generateInterviewQuestions, generateAntiCriteria, needsInterview } from '../interview'
 
 export async function think(ctx: LoopContext): Promise<Partial<LoopContext>> {
-  // 1. 使用 LLM 分析风险/假设/失败模式
   let risks: string[] = []
   if (ctx.llm) {
     try {
-      ctx.onStreamText?.('正在分析风险...\n')
       const response = await ctx.llm.complete({
         model: 'claude-sonnet-4-20250514',
         messages: [
@@ -22,22 +20,18 @@ export async function think(ctx: LoopContext): Promise<Partial<LoopContext>> {
         throw new Error('返回结果不是数组')
       }
       risks = parsed.filter((item): item is string => typeof item === 'string')
-      ctx.onStreamText?.(`发现 ${risks.length} 个风险点\n`)
     } catch {
-      // LLM 调用失败或 JSON 解析失败时使用本地分析
       risks = analyzeRisks(ctx.userInput)
     }
   } else {
     risks = analyzeRisks(ctx.userInput)
   }
 
-  // 2. 生成 Interview 追问问题
   const interviewQuestions = needsInterview(ctx)
     ? generateInterviewQuestions(ctx)
     : []
 
   if (interviewQuestions.length > 0) {
-    ctx.onStreamText?.(`需要追问 ${interviewQuestions.length} 个问题\n`)
     return {
       phase: 'THINK',
       risks,
@@ -45,10 +39,8 @@ export async function think(ctx: LoopContext): Promise<Partial<LoopContext>> {
     }
   }
 
-  // 3. 生成 Anti-criteria 反向追问
   const antiCriteria = generateAntiCriteria(ctx)
   if (antiCriteria.length > 0) {
-    ctx.onStreamText?.(`识别到 ${antiCriteria.length} 个潜在弊端\n`)
     return {
       phase: 'THINK',
       risks,

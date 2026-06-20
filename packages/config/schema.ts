@@ -1,11 +1,20 @@
 import { z } from 'zod'
 
+export const PROVIDERS = ['anthropic', 'openai', 'deepseek', 'local'] as const
+
+export const MODEL_CATALOG: Record<string, string[]> = {
+  anthropic: ['claude-sonnet-4-20250514', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'],
+  openai: ['gpt-4o', 'gpt-4o-mini', 'o3-mini'],
+  deepseek: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-coder'],
+  local: ['codellama', 'llama3', 'qwen2'],
+}
+
 export const LLMConfigSchema = z.object({
-  provider: z.enum(['anthropic', 'openai', 'local']),
+  provider: z.enum(PROVIDERS),
   model: z.string(),
   apiKeyEnv: z.string().optional(),
-  apiKey: z.string().optional(),  // 直接传入的 API key
-  baseUrl: z.string().optional(), // 自定义端点
+  apiKey: z.string().optional(),
+  baseUrl: z.string().optional(),
 })
 
 export const SecurityConfigSchema = z.object({

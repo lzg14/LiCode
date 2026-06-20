@@ -200,7 +200,7 @@ export class ObsidianIntegration extends NotesIntegration {
     const links: ObsidianLink[] = []
 
     // Wiki 链接: [[target]] or [[target|alias]]
-    const wikiLinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g
+    const wikiLinkRegex = /(?<!!)\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g
     let match
 
     while ((match = wikiLinkRegex.exec(content)) !== null) {

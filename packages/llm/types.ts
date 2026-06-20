@@ -1,12 +1,26 @@
+export interface LLMTool {
+  name: string
+  description: string
+  input_schema: Record<string, unknown>
+}
+
+export interface LLMToolCall {
+  id: string
+  name: string
+  input: Record<string, unknown>
+}
+
 export interface LLMRequest {
   model: string
-  messages: { role: string; content: string }[]
+  messages: { role: string; content: string | Array<{ type: string; [key: string]: unknown }> }[]
+  tools?: LLMTool[]
   temperature?: number
   maxTokens?: number
 }
 
 export interface LLMResponse {
   content: string
+  toolCalls?: LLMToolCall[]
   usage?: {
     inputTokens: number
     outputTokens: number

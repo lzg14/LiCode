@@ -1,6 +1,7 @@
 import type { Agent, SpawnInput } from './types'
 import { isBlockedTool, SUBAGENT_BLOCKED_TOOLS } from './blocked-tools'
 import { limitManager } from './limits'
+import { globalToolRegistry } from '../tools/registry'
 
 export class AgentManager {
   private agents = new Map<string, Agent>()
@@ -33,7 +34,9 @@ export class AgentManager {
   }
 
   private getInheritedTools(): string[] {
-    return []
+    return globalToolRegistry.list()
+      .map(t => t.name)
+      .filter(t => !isBlockedTool(t))
   }
 
   get(id: string): Agent | undefined {
