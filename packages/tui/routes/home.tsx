@@ -10,7 +10,7 @@ import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
 
 export function Home() {
-  const { phase, isProcessing, messages, run, compactSession, currentModel, currentProvider, switchModel, switchProvider, getAvailableModels, getAvailableProviders, addMessage, runWorkflow, listWorkflows } = useLoop()
+  const { phase, isProcessing, messages, run, compactSession, currentModel, currentProvider, switchModel, switchProvider, getAvailableModels, getAvailableProviders, addMessage, searchHistory, runWorkflow, listWorkflows } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [providerPickerOpen, setProviderPickerOpen] = createSignal(false)
@@ -26,7 +26,7 @@ export function Home() {
     setProviderPickerIdx(0)
   }
 
-  const handleSubmit = async (text: string) => {
+  const handleSubmit = async (text: string, images?: Array<{ base64: string; mimeType: string }>) => {
     if (text.startsWith('/compact')) {
       await compactSession()
       return
@@ -125,7 +125,7 @@ export function Home() {
       }
       return
     }
-    await run(text)
+    await run(text, images)
   }
 
   // ===== 斜杠命令菜单 =====

@@ -30,10 +30,11 @@ export function createModel(config: ModelConfig) {
     return createAnthropic({ apiKey, baseURL: config.baseUrl })(config.model)
   }
   if (provider === "minimax") {
-    // MiniMax 提供 Anthropic 兼容 API（/anthropic 端点），不是 OpenAI 兼容
-    // 用 createAnthropic 才能用 thinking、tool_use 等内容块
     const model = normalizeMiniMaxModel(config.model)
     const baseURL = config.baseUrl ?? "https://api.minimaxi.com/anthropic"
+    if (baseURL.includes("/v1")) {
+      return createOpenAI({ apiKey, baseURL }).chat(model)
+    }
     return createAnthropic({ apiKey, baseURL })(model)
   }
   return createOpenAI({ apiKey, baseURL: config.baseUrl }).chat(config.model)

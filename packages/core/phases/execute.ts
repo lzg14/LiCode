@@ -53,11 +53,24 @@ Web 工具：
 - database_query: 查询 SQLite 数据库
 - apply_patch: 应用代码补丁（unified diff 或 JSON 格式）
 
-当你需要使用工具时，请调用相应的工具。工具调用结果会自动返回给你。`
+当你需要使用工具时，请调用相应的工具。工具调用结果会自动返回给你。
+
+## 批量工具调用
+当需要多个独立的工具调用时（如同时读取多个文件、同时搜索多个模式等），请在一次回复中**一次性声明所有独立的工具调用**，不要分步进行。独立的工具调用会被并行执行，大幅提升效率。
+
+反例（分步，低效）：
+1. 搜索 a → 等待结果
+2. 搜索 b → 等待结果
+
+正例（批量，高效）：
+1. 同时搜索 a、搜索 b、搜索 c → 一次拿到全部结果
+
+判断独立性的标准：如果两个工具调用的输入互不依赖，就可以声明在同一轮。`
 
 export interface ExecuteContext {
   model: any
   userInput: string
+  userImages?: Array<{ base64: string; mimeType: string }>
   cwd?: string
   signal?: AbortSignal
   onLLMCall?: () => void
@@ -118,9 +131,17 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
     && lastInHistory.content[0]?.type === 'text'
     && lastInHistory.content[0]?.text === ctx.userInput
 
+  // 构造 user 消息内容（支持 multimodal：text + images）
+  const userContent: any[] = [{ type: "text", text: ctx.userInput }]
+  if (ctx.userImages?.length) {
+    for (const img of ctx.userImages) {
+      userContent.push({ type: "image", image: `data:${img.mimeType};base64,${img.base64}`, mediaType: img.mimeType })
+    }
+  }
+
   const msgs: any[] = isDuplicate
     ? [...history]
-    : [...history, { role: "user", content: [{ type: "text", text: ctx.userInput }] }]
+    : [...history, { role: "user", content: userContent }]
 
   // 如果有 session 摘要，注入到 msgs 开头（作为 user 消息 + assistant 确认）
   if (ctx.sessionSummary) {
@@ -246,9 +267,9 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         }
       }
 
-      const toolResults: any[] = []
       toolBatch++
-      for (const tc of result.toolCalls) {
+      devLogger.info('PARALLEL', `Executing ${result.toolCalls.length} tool(s) in batch ${toolBatch}`)
+      const toolResults: any[] = await Promise.all(result.toolCalls.map(async (tc) => {
         devLogger.logToolCall(tc.toolName, tc.input)
         const tcInput = tc.input as Record<string, unknown>
         ctx.onToolCall?.(tc.toolName, tcInput, toolBatch)
@@ -257,13 +278,13 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         devLogger.logToolCall(tc.toolName, tc.input, execResult)
         if (toolId) ctx.timer?.end(toolId, { success: execResult.success })
         ctx.onToolResult?.(execResult)
-        toolResults.push({
-          type: "tool-result",
+        return {
+          type: "tool-result" as const,
           toolCallId: tc.toolCallId,
           toolName: tc.toolName,
           output: { type: "text", value: execResult.success ? (execResult.output ?? "") : `Error: ${execResult.error}` },
-        })
-      }
+        }
+      }))
       const toolMsg = { role: "tool", content: toolResults }
       msgs.push(toolMsg)
 
