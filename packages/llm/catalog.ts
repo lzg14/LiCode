@@ -108,6 +108,30 @@ export const MODEL_CATALOG: Record<string, ModelConfig> = {
     costPer1kInput: 0.001,
     costPer1kOutput: 0.008,
   },
+  'MiniMax-M3[1M]': {
+    id: 'MiniMax-M3[1M]',
+    provider: 'MiniMax',
+    displayName: 'MiniMax M3 (1M)',
+    contextWindow: 1000000,
+    maxOutput: 16384,
+    supportsVision: false,
+    supportsToolUse: true,
+    supportsStreaming: true,
+    costPer1kInput: 0.002,
+    costPer1kOutput: 0.016,
+  },
+  'MiniMax-M2.7-highspeed': {
+    id: 'MiniMax-M2.7-highspeed',
+    provider: 'MiniMax',
+    displayName: 'MiniMax M2.7 HighSpeed',
+    contextWindow: 128000,
+    maxOutput: 8192,
+    supportsVision: false,
+    supportsToolUse: true,
+    supportsStreaming: true,
+    costPer1kInput: 0.0005,
+    costPer1kOutput: 0.004,
+  },
 }
 
 export function getModelConfig(modelId: string): ModelConfig | undefined {
