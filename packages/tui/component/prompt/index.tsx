@@ -21,7 +21,7 @@ let prependTextFn: ((text: string) => void) | null = null
 export function Prompt(props: PromptProps) {
   const { primary, text, textMuted, backgroundElement, borderActive } = useTheme()
   const history = useHistory()
-  const { toggleToolCallExpanded, abort, pendingCount } = useLoop()
+  const { toggleToolCallExpanded, abort, pendingCount, addMessage } = useLoop()
   let input: TextareaRenderable
   const [pendingImages, setPendingImages] = createSignal<Array<{ base64: string; mimeType: string }>>([])
 
@@ -110,10 +110,16 @@ export function Prompt(props: PromptProps) {
       return
     }
 
-    // ESC: 取消当前对话
+    // ESC: 中断当前执行 + 清空队列
     if (e.name === "escape") {
       e.preventDefault()
-      if (props.disabled) abort()
+      if (props.disabled) {
+        abort()
+        addMessage({ role: "system", content: "已取消当前执行" })
+      } else if (pendingCount() > 0) {
+        abort()
+        addMessage({ role: "system", content: `已清空队列（${pendingCount()} 条）` })
+      }
       return
     }
 
