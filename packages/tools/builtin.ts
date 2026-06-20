@@ -7,6 +7,7 @@ import { join, dirname, resolve } from 'path'
 import { Database } from 'bun:sqlite'
 import { z } from 'zod'
 import { globalToolRegistry } from './registry'
+import { securityLayer } from '../security'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -216,6 +217,11 @@ export function registerBuiltinTools(): void {
     description: '执行 shell 命令。',
     inputSchema: z.object({ command: z.string(), cwd: z.string().optional(), timeout: z.number().optional() }),
     handler: async ({ command, cwd, timeout }, ctx) => {
+      // 安全检查：命令白名单
+      const cmdCheck = securityLayer.checkCommand(command)
+      if (!cmdCheck.allowed) {
+        return { success: false, error: cmdCheck.reason ?? '命令被安全策略阻止' }
+      }
       try {
         const { stdout, stderr } = await execAsync(command, { cwd: cwd ?? ctx.cwd, timeout: timeout ?? 30_000, maxBuffer: 10 * 1024 * 1024 })
         return { success: true, output: stdout || stderr || '完成' }
