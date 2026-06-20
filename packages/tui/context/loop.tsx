@@ -51,6 +51,7 @@ export interface LoopContext {
   getAvailableModels: () => string[]
   getAvailableProviders: () => string[]
   contextTokens: Accessor<number>
+  searchHistory: (query: string) => Array<{ turn: number; role: string; snippet: string }>
 }
 
 const Ctx = createContext<LoopContext>()
@@ -102,6 +103,11 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
 
   // 持久化 session ID，跨轮对话复用同一个 session
   let persistentSessionId: string | undefined = props.sessionId
+
+  const searchHistory = (query: string) => {
+    if (!persistentSessionId || !props.loop) return []
+    return props.loop.searchSessionMessages(persistentSessionId, query)
+  }
 
   onMount(() => {
     if (props.sessionId && props.loop) {
@@ -199,11 +205,12 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           setLlmCallCount(prev => prev + 1)
         },
         onLLMResult: (usage: { inputTokens: number; outputTokens: number; totalTokens: number }) => {
-          setLlmTokenUsage(prev => ({
-            input: prev.input + usage.inputTokens,
-            output: prev.output + usage.outputTokens,
-            total: prev.total + usage.totalTokens,
-          }))
+          // 显示当前请求的上下文（不是累加）— inputTokens 本身已包含完整历史
+          setLlmTokenUsage({
+            input: usage.inputTokens,
+            output: usage.outputTokens,
+            total: usage.inputTokens + usage.outputTokens,
+          })
         },
         onStreamText: (text: string) => {
           streamingBuffer += text
@@ -326,6 +333,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     getAvailableModels,
     getAvailableProviders,
     contextTokens,
+    searchHistory,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }
