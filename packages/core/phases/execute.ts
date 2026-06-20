@@ -96,6 +96,10 @@ export interface ExecuteContext {
   sessionId?: string
   /** SessionManager 实例（持久化用） */
   sessionManager?: any
+  /** 当前激活的技能名称（注入到 system prompt） */
+  activeSkill?: string | null
+  /** 当前激活的技能内容（注入到 system prompt） */
+  activeSkillInstructions?: string | null
   /** 性能埋点计时器（可选） */
   timer?: Timer
 }
@@ -176,9 +180,14 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       const llmId = ctx.timer?.start('llm.generateText', { iteration: totalIterations })
       ctx.onLLMCall?.()
       const startTime = Date.now()
+      // 拼接激活技能的内容（如果有）
+      const activeSkillContent = ctx.activeSkillInstructions
+      const fullSystem = activeSkillContent
+        ? `${SYSTEM_PROMPT}\n\n## 当前激活技能: ${ctx.activeSkill ?? "?"}\n\n${activeSkillContent}\n\n请严格遵循上述技能的指令与规则。`
+        : SYSTEM_PROMPT
       const result = await generateText({
         model: ctx.model,
-        system: SYSTEM_PROMPT,
+        system: fullSystem,
         messages: msgs,
         tools,
         temperature: 0.7,

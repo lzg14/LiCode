@@ -47,6 +47,10 @@ function App() {
       const w = process.stdout.columns || 80
       const h = process.stdout.rows || 24
       renderer.emit?.("resize", w, h)
+      // 再触发一次确保布局正确
+      setTimeout(() => {
+        renderer.emit?.("resize", process.stdout.columns || 80, process.stdout.rows || 24)
+      }, 500)
     }, 200)
   })
 
@@ -128,7 +132,7 @@ export async function tui(config: any) {
                     <DialogProvider>
                       <ToastProvider>
                         <Toast />
-                        <LoopProvider loop={loop} model={model} provider={config.llm.provider} sessionId={lastSessionId ?? undefined}>
+                        <LoopProvider loop={loop} model={model} provider={config.llm.provider} sessionId={lastSessionId ?? undefined} llmConfig={config.llm}>
                           <App />
                         </LoopProvider>
                       </ToastProvider>

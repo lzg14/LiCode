@@ -67,6 +67,9 @@ export interface LoopContext {
   onPerfTrace?: (trace: PerfTrace) => void
   // 历史压缩摘要（由 SessionCompactor 注入）
   sessionSummary?: string
+  // Skill 相关
+  activeSkill?: string
+  activeSkillInstructions?: string
 }
 
 const PHASE_ORDER: Phase[] = ['OBSERVE', 'THINK', 'PLAN', 'BUILD', 'EXECUTE', 'VERIFY', 'LEARN']
@@ -368,6 +371,8 @@ export class CoreLoop {
           sessionId: ctx.sessionId,
           sessionManager: this.sessionManager,
           cwd: ctx.cwd,
+          activeSkill: ctx.activeSkill,
+          activeSkillInstructions: ctx.activeSkillInstructions,
           onStreamText: ctx.onStreamText,
           onLLMCall: ctx.onLLMCall,
           onLLMResult: ctx.onLLMResult,

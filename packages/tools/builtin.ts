@@ -487,24 +487,24 @@ export function registerBuiltinTools(): void {
       ]
 
       // 加载技能
-      const { skillLoader } = await import('../../skills/loader')
+      const { skillLoader } = await import('../skills/loader')
       for (const dir of skillDirs) {
         await skillLoader.loadFromDir(dir)
       }
 
       // 查找技能
-      const { globalSkillRegistry } = await import('../../skills/registry')
+      const { globalSkillRegistry } = await import('../skills/registry')
       const skill = globalSkillRegistry.findByName(name)
       if (!skill) {
         const loaded = globalSkillRegistry.list().map(s => s.name).join(', ')
         return { success: false, error: `技能 "${name}" 未找到。已加载: ${loaded || '(无)'}。搜索路径: ${skillDirs.join(', ')}` }
       }
 
-      // 执行技能
-      const { SkillExecutor } = await import('../../skills/executor')
-      const executor = new SkillExecutor()
-      const result = await executor.execute(name, args ?? {})
-      return { success: result.success, output: result.output ?? result.error ?? '' }
+      // 返回 skill instructions，由 LLM 按指令执行
+      return {
+        success: true,
+        output: `## 技能已激活: ${skill.name}\n\n${skill.instructions}`,
+      }
     },
   })
 

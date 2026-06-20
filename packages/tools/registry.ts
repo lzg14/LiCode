@@ -2,6 +2,7 @@ import type { ToolDefinition, ToolResult } from './types'
 import type { ToolContext } from './context'
 import { createToolContext } from './context'
 import { truncateOutput } from './truncate'
+import { securityLayer } from '../security'
 
 export class ToolRegistry {
   private tools = new Map<string, ToolDefinition>()
@@ -31,6 +32,17 @@ export class ToolRegistry {
     const tool = this.tools.get(name)
     if (!tool) {
       return { success: false, error: `Tool not found: ${name}` }
+    }
+
+    // 安全检查：bash 工具需要检查命令白名单
+    if (name === 'bash') {
+      const parsed = tool.inputSchema.parse(input) as { command?: string }
+      if (parsed.command) {
+        const check = securityLayer.checkCommand(parsed.command)
+        if (!check.allowed) {
+          return { success: false, error: `安全拦截: ${check.reason}` }
+        }
+      }
     }
 
     const mergedCtx = { ...this.defaultContext, ...ctx }
