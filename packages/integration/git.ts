@@ -1,19 +1,21 @@
-import { execSync } from 'child_process'
+import simpleGit, { type SimpleGit, type StatusResult, type LogResult } from 'simple-git'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { BaseIntegration, type HealthStatus } from './types'
 
 /**
- * Git 集成 - 仓库操作、分支管理、变更追踪
+ * Git 集成 - 使用 simple-git SDK
  */
 
 export class GitIntegration extends BaseIntegration {
   name = 'git'
   private repoPath: string
+  private git: SimpleGit
 
   constructor(repoPath: string) {
     super()
     this.repoPath = repoPath
+    this.git = simpleGit(repoPath)
   }
 
   async connect(): Promise<void> {
@@ -28,7 +30,7 @@ export class GitIntegration extends BaseIntegration {
 
   async health(): Promise<HealthStatus> {
     try {
-      this.exec('git status')
+      await this.git.status()
       return { healthy: true }
     } catch {
       return { healthy: false, message: 'Git not available' }
@@ -36,63 +38,64 @@ export class GitIntegration extends BaseIntegration {
   }
 
   /**
-   * 执行 git 命令
-   */
-  private exec(command: string): string {
-    return execSync(command, { cwd: this.repoPath, encoding: 'utf-8' }).trim()
-  }
-
-  /**
    * 获取状态
    */
-  getStatus(): { branch: string; ahead: number; behind: number; dirty: boolean } {
-    const branch = this.exec('git branch --show-current')
-    const ahead = parseInt(this.exec('git rev-list --count @{u}..HEAD 2>/dev/null || echo 0'))
-    const behind = parseInt(this.exec('git rev-list --count HEAD..@{u} 2>/dev/null || echo 0'))
-    const dirty = this.exec('git status --porcelain').length > 0
-
-    return { branch, ahead, behind, dirty }
+  async getStatus(): Promise<{ branch: string; ahead: number; behind: number; dirty: boolean }> {
+    const status: StatusResult = await this.git.status()
+    return {
+      branch: status.current,
+      ahead: status.ahead,
+      behind: status.behind,
+      dirty: status.is_clean() === false,
+    }
   }
 
   /**
    * 获取 diff
    */
-  getDiff(staged = false): string {
-    const flag = staged ? '--cached' : ''
-    return this.exec(`git diff ${flag}`)
+  async getDiff(staged = false): Promise<string> {
+    if (staged) {
+      const diff = await this.git.diff(['--cached'])
+      return diff
+    }
+    const diff = await this.git.diff()
+    return diff
   }
 
   /**
    * 获取 log
    */
-  getLog(count = 10): { hash: string; message: string; author: string; date: string }[] {
-    const output = this.exec(`git log -${count} --format="%H|%s|%an|%ad"`)
-    return output.split('\n').filter(Boolean).map(line => {
-      const [hash, message, author, date] = line.split('|')
-      return { hash, message, author, date }
-    })
+  async getLog(count = 10): Promise<{ hash: string; message: string; author: string; date: string }[]> {
+    const log: LogResult = await this.git.log({ maxCount: count })
+    return log.all.map(entry => ({
+      hash: entry.hash,
+      message: entry.message,
+      author: entry.author_name,
+      date: entry.date,
+    }))
   }
 
   /**
    * 暂存文件
    */
-  add(files: string[]): void {
-    this.exec(`git add ${files.join(' ')}`)
+  async add(files: string[]): Promise<void> {
+    await this.git.add(files)
   }
 
   /**
    * 提交
    */
-  commit(message: string): string {
-    return this.exec(`git commit -m "${message}"`)
+  async commit(message: string): Promise<string> {
+    const result = await this.git.commit(message)
+    return result.commit
   }
 
   /**
    * 获取分支列表
    */
-  getBranches(): string[] {
-    const output = this.exec('git branch --list')
-    return output.split('\n').map(b => b.replace('* ', '').trim()).filter(Boolean)
+  async getBranches(): Promise<string[]> {
+    const branches = await this.git.branchLocal()
+    return branches.all
   }
 
   /**

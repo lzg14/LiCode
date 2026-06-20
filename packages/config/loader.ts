@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, watch } from 'fs'
 import { join, dirname } from 'path'
 import { ConfigSchema, type Config } from './schema'
 import { importClaudeCodeConfig } from './external'
+import { DEFAULT_CONFIG } from './defaults'
 
 /**
  * 配置系统 - 多层级配置、环境变量替换、热更新
@@ -58,77 +59,68 @@ export class ConfigLoader {
 
   async discoverAndLoad(home: string): Promise<Config> {
     // 优先级:
-    // 1. ~/.licode/config.json (全局配置)
-    // 2. ./licode.config.json (项目配置)
+    // 1. ./licode.config.json (项目配置)
+    // 2. ~/.licode/config.json (全局配置)
     // 3. Claude Code 配置 (自动导入)
     // 4. 默认配置
+    // 5. 环境变量覆盖 (LICODE_MODEL / LICODE_PROVIDER)
 
     const globalPath = join(home, '.licode', 'config.json')
     const localPath = join(process.cwd(), 'licode.config.json')
 
-    // 尝试加载项目配置
     if (existsSync(localPath)) {
       try {
         this.config = await this.load(localPath)
         console.log('[✓] Loaded project config')
-        return this.config
       } catch (e) {
         console.warn('[!] Failed to load project config:', e)
       }
     }
 
-    // 尝试加载全局配置
-    if (existsSync(globalPath)) {
+    if (!this.config && existsSync(globalPath)) {
       try {
         this.config = await this.load(globalPath)
         console.log('[✓] Loaded global config')
-        return this.config
       } catch (e) {
         console.warn('[!] Failed to load global config:', e)
       }
     }
 
-    // 尝试从 Claude Code 导入
-    const claudeConfig = importClaudeCodeConfig()
-    if (claudeConfig) {
-      console.log('[✓] Imported LLM config from Claude Code')
-      this.config = {
-        llm: {
-          provider: 'anthropic',
-          model: claudeConfig.model,
-          apiKeyEnv: 'ANTHROPIC_API_KEY',
-          apiKey: claudeConfig.apiKey,
-          baseUrl: claudeConfig.baseUrl,
-        },
-        security: { commandWhitelist: [], allowedPaths: [], deniedPaths: [] },
-        memory: { path: './licode-memory.json', retentionDays: 30 },
-        subagent: {
-          maxConcurrent: 3,
-          maxDepth: 1,
-          timeoutMs: 900000,
-          blockedTools: ['delegate_task', 'clarify', 'memory_write', 'send_message', 'execute_code'],
-        },
+    if (!this.config) {
+      const claudeConfig = importClaudeCodeConfig()
+      if (claudeConfig) {
+        const isDeepSeek = claudeConfig.baseUrl.includes('deepseek')
+        console.log('[✓] Imported LLM config from Claude Code')
+        this.config = {
+          llm: {
+            provider: isDeepSeek ? 'deepseek' : 'anthropic',
+            model: claudeConfig.model,
+            apiKeyEnv: 'ANTHROPIC_API_KEY',
+            apiKey: claudeConfig.apiKey,
+            baseUrl: isDeepSeek ? 'https://api.deepseek.com' : claudeConfig.baseUrl,
+          },
+          security: { commandWhitelist: [], allowedPaths: [], deniedPaths: [] },
+          memory: { path: '~/.licode/memory.sessions.db', retentionDays: 30 },
+          subagent: {
+            maxConcurrent: 3,
+            maxDepth: 1,
+            timeoutMs: 900000,
+            blockedTools: ['delegate_task', 'clarify', 'memory_write', 'send_message', 'execute_code'],
+          },
+        }
       }
-      return this.config
     }
 
-    // 使用默认配置
-    this.config = {
-      llm: {
-        provider: 'anthropic',
-        model: 'claude-sonnet-4-20250514',
-        apiKeyEnv: 'ANTHROPIC_API_KEY',
-      },
-      security: { commandWhitelist: [], allowedPaths: [], deniedPaths: [] },
-      memory: { path: './licode-memory.json', retentionDays: 30 },
-      subagent: {
-        maxConcurrent: 3,
-        maxDepth: 1,
-        timeoutMs: 900000,
-        blockedTools: [],
-      },
+    if (!this.config) {
+      this.config = { ...DEFAULT_CONFIG }
+      console.log('[!] Using default config')
     }
-    console.log('[!] Using default config')
+
+    // 环境变量覆盖
+    if (process.env.LICODE_MODEL) this.config.llm.model = process.env.LICODE_MODEL
+    if (process.env.LICODE_PROVIDER) this.config.llm.provider = process.env.LICODE_PROVIDER as any
+    if (process.env.LICODE_API_KEY) this.config.llm.apiKey = process.env.LICODE_API_KEY
+
     return this.config
   }
 

@@ -1,10 +1,7 @@
 import { LoopContext } from '../loop'
 
 export async function learn(ctx: LoopContext): Promise<Partial<LoopContext>> {
-  ctx.onStreamText?.('学习中...\n')
   await updateMemory(ctx)
-  await summarizeExperience(ctx)
-  ctx.onStreamText?.('学习完成\n')
 
   return {
     phase: 'DONE',
@@ -12,9 +9,15 @@ export async function learn(ctx: LoopContext): Promise<Partial<LoopContext>> {
 }
 
 async function updateMemory(ctx: LoopContext): Promise<void> {
-  // 写入记忆
-}
+  if (!ctx.memory || !ctx.userInput || !ctx.aiResponse) return
 
-async function summarizeExperience(_ctx: LoopContext): Promise<void> {
-  // 总结经验
+  try {
+    await ctx.memory.store({
+      scope: 'session',
+      type: 'memory',
+      content: `User: ${ctx.userInput}\nAI: ${ctx.aiResponse}`,
+    })
+  } catch (e) {
+    ctx.onPhaseLog?.(`记忆存储失败: ${e}\n`)
+  }
 }

@@ -33,7 +33,7 @@ export class ConfigValidator {
       }
     }
 
-    const errors: ValidationError[] = result.error.errors.map(err => ({
+    const errors: ValidationError[] = result.error.issues.map(err => ({
       path: err.path.join('.'),
       expected: err.message,
       actual: undefined,

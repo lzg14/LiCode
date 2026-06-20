@@ -1,4 +1,4 @@
-#!/usr/bin/env node
-import { runTUI } from '../tui/app'
+#!/usr/bin/env bun
+import { runTUI } from "../tui/app"
 
 runTUI().catch(console.error)

@@ -1,47 +1,258 @@
-import { LoopContext } from '../loop'
+import { generateText, tool, jsonSchema } from "ai"
+import { z } from "zod"
+import { globalToolRegistry } from "../../tools/registry"
+import { devLogger } from "../dev-logger"
+import type { Timer } from "../perf"
 
 const SYSTEM_PROMPT = `你是一个名为 licode 的 AI 助手，专注于代码开发。
 你的核心理念是"宁可慢，不要白干"——宁可多问清楚，也不要假设。
-请用中文回答用户的问题，保持简洁明了。`
+请用中文回答用户的问题，保持简洁明了。
 
-export async function execute(ctx: LoopContext): Promise<Partial<LoopContext>> {
-  ctx.onStreamText?.('正在生成回复...\n')
+你可以使用以下工具来帮助用户：
 
-  if (!ctx.llm) {
-    const msg = '请配置 LLM provider'
-    ctx.onStreamText?.(msg)
-    return {
-      phase: 'VERIFY',
-      aiResponse: msg,
-      deliverable: ctx.intermediateResults,
-    }
-  }
+文件操作：
+- read: 读取文件内容
+- write: 写入文件
+- edit: 编辑文件（替换字符串）
+- list_directory: 列出目录内容
+- create_directory: 创建目录
+- delete_file: 删除文件
+- move_file: 移动/重命名文件
+- copy_file: 复制文件
 
-  try {
-    const response = await ctx.llm.complete({
-      model: 'claude-sonnet-4-20250514',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: ctx.userInput },
-      ],
-      temperature: 0.7,
+搜索工具：
+- glob: 按模式搜索文件
+- grep: 搜索文件内容（正则）
+- codesearch: 使用 ripgrep 搜索代码
+
+系统工具：
+- bash: 执行 shell 命令
+- stat: 获取文件详细信息
+- env_vars: 获取环境变量
+- system_info: 获取系统信息
+- datetime: 获取当前日期时间
+
+Git 工具：
+- git_status: 获取 Git 状态
+- git_diff: 获取 Git diff
+- git_log: 获取 Git 日志
+- git_commit: Git 提交
+
+Web 工具：
+- webfetch: 获取网页内容
+- websearch: 搜索网页（cn.bing.com，国内可用）
+
+开发工具：
+- run_tests: 运行测试
+- lint: 代码检查
+- format: 格式化代码
+- install_deps: 安装依赖
+
+当你需要使用工具时，请调用相应的工具。工具调用结果会自动返回给你。`
+
+export interface ExecuteContext {
+  model: any
+  userInput: string
+  cwd?: string
+  signal?: AbortSignal
+  onLLMCall?: () => void
+  onLLMResult?: (usage: { inputTokens: number; outputTokens: number; totalTokens: number }) => void
+  onStreamText?: (text: string) => void
+  onToolCall?: (toolName: string, args: Record<string, unknown>) => void
+  onToolResult?: (result: unknown) => void
+  /**
+   * 完整的 AI SDK 消息历史（含 tool-call/tool-result parts）。
+   * 来自 sessionManager.getMessagesAsModelMessages()
+   */
+  history?: Array<{ role: string; content: any[] }>
+  /**
+   * Session 历史压缩摘要（来自 SessionCompactor）
+   * 注入到 msgs 开头，让 LLM 了解之前的对话背景
+   */
+  sessionSummary?: string
+  /** 当前 session 的 id（持久化用） */
+  sessionId?: string
+  /** SessionManager 实例（持久化用） */
+  sessionManager?: any
+  /** 性能埋点计时器（可选） */
+  timer?: Timer
+}
+
+const MAX_ITERATIONS = 25
+
+function zodToJsonSchema(schema: any): any {
+  const raw: any = z.toJSONSchema(schema, { target: 'draft-7' })
+  delete raw.$schema
+  return raw
+}
+
+export async function execute(ctx: ExecuteContext): Promise<string> {
+  if (!ctx.model) return "请配置 LLM provider"
+
+  const tools: Record<string, any> = {}
+  for (const t of globalToolRegistry.list()) {
+    const jsonSchemaDef = zodToJsonSchema(t.inputSchema)
+
+    tools[t.name] = tool({
+      description: t.description,
+      inputSchema: jsonSchema(jsonSchemaDef),
     })
+  }
 
-    ctx.onStreamText?.(response.content)
+  // 完整重建 msgs：摘要（如果存在）+ 历史 + 本轮 user 输入
+  const history = ctx.history ?? []
+  const lastInHistory = history[history.length - 1]
+  const isDuplicate = lastInHistory
+    && lastInHistory.role === 'user'
+    && Array.isArray(lastInHistory.content)
+    && lastInHistory.content.length === 1
+    && lastInHistory.content[0]?.type === 'text'
+    && lastInHistory.content[0]?.text === ctx.userInput
 
-    return {
-      phase: 'VERIFY',
-      aiResponse: response.content,
-      deliverable: ctx.intermediateResults,
-    }
-  } catch (e) {
-    const error = e instanceof Error ? e.message : String(e)
-    const msg = `抱歉，AI 调用失败: ${error}`
-    ctx.onStreamText?.(`[LLM Error] ${error}\n`)
-    return {
-      phase: 'VERIFY',
-      aiResponse: msg,
-      deliverable: ctx.intermediateResults,
+  const msgs: any[] = isDuplicate
+    ? [...history]
+    : [...history, { role: "user", content: [{ type: "text", text: ctx.userInput }] }]
+
+  // 如果有 session 摘要，注入到 msgs 开头（作为 user 消息 + assistant 确认）
+  if (ctx.sessionSummary) {
+    msgs.unshift(
+      { role: "user", content: [{ type: "text", text: `[系统上下文] 以下是之前对话的摘要，帮助你了解项目背景和已完成的工作：\n\n${ctx.sessionSummary}\n\n请记住这些上下文，继续与用户对话。` }] },
+      { role: "assistant", content: [{ type: "text", text: "好的，我已阅读之前的对话摘要，了解了项目背景。" }] }
+    )
+  }
+
+  let fullText = ""
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    try {
+      devLogger.logLLMRequest(
+        ctx.model.modelId || 'unknown',
+        ctx.model.provider || 'unknown',
+        msgs,
+        Object.keys(tools).length > 0 ? tools : undefined
+      )
+      const llmId = ctx.timer?.start('llm.generateText', { iteration: i })
+      ctx.onLLMCall?.()
+      const startTime = Date.now()
+      const result = await generateText({
+        model: ctx.model,
+        system: SYSTEM_PROMPT,
+        messages: msgs,
+        tools,
+        temperature: 0.7,
+        ...(ctx.signal ? { abortSignal: ctx.signal } : {}),
+      })
+      const duration = Date.now() - startTime
+      if (result.usage) {
+        ctx.onLLMResult?.({
+          inputTokens: result.usage.inputTokens ?? 0,
+          outputTokens: result.usage.outputTokens ?? 0,
+          totalTokens: (result.usage.inputTokens ?? 0) + (result.usage.outputTokens ?? 0),
+        })
+      }
+      if (llmId) ctx.timer?.end(llmId, {
+        toolCalls: result.toolCalls?.length ?? 0,
+        finishReason: result.finishReason ?? 'unknown',
+      })
+      devLogger.logLLMResponse({
+        finishReason: result.finishReason,
+        textLength: result.text?.length ?? 0,
+        toolCalls: result.toolCalls?.map(tc => ({ tool: tc.toolName, input: tc.input })),
+      }, duration)
+
+      // 累积每次 LLM 返回的文本（含带 tool calls 的中间推理）
+      if (result.text) {
+        fullText += result.text
+        ctx.onStreamText?.(result.text)
+      }
+
+      if (!result.toolCalls?.length) {
+        // 持久化最终 assistant 文本回复
+        if (ctx.sessionManager && ctx.sessionId && fullText) {
+          try {
+            ctx.sessionManager.appendMessageWithParts({
+              sessionId: ctx.sessionId,
+              role: 'assistant',
+              content: [{ type: 'text', text: fullText }],
+              model: ctx.model.modelId,
+              tokenUsage: result.usage
+                ? {
+                    input: result.usage.inputTokens ?? 0,
+                    output: result.usage.outputTokens ?? 0,
+                    reasoning: result.usage.outputTokenDetails?.reasoningTokens,
+                  }
+                : undefined,
+            })
+          } catch (e) {
+            devLogger.logException('execute.persistAssistant', e)
+          }
+        }
+
+        return fullText
+      }
+
+      // 有 tool calls：构建 assistant 消息 + 工具结果消息
+      const assistantContent: any[] = []
+      if (result.text) assistantContent.push({ type: "text", text: result.text })
+      for (const tc of result.toolCalls) {
+        assistantContent.push({ type: "tool-call", toolCallId: tc.toolCallId, toolName: tc.toolName, input: tc.input })
+      }
+      const assistantMsg = { role: "assistant", content: assistantContent }
+      msgs.push(assistantMsg)
+
+      // 持久化 assistant（含 tool-call）
+      if (ctx.sessionManager && ctx.sessionId) {
+        try {
+          ctx.sessionManager.appendMessageWithParts({
+            sessionId: ctx.sessionId,
+            role: 'assistant',
+            content: assistantContent,
+            model: ctx.model.modelId,
+          })
+        } catch (e) {
+          devLogger.logException('execute.persistAssistantTool', e)
+        }
+      }
+
+      const toolResults: any[] = []
+      for (const tc of result.toolCalls) {
+        devLogger.logToolCall(tc.toolName, tc.input)
+        const tcInput = tc.input as Record<string, unknown>
+        ctx.onToolCall?.(tc.toolName, tcInput)
+        const toolId = ctx.timer?.start(`tool.${tc.toolName}`)
+        const execResult = await globalToolRegistry.execute(tc.toolName, tcInput, { cwd: ctx.cwd })
+        devLogger.logToolCall(tc.toolName, tc.input, execResult)
+        if (toolId) ctx.timer?.end(toolId, { success: execResult.success })
+        ctx.onToolResult?.(execResult)
+        toolResults.push({
+          type: "tool-result",
+          toolCallId: tc.toolCallId,
+          toolName: tc.toolName,
+          output: { type: "text", value: execResult.success ? (execResult.output ?? "") : `Error: ${execResult.error}` },
+        })
+      }
+      const toolMsg = { role: "tool", content: toolResults }
+      msgs.push(toolMsg)
+
+      // 持久化 tool results
+      if (ctx.sessionManager && ctx.sessionId) {
+        try {
+          ctx.sessionManager.appendMessageWithParts({
+            sessionId: ctx.sessionId,
+            role: 'tool',
+            content: toolResults,
+          })
+        } catch (e) {
+          devLogger.logException('execute.persistTool', e)
+        }
+      }
+
+    } catch (e) {
+      devLogger.logException('execute.generateText', e, { iteration: i, messageCount: msgs.length })
+      const error = e instanceof Error ? e.message : String(e)
+      ctx.onStreamText?.(`[LLM Error] ${error}\n`)
+      return `抱歉，AI 调用失败: ${error}`
     }
   }
+
+  return fullText || "已达到最大迭代次数"
 }

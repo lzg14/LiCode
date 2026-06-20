@@ -159,7 +159,8 @@ export class CheckpointManager {
       }
 
       return checkpoints
-    } catch {
+    } catch (e) {
+      console.warn(`[Checkpoint] loadCheckpoints failed for ${sessionId}:`, e)
       return []
     }
   }

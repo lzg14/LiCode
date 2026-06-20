@@ -21,7 +21,7 @@ export class Projector {
 
   constructor(config: ProjectorConfig = {}) {
     this.config = {
-      maxLength: 1000,
+      maxLength: Infinity,
       includeTimestamp: false,
       compactToolResults: true,
       ...config,

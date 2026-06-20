@@ -3,18 +3,13 @@ import { checkSensitivePath } from '../../security/sensitive'
 import { existsSync } from 'fs'
 import { join } from 'path'
 
-// 缓存已初始化的目录，避免重复检查
-const gitInitCache = new Set<string>()
+const gitInitCache = new Map<string, number>()
+const CACHE_TTL = 60_000
 
 export async function observe(ctx: LoopContext): Promise<Partial<LoopContext>> {
-  // 1. 判断 Effort Level
   const effortLevel = estimateEffortLevel(ctx.userInput)
-
-  // 2. 敏感目录检查
   const sw = checkSensitivePath(ctx.cwd)
   const sensitiveWarning = sw ? `${sw.reason} (${sw.path})` : undefined
-
-  // 3. 检查 git 初始化（只检查一次，缓存结果）
   ensureGitCached(ctx.cwd)
 
   return {
@@ -25,19 +20,30 @@ export async function observe(ctx: LoopContext): Promise<Partial<LoopContext>> {
 }
 
 function ensureGitCached(cwd: string): void {
-  if (gitInitCache.has(cwd)) return
+  const cached = gitInitCache.get(cwd)
+  if (cached !== undefined && Date.now() - cached < CACHE_TTL) return
 
   const gitDir = join(cwd, '.git')
   if (existsSync(gitDir)) {
-    gitInitCache.add(cwd)
+    gitInitCache.set(cwd, Date.now())
+  } else {
+    gitInitCache.delete(cwd)
   }
-  // 如果没有 .git，不自动初始化（避免意外）
 }
 
 function estimateEffortLevel(input: string): number {
-  if (input.length < 50) return 1
-  if (input.includes('?')) return 2
-  if (input.includes('帮我') || input.includes('帮我搞')) return 3
-  if (input.includes('重新设计') || input.includes('架构')) return 5
-  return 4
+  const len = input.length
+  const hasCode = /[`{}\[\]();]/.test(input) || /file|src|lib|test|packages?\//i.test(input)
+  const hasMultiStep = /然后|接着|同时|另外|以及|之后|并且/.test(input)
+  const hasQuestion = /\?|？|怎么|如何|为什么|什么|哪里/.test(input)
+  const hasAction = /帮我|实现|添加|修改|删除|重构|修复|优化|创建|编写/.test(input)
+  const hasDesign = /设计|架构|重构|规划|方案/.test(input)
+  const hasFileRef = /\.\w{1,5}\b/.test(input)
+
+  if (len < 30 && !hasMultiStep && !hasDesign) return 1
+  if (len < 80 && hasQuestion && !hasAction) return 2
+  if (len < 200 && hasAction && !hasMultiStep) return 3
+  if (hasMultiStep || (hasAction && hasCode) || (hasAction && hasFileRef)) return 4
+  if (hasDesign || len > 500) return 5
+  return 3
 }

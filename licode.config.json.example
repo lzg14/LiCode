@@ -1,16 +1,24 @@
 {
+  "// 说明": "licode 配置文件，放在项目根目录或 ~/.licode/config.json",
+  "// 环境变量": "可设置 LICODE_MODEL / LICODE_PROVIDER / LICODE_API_KEY 覆盖以下值",
   "llm": {
-    "provider": "anthropic",
-    "model": "claude-sonnet-4-20250514",
-    "apiKeyEnv": "ANTHROPIC_API_KEY"
+    "provider": "deepseek",
+    "// provider 可选": "anthropic | openai | deepseek | local",
+    "model": "deepseek-v4-flash",
+    "// model 常用值": "deepseek: deepseek-v4-flash, deepseek-chat | anthropic: claude-sonnet-4-20250514 | openai: gpt-4o",
+    "apiKeyEnv": "ANTHROPIC_API_KEY",
+    "// apiKeyEnv": "从环境变量读取 API Key 的变量名",
+    "apiKey": "",
+    "// apiKey": "直接填写 API Key（优先级高于 apiKeyEnv）",
+    "baseUrl": "https://api.deepseek.com"
   },
   "security": {
     "commandWhitelist": ["git", "npm", "pnpm"],
-    "allowedPaths": ["D:/ProjectFile"],
-    "deniedPaths": ["C:/Users"]
+    "allowedPaths": ["./"],
+    "deniedPaths": []
   },
   "memory": {
-    "path": "./licode-memory.db",
+    "path": "~/.licode/memory.sessions.db",
     "retentionDays": 30
   },
   "subagent": {

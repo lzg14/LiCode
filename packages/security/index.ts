@@ -1,6 +1,17 @@
 import { isCommandAllowed, DEFAULT_WHITELIST, BLOCKED_COMMANDS } from './whitelist'
 import { checkSensitivePath } from './sensitive'
 
+// 导出权限系统
+export {
+  PermissionManager,
+  PERMISSION_PRESETS,
+  createPermissionManager,
+  mergePermissions,
+  PermissionRuleSchema,
+  PermissionConfigSchema,
+} from './permission'
+export type { PermissionAction, PermissionRule, PermissionContext } from './permission'
+
 /**
  * 安全层 - 集成命令白名单、文件系统边界、敏感信息检测
  */
