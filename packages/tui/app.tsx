@@ -1,6 +1,6 @@
 import { render, useKeyboard, useRenderer } from "@opentui/solid"
 import { createCliRenderer, type CliRendererConfig } from "@opentui/core"
-import { Switch, Match, ErrorBoundary, onMount, onCleanup } from "solid-js"
+import { Switch, Match, ErrorBoundary, onMount } from "solid-js"
 import { CoreLoop } from "../core/loop"
 import { configLoader } from "../config/loader"
 import { createModel } from "../llm/provider"
@@ -8,6 +8,7 @@ import { registerBuiltinTools } from "../tools/builtin"
 import { devLogger, setupGlobalErrorHandlers } from "../core/dev-logger"
 import { doCopy } from "./util/selection"
 import { focusInput } from "./component/prompt"
+import { setSidebarVisible, setModelPickerOpen } from "./context/shortcuts"
 
 import { ThemeProvider } from "./context/theme"
 import { RouteProvider, useRoute } from "./context/route"
@@ -42,22 +43,14 @@ function App() {
   const toast = useToast()
 
   onMount(() => {
-    // 首次渲染完成后手动触发 resize，强制重排
-    // 解决终端尺寸缓存导致首次布局错乱的问题
+    // 首次启动延迟触发 resize 事件，强制 @opentui 重排
+    // @opentui 的 useTerminalDimensions / onResize 监听 resize 事件
+    // 但首次渲染时终端可能未完全就绪，需要延迟触发一次
     setTimeout(() => {
       const w = process.stdout.columns || 80
       const h = process.stdout.rows || 24
-      renderer.handleResize?.(w, h)
-    }, 50)
-
-    // 窗口改变时同步触发
-    const onResize = () => {
-      const w = process.stdout.columns || 80
-      const h = process.stdout.rows || 24
-      renderer.handleResize?.(w, h)
-    }
-    process.stdout.on("resize", onResize)
-    onCleanup(() => process.stdout.off("resize", onResize))
+      renderer.emit?.("resize", w, h)
+    }, 200)
   })
 
   useKeyboard((evt) => {
@@ -69,6 +62,16 @@ function App() {
     if (evt.ctrl && evt.name === "d") {
       evt.preventDefault()
       process.exit(0)
+      return
+    }
+    if (evt.ctrl && evt.name === "b") {
+      evt.preventDefault()
+      setSidebarVisible(prev => !prev)
+      return
+    }
+    if (evt.ctrl && evt.name === "m") {
+      evt.preventDefault()
+      setModelPickerOpen(prev => !prev)
       return
     }
     if (evt.ctrl && evt.name === "c") {
