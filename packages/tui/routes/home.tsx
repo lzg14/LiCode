@@ -1,4 +1,5 @@
 import { createSignal, createMemo, Show, For } from "solid-js"
+import { useKeyboard } from "@opentui/solid"
 import { useTheme } from "../context/theme"
 import { useLoop } from "../context/loop"
 import { sidebarVisible, setSidebarVisible, modelPickerOpen, setModelPickerOpen } from "../context/shortcuts"
@@ -9,7 +10,7 @@ import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
 
 export function Home() {
-  const { phase, isProcessing, messages, run, compactSession, currentModel, currentProvider, switchModel, switchProvider, getAvailableModels, getAvailableProviders, addMessage } = useLoop()
+  const { phase, isProcessing, messages, run, compactSession, currentModel, currentProvider, switchModel, switchProvider, getAvailableModels, getAvailableProviders, addMessage, runWorkflow, listWorkflows } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [providerPickerOpen, setProviderPickerOpen] = createSignal(false)
@@ -59,6 +60,24 @@ export function Home() {
         addMessage({ role: "system", content: `Provider 已切换为 ${match}` })
       } else {
         addMessage({ role: "system", content: `未找到 provider "${arg}"，可用: ${providers.join(', ')}` })
+      }
+      return
+    }
+    if (text.startsWith('/workflow') || text.startsWith('/wf')) {
+      const arg = text.replace(/^\/w(orkflow|f)\s*/, "").trim()
+      if (!arg || arg === "list") {
+        const wfs = listWorkflows()
+        addMessage({ role: "system", content: `可用 workflow: ${wfs.join(", ")}\n\n用法：/workflow coding <需求>` })
+        return
+      }
+      const [name, ...rest] = arg.split(/\s+/)
+      const inputArgs = { input: rest.join(" ") || name }
+      addMessage({ role: "system", content: `运行 workflow: ${name}...` })
+      const result = await runWorkflow(name, inputArgs)
+      if (result.success) {
+        addMessage({ role: "system", content: `✓ workflow 完成\n\n${result.output?.summary || JSON.stringify(result.output).slice(0, 500)}` })
+      } else {
+        addMessage({ role: "system", content: `✗ workflow 失败: ${result.error}` })
       }
       return
     }
@@ -115,6 +134,17 @@ export function Home() {
   const [slashIdx, setSlashIdx] = createSignal(0)
   const [availableSkills, setAvailableSkills] = createSignal<string[]>([])
 
+  // ===== 历史搜索 =====
+  const [searchOpen, setSearchOpen] = createSignal(false)
+  const [searchQuery, setSearchQuery] = createSignal("")
+  const [searchResults, setSearchResults] = createSignal<Array<{ turn: number; role: string; snippet: string }>>([])
+  const [searchIdx, setSearchIdx] = createSignal(0)
+  const performSearch = (q: string) => {
+    const r = searchHistory(q)
+    setSearchResults(r)
+    setSearchIdx(0)
+  }
+
   const scanSkills = async () => {
     const { readdir } = await import("fs/promises")
     const { join } = await import("path")
@@ -133,8 +163,10 @@ export function Home() {
       { type: 'cmd', label: '/compact', desc: '压缩对话历史' },
       { type: 'cmd', label: '/model', desc: '切换模型（当前 provider）' },
       { type: 'cmd', label: '/provider', desc: '切换 LLM provider (anthropic/openai/deepseek)' },
+      { type: 'cmd', label: '/search', desc: '搜索历史消息 (/search 关键词)' },
       { type: 'cmd', label: '/save', desc: '保存会话 (/save 名称)' },
       { type: 'cmd', label: '/load', desc: '加载会话 (/load 名称)' },
+      { type: 'cmd', label: '/workflow', desc: '运行工作流 (/workflow coding/research/review)' },
     ]
     for (const s of availableSkills()) {
       items.push({ type: 'skill', label: `/skill ${s}`, desc: `加载技能 ${s}` })
@@ -159,9 +191,20 @@ export function Home() {
     const selected = items[slashIdx()]
     if (!selected) return
     if (selected.type === 'cmd') {
+      const text = slashInput().trim()
       if (selected.label === '/compact') compactSession()
       else if (selected.label === '/model') toggleModelPicker()
       else if (selected.label === '/provider') toggleProviderPicker()
+      else if (selected.label === '/search') {
+        const q = text.startsWith('/search') ? text.slice(7).trim() : ''
+        if (q) {
+          setSearchQuery(q)
+          performSearch(q)
+          setSearchOpen(true)
+        }
+        setSlashOpen(false)
+        return
+      }
     }
     setSlashOpen(false)
   }
@@ -208,6 +251,12 @@ export function Home() {
       else if (evt.name === "down") { evt.preventDefault(); setSlashIdx(prev => (prev + 1) % items.length) }
       else if (evt.name === "return") { evt.preventDefault(); handleSlashSubmit() }
       else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false) }
+      return
+    }
+    if (searchOpen()) {
+      if (evt.name === "up") { evt.preventDefault(); setSearchIdx(prev => Math.max(0, prev - 1)) }
+      else if (evt.name === "down") { evt.preventDefault(); setSearchIdx(prev => Math.min(searchResults().length - 1, prev + 1)) }
+      else if (evt.name === "escape" || evt.name === "return") { evt.preventDefault(); setSearchOpen(false) }
       return
     }
   })
@@ -317,6 +366,45 @@ export function Home() {
           </box>
         </Show>
 
+        <Show when={searchOpen()}>
+          <box
+            flexDirection="column"
+            position="absolute"
+            top={0}
+            left={0}
+            width="100%"
+            height="100%"
+            zIndex={5000}
+            alignItems="center"
+            justifyContent="center"
+          >
+            <box
+              flexDirection="column"
+              width={80}
+              paddingX={2}
+              paddingY={1}
+              backgroundColor={backgroundPanel()}
+              border={["top", "bottom", "left", "right"]}
+              borderColor={primary()}
+            >
+              <text fg={primary()}>{`搜索: "${searchQuery()}"  (${searchResults().length} 条结果, Esc 关闭)`}</text>
+              <box height={1} />
+              <Show
+                when={searchResults().length > 0}
+                fallback={<text fg={textMuted()}>未找到匹配的消息</text>}
+              >
+                <For each={searchResults()}>
+                  {(r, i) => (
+                    <text fg={i() === searchIdx() ? primary() : text()}>
+                      {`${i() === searchIdx() ? '▸ ' : '  '}[第 ${r.turn} 轮 · ${r.role}] ${r.snippet}`}
+                    </text>
+                  )}
+                </For>
+              </Show>
+            </box>
+          </box>
+        </Show>
+
         <Show when={messages().length === 0 && !isProcessing()}>
           <box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
             <Logo />
@@ -342,7 +430,8 @@ export function Home() {
         </Show>
 
         <box flexShrink={0}>
-          <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange} pickerOpen={modelPickerOpen() || providerPickerOpen() || slashOpen()} />
+          <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange}
+            popupOpen={modelPickerOpen() || providerPickerOpen() || slashOpen()} />
           <StatusBar />
         </box>
       </box>

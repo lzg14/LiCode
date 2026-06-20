@@ -8,6 +8,15 @@ export interface ModelConfig {
   baseUrl?: string
 }
 
+/**
+ * MiniMax 模型名规范化：
+ * - MiniMax-M3[1M] -> MiniMax-M3 （[1M] 是 context 标识，不是模型名）
+ * - 用户随便加的 [xxx] 后缀都剥掉
+ */
+function normalizeMiniMaxModel(model: string): string {
+  return model.replace(/\[.*?\]$/, "").trim()
+}
+
 export function createModel(config: ModelConfig) {
   const provider = config.provider.toLowerCase()
   let apiKey = config.apiKey || process.env[`${provider.toUpperCase()}_API_KEY`] || ""
@@ -21,7 +30,11 @@ export function createModel(config: ModelConfig) {
     return createAnthropic({ apiKey, baseURL: config.baseUrl })(config.model)
   }
   if (provider === "minimax") {
-    return createOpenAI({ apiKey, baseURL: config.baseUrl ?? "https://api.minimax.chat/v1" }).chat(config.model)
+    // MiniMax 提供 Anthropic 兼容 API（/anthropic 端点），不是 OpenAI 兼容
+    // 用 createAnthropic 才能用 thinking、tool_use 等内容块
+    const model = normalizeMiniMaxModel(config.model)
+    const baseURL = config.baseUrl ?? "https://api.minimaxi.com/anthropic"
+    return createAnthropic({ apiKey, baseURL })(model)
   }
   return createOpenAI({ apiKey, baseURL: config.baseUrl }).chat(config.model)
 }

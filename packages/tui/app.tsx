@@ -1,6 +1,6 @@
+import { Switch, Match, ErrorBoundary, onMount } from "solid-js"
 import { render, useKeyboard, useRenderer } from "@opentui/solid"
 import { createCliRenderer, type CliRendererConfig } from "@opentui/core"
-import { Switch, Match, ErrorBoundary, onMount } from "solid-js"
 import { CoreLoop } from "../core/loop"
 import { configLoader } from "../config/loader"
 import { createModel } from "../llm/provider"
@@ -8,7 +8,6 @@ import { registerBuiltinTools } from "../tools/builtin"
 import { devLogger, setupGlobalErrorHandlers } from "../core/dev-logger"
 import { doCopy } from "./util/selection"
 import { focusInput } from "./component/prompt"
-import { setSidebarVisible, setModelPickerOpen } from "./context/shortcuts"
 
 import { ThemeProvider } from "./context/theme"
 import { RouteProvider, useRoute } from "./context/route"
@@ -44,8 +43,6 @@ function App() {
 
   onMount(() => {
     // 首次启动延迟触发 resize 事件，强制 @opentui 重排
-    // @opentui 的 useTerminalDimensions / onResize 监听 resize 事件
-    // 但首次渲染时终端可能未完全就绪，需要延迟触发一次
     setTimeout(() => {
       const w = process.stdout.columns || 80
       const h = process.stdout.rows || 24
@@ -62,16 +59,6 @@ function App() {
     if (evt.ctrl && evt.name === "d") {
       evt.preventDefault()
       process.exit(0)
-      return
-    }
-    if (evt.ctrl && evt.name === "b") {
-      evt.preventDefault()
-      setSidebarVisible(prev => !prev)
-      return
-    }
-    if (evt.ctrl && evt.name === "m") {
-      evt.preventDefault()
-      setModelPickerOpen(prev => !prev)
       return
     }
     if (evt.ctrl && evt.name === "c") {
