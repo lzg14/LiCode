@@ -119,7 +119,7 @@ export function Prompt(props: PromptProps) {
         <textarea
           ref={(r: TextareaRenderable) => { input = r }}
           placeholder={props.disabled
-            ? pendingCount() > 0 ? `等待中 (队列 ${pendingCount()} 条)...` : "等待响应中..."
+            ? pendingCount() > 0 ? `等待中（队列 ${pendingCount()} 条）...` : "等待响应中..."
             : props.placeholder ?? "输入消息..."}
           placeholderColor={textMuted()}
           textColor={props.disabled ? textMuted() : text()}
