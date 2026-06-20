@@ -43,8 +43,9 @@ function App() {
   const [resizeTick, setResizeTick] = createSignal(0)
 
   onMount(() => {
-    // 首次渲染完成后强制触发重排，解决终端尺寸缓存问题
-    setTimeout(() => setResizeTick(t => t + 1), 50)
+    // 首次渲染完成后强制触发终端 resize 事件，
+    // 解决 @opentui 缓存终端尺寸导致的布局错乱
+    setTimeout(() => process.stdout.emit("resize"), 100)
 
     const onResize = () => setResizeTick(t => t + 1)
     process.stdout.on("resize", onResize)
