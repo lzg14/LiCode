@@ -66,8 +66,9 @@ export function Prompt(props: PromptProps) {
   }
 
   const handleKeyDown = async (e: any) => {
-    // ESC: 中断当前执行 + 清空队列（disabled 时也要响应）
+    // ESC: 弹窗打开时让外层 useKeyboard 关闭弹窗；否则用于中断/清队列
     if (e.name === "escape") {
+      if (props.popupOpen) return  // 让外层 useKeyboard 处理关闭弹窗
       e.preventDefault()
       if (props.disabled) {
         abort()
