@@ -40,9 +40,12 @@ function App() {
   const loop = useLoop()
   const renderer = useRenderer()
   const toast = useToast()
-  const [, setResizeTick] = createSignal(0)
+  const [resizeTick, setResizeTick] = createSignal(0)
 
   onMount(() => {
+    // 首次渲染完成后强制触发重排，解决终端尺寸缓存问题
+    setTimeout(() => setResizeTick(t => t + 1), 50)
+
     const onResize = () => setResizeTick(t => t + 1)
     process.stdout.on("resize", onResize)
     onCleanup(() => process.stdout.off("resize", onResize))
@@ -74,7 +77,7 @@ function App() {
   return (
     <box
       flexDirection="column"
-      height="100%"
+      height={resizeTick() >= 0 ? "100%" : "100%"}
       onMouseUp={() => {
         doCopy(renderer, toast, "已复制到剪贴板")
         setTimeout(() => focusInput(), 10)
