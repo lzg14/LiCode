@@ -10,7 +10,7 @@ import { Sidebar } from "../component/sidebar"
 
 export function Home() {
   const { phase, isProcessing, messages, run, compactSession, currentModel, switchModel, getAvailableModels, addMessage } = useLoop()
-  const { background, primary, text, textMuted } = useTheme()
+  const { background, backgroundPanel, primary, text, textMuted } = useTheme()
   const [sidebarVisible, setSidebarVisible] = createSignal(true)
   const [modelPickerOpen, setModelPickerOpen] = createSignal(false)
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
@@ -29,6 +29,7 @@ export function Home() {
       evt.preventDefault()
       toggleModelPicker()
     }
+    // 模型选择器导航
     if (modelPickerOpen()) {
       const models = getAvailableModels()
       if (evt.name === "up") {
@@ -45,6 +46,23 @@ export function Home() {
       } else if (evt.name === "escape") {
         evt.preventDefault()
         setModelPickerOpen(false)
+      }
+    }
+    // 斜杠命令菜单导航
+    if (slashOpen()) {
+      const items = slashItems()
+      if (evt.name === "up") {
+        evt.preventDefault()
+        setSlashIdx(prev => (prev - 1 + items.length) % items.length)
+      } else if (evt.name === "down") {
+        evt.preventDefault()
+        setSlashIdx(prev => (prev + 1) % items.length)
+      } else if (evt.name === "return") {
+        evt.preventDefault()
+        handleSlashSubmit()
+      } else if (evt.name === "escape") {
+        evt.preventDefault()
+        setSlashOpen(false)
       }
     }
   })
@@ -139,7 +157,7 @@ export function Home() {
             width={50}
             paddingX={2}
             paddingY={1}
-            backgroundColor="#1e1e1e"
+            backgroundColor={backgroundPanel()}
             border={["top", "bottom", "left", "right"]}
             borderColor={primary()}
           >
@@ -165,15 +183,9 @@ export function Home() {
             width={50}
             paddingX={2}
             paddingY={1}
-            backgroundColor="#1e1e1e"
+            backgroundColor={backgroundPanel()}
             border={["top", "bottom", "left", "right"]}
             borderColor={primary()}
-            onKeyDown={(e: any) => {
-              if (e.name === "up") { e.preventDefault(); setSlashIdx(prev => (prev - 1 + slashItems().length) % slashItems().length) }
-              else if (e.name === "down") { e.preventDefault(); setSlashIdx(prev => (prev + 1) % slashItems().length) }
-              else if (e.name === "return") { e.preventDefault(); handleSlashSubmit() }
-              else if (e.name === "escape") { e.preventDefault(); setSlashOpen(false) }
-            }}
           >
             <text fg={primary()}>命令 ({slashInput()})</text>
             <box height={1} />
@@ -212,7 +224,7 @@ export function Home() {
         </Show>
 
         <box flexShrink={0}>
-          <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange} />
+          <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange} pickerOpen={modelPickerOpen() || slashOpen()} />
           <StatusBar />
         </box>
       </box>

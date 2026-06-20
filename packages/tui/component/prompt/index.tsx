@@ -9,6 +9,8 @@ export interface PromptProps {
   disabled?: boolean
   placeholder?: string
   onInputChange?: (text: string) => void
+  /** 当外部弹窗（模型选择器/命令菜单）打开时，阻止 Prompt 拦截上下/回车/ESC */
+  pickerOpen?: boolean
 }
 
 let focusFn: (() => void) | null = null
@@ -42,6 +44,11 @@ export function Prompt(props: PromptProps) {
 
   const handleKeyDown = (e: any) => {
     if (props.disabled) return
+
+    // 外部弹窗打开时，不拦截上下/回车/ESC，交给父组件处理
+    if (props.pickerOpen) {
+      return
+    }
 
     if (e.name === "up" && (input.plainText.length === 0 || input.cursorOffset === 0)) {
       e.preventDefault()
