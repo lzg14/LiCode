@@ -330,7 +330,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       if (inputQueue.length > 0) {
         const next = inputQueue.shift()!
         setPendingCount(inputQueue.length)
-        run(next)
+        // 把已经发出过的 user 消息 queued 标记去掉
+        updateMessage(next.id, { queued: false })
+        run(next.text)
       }
     }
   }
