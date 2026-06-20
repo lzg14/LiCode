@@ -83,15 +83,15 @@ export function Home() {
             bottom={4}
             left={1}
             zIndex={5000}
-            paddingLeft={1}
-            paddingRight={1}
-            paddingTop={0}
-            paddingBottom={0}
+            width={50}
+            paddingX={2}
+            paddingY={1}
             backgroundColor="#1e1e1e"
             border={["top", "bottom", "left", "right"]}
             borderColor={primary()}
           >
             <text fg={primary()}>{`选择模型 (↑↓ 选择, Enter 确认, Esc 取消)`}</text>
+            <box height={1} />
             <For each={getAvailableModels()}>
               {(model, i) => (
                 <text fg={i() === modelPickerIdx() ? primary() : text()}>

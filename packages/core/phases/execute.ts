@@ -130,6 +130,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
 
   let fullText = ""
   let toolBatch = 0
+  let hasToolCalls = false
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     try {
       devLogger.logLLMRequest(
@@ -167,10 +168,19 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         toolCalls: result.toolCalls?.map(tc => ({ tool: tc.toolName, input: tc.input })),
       }, duration)
 
-      // 只在最终轮（无 toolCalls）保留文本到 fullText，中间推理仅用于 streaming 显示
+      // 中间轮（有 tool calls）：文本通过 onIntermediateText 保存为 assistant 消息
+      // 最终轮：如果之前有工具调用，也用 onIntermediateText 保存（避免 streaming→message 重复）
+      //         如果无工具调用，用 onStreamText 显示（直接回复场景）
       if (result.text) {
-        if (!result.toolCalls?.length) fullText = result.text
-        ctx.onStreamText?.(result.text)
+        if (result.toolCalls?.length) {
+          hasToolCalls = true
+          ctx.onIntermediateText?.(result.text)
+        } else if (hasToolCalls) {
+          ctx.onIntermediateText?.(result.text)
+        } else {
+          fullText = result.text
+          ctx.onStreamText?.(result.text)
+        }
       }
 
       if (!result.toolCalls?.length) {
@@ -195,7 +205,8 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
           }
         }
 
-        return fullText
+        // 如果之前有工具调用，最终文本已通过 onIntermediateText 保存，返回空避免重复
+        return hasToolCalls ? "" : fullText
       }
 
       // 有 tool calls：构建 assistant 消息 + 工具结果消息

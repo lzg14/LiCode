@@ -43,6 +43,7 @@ export interface LoopContext {
   onLLMResult?: (usage: { inputTokens: number; outputTokens: number; totalTokens: number }) => void
   onToolCall?: (toolName: string, args: Record<string, unknown>, batch: number) => void
   onToolResult?: (result: unknown) => void
+  onIntermediateText?: (text: string) => void
   // 流式输出缓冲
   streamBuffer?: string
   // Phase-specific fields
@@ -339,6 +340,7 @@ export class CoreLoop {
           onLLMResult: ctx.onLLMResult,
           onToolCall: ctx.onToolCall,
           onToolResult: ctx.onToolResult,
+          onIntermediateText: ctx.onIntermediateText,
           signal: ctx.signal,
           timer,
         })
