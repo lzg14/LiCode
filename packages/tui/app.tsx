@@ -126,7 +126,7 @@ export async function tui(config: any) {
                     <DialogProvider>
                       <ToastProvider>
                         <Toast />
-                        <LoopProvider loop={loop} model={model} sessionId={lastSessionId ?? undefined}>
+                        <LoopProvider loop={loop} model={model} provider={config.llm.provider} sessionId={lastSessionId ?? undefined}>
                           <App />
                         </LoopProvider>
                       </ToastProvider>

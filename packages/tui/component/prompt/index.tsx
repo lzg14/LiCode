@@ -79,7 +79,7 @@ export function Prompt(props: PromptProps) {
     <box
       border={["left"]}
       borderColor={borderActive()}
-      height={3}
+      height={4}
       customBorderChars={{
         topLeft: "",
         bottomLeft: "",
@@ -97,11 +97,11 @@ export function Prompt(props: PromptProps) {
       <box
         paddingLeft={1}
         paddingRight={1}
-        paddingTop={0}
+        paddingTop={1}
         paddingBottom={0}
         backgroundColor={backgroundElement()}
         flexGrow={1}
-        height={3}
+        height={4}
         justifyContent="center"
       >
         <textarea

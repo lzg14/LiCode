@@ -1,12 +1,10 @@
 import { useTheme } from "../context/theme"
-import { useConfig } from "../context/config"
 import { useLoop } from "../context/loop"
 import { globalToolRegistry } from "../../tools/registry"
 
 export function StatusBar() {
   const { textMuted } = useTheme()
-  const config = useConfig()
-  const { elapsed, isProcessing } = useLoop()
+  const { elapsed, isProcessing, currentModel } = useLoop()
 
   const elapsedStr = () => {
     const secs = elapsed()
@@ -19,7 +17,7 @@ export function StatusBar() {
   return (
     <box width="100%" paddingX={1} paddingY={0}>
       <text fg={textMuted()}>
-        {`${globalToolRegistry.list().length} tools · ${config.config().llm.model}`}
+        {`${globalToolRegistry.list().length} tools · ${currentModel()}`}
         {isProcessing() ? ` · ${elapsedStr()}` : ""}
       </text>
     </box>

@@ -41,10 +41,16 @@ function MessageItem(props: { msg: Message }) {
   const { primary, text, textMuted, error, success, warning } = useTheme()
 
   if (props.msg.role === "user") {
+    const lineCount = props.msg.content.split('\n').length
+    const isLong = lineCount > 3 || props.msg.content.length > 200
     return (
       <box flexDirection="row" marginBottom={1}>
         <text fg={primary()}>{"┃ "}</text>
-        <text fg={text()}>{props.msg.content}</text>
+        <Show when={!isLong} fallback={
+          <text fg={textMuted()}>[pasted ~ {lineCount} lines]</text>
+        }>
+          <text fg={text()}>{props.msg.content}</text>
+        </Show>
       </box>
     )
   }
@@ -159,6 +165,8 @@ export function MessageList() {
           <Spinner>思考中...</Spinner>
         </box>
       </Show>
+
+      <box height={1} />
     </box>
   )
 }
