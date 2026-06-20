@@ -73,6 +73,8 @@ export interface LoopContext {
   compactSession: () => Promise<void>
   runWorkflow: (name: string, args: any) => Promise<any>
   listWorkflows: () => string[]
+  activeSkill: Accessor<string | null>
+  setActiveSkill: (name: string | null) => void
   currentModel: Accessor<string>
   currentProvider: Accessor<string>
   switchModel: (modelId: string) => void
@@ -84,7 +86,7 @@ export interface LoopContext {
 
 const Ctx = createContext<LoopContext>()
 
-export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; provider?: string; sessionId?: string }) {
+export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; provider?: string; sessionId?: string; llmConfig?: { provider: string; model: string; apiKey?: string; baseUrl?: string } }) {
   const [phase, setPhase] = createSignal<Phase>("OBSERVE")
   const [isProcessing, setIsProcessing] = createSignal(false)
   const [elapsed, setElapsed] = createSignal(0)
@@ -96,6 +98,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const [llmTokenUsage, setLlmTokenUsage] = createSignal({ input: 0, output: 0, total: 0 })
   const [currentModel, setCurrentModel] = createSignal(props.model?.modelId ?? "unknown")
   const [currentProvider, setCurrentProvider] = createSignal(props.provider ?? "deepseek")
+  const [activeSkill, setActiveSkillState] = createSignal<string | null>(null)
+  const [activeSkillInstructions, setActiveSkillInstructions] = createSignal<string | null>(null)
 
   const [pendingCount, setPendingCount] = createSignal(0)
   const inputQueue: { id: string; text: string }[] = []
@@ -147,15 +151,57 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
 
   const listWorkflows = (): string[] => wfEngine["config"]?.scriptRegistry?.list() ?? ["coding", "research", "review"]
 
+  const setActiveSkill = async (name: string | null) => {
+    if (!name) {
+      setActiveSkillState(null)
+      setActiveSkillInstructions(null)
+      return
+    }
+    try {
+      const { readFile } = await import("fs/promises")
+      const { join } = await import("path")
+      const homes = process.env.HOME || process.env.USERPROFILE || ""
+      const paths = [
+        join(homes, ".licode", "skills", `${name}.skill.md`),
+        join(homes, ".licode", "skills", "builtin", `${name}.skill.md`),
+        join(process.cwd(), "skills", `${name}.skill.md`),
+      ]
+      for (const p of paths) {
+        try {
+          const content = await readFile(p, "utf-8")
+          setActiveSkillState(name)
+          setActiveSkillInstructions(content)
+          return
+        } catch {}
+      }
+      setActiveSkillState(name)
+      setActiveSkillInstructions(`# ${name}\n\n技能文件未找到。已搜索: ${paths.join(", ")}`)
+    } catch (e) {
+      devLogger.debug("SKILL", "load failed", e)
+    }
+  }
+
   const switchModel = (modelId: string) => {
-    activeModel = createModel({ provider: currentProvider(), model: modelId })
+    const cfg = props.llmConfig
+    activeModel = createModel({
+      provider: cfg?.provider ?? currentProvider(),
+      model: modelId,
+      apiKey: cfg?.apiKey,
+      baseUrl: cfg?.baseUrl,
+    })
     setCurrentModel(modelId)
   }
 
   const switchProvider = (providerId: string) => {
     const models = listModelsByProvider(providerId)
     if (models.length === 0) return
-    activeModel = createModel({ provider: providerId, model: models[0] })
+    const cfg = props.llmConfig
+    activeModel = createModel({
+      provider: providerId,
+      model: models[0],
+      apiKey: cfg?.apiKey,
+      baseUrl: cfg?.baseUrl,
+    })
     setCurrentProvider(providerId)
     setCurrentModel(models[0])
   }
@@ -274,6 +320,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         phase: "OBSERVE" as Phase,
         cwd: process.cwd(),
         model: activeModel,
+        activeSkill: activeSkill() ?? undefined,
+        activeSkillInstructions: activeSkillInstructions() ?? undefined,
         onPhaseChange: (p: Phase) => {
           setPhase(p)
         },
@@ -420,6 +468,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     getAvailableModels,
     getAvailableProviders,
     contextTokens,
+    activeSkill,
+    setActiveSkill,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }

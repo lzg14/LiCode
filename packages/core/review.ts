@@ -1,4 +1,5 @@
 import type { LoopContext } from './loop'
+import { generateText } from 'ai'
 
 /**
  * Review Agent - 自动触发反方视角评审
@@ -68,10 +69,10 @@ export interface ReviewResult {
  * 执行评审
  */
 export async function reviewPlan(ctx: LoopContext): Promise<ReviewResult> {
-  const { llm, userInput, plan, risks = [] } = ctx
+  const { model, userInput, plan, risks = [] } = ctx
 
-  // 如果没有 LLM，使用本地评审
-  if (!llm) {
+  // 如果没有 model，使用本地评审
+  if (!model) {
     return localReview(ctx)
   }
 
@@ -79,16 +80,15 @@ export async function reviewPlan(ctx: LoopContext): Promise<ReviewResult> {
   const reviewPrompt = buildReviewPrompt(ctx)
 
   try {
-    const response = await llm.complete({
-      messages: [
-        { role: 'system', content: reviewPrompt },
-        { role: 'user', content: `请评审以下方案：\n\n用户需求：${userInput}\n计划：${plan?.steps?.join(' → ') || '未指定'}\n风险：${risks.join('、') || '未识别'}` },
-      ],
+    const result = await generateText({
+      model,
+      system: reviewPrompt,
+      prompt: `请评审以下方案：\n\n用户需求：${userInput}\n计划：${plan?.steps?.join(' → ') || '未指定'}\n风险：${risks.join('、') || '未识别'}`,
       temperature: 0.3,
     })
 
     // 解析评审结果
-    return parseReviewResponse(response.content)
+    return parseReviewResponse(result.text)
   } catch {
     return localReview(ctx)
   }
