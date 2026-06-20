@@ -1,6 +1,6 @@
 import { render, useKeyboard, useRenderer } from "@opentui/solid"
 import { createCliRenderer, type CliRendererConfig } from "@opentui/core"
-import { Switch, Match, ErrorBoundary, createSignal, onMount, onCleanup } from "solid-js"
+import { Switch, Match, ErrorBoundary, onMount, onCleanup } from "solid-js"
 import { CoreLoop } from "../core/loop"
 import { configLoader } from "../config/loader"
 import { createModel } from "../llm/provider"
