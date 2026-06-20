@@ -113,7 +113,7 @@ export function Sidebar() {
 
       <Show when={isProcessing()}>
         <box flexDirection="column" gap={1} paddingTop={1}>
-          <text fg={textMuted()} >Progress</text>
+          <text fg={primary()}>Progress</text>
           <box flexDirection="row" gap={1}>
             <text fg={primary()} >phase</text>
             <text fg={primary()} >{phase()}</text>
