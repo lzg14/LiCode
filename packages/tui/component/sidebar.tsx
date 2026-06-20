@@ -8,7 +8,7 @@ const VERSION = "0.1.0"
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning } = useTheme()
   const config = useConfig()
-  const { phase, isProcessing, elapsed, messages, llmCallCount, llmTokenUsage } = useLoop()
+  const { phase, isProcessing, elapsed, messages, llmCallCount, llmTokenUsage, contextTokens } = useLoop()
 
   const msgCount = createMemo(() => messages().length)
   const toolCallCount = createMemo(() => messages().filter((m) => m.role === "tool").length)
@@ -100,6 +100,12 @@ export function Sidebar() {
             <text fg={textMuted()}>total</text>
             <text fg={(llmTokenUsage().total > 32000) ? warning() : text()}>
               {(llmTokenUsage().total / 1000).toFixed(1)}K
+            </text>
+          </box>
+          <box paddingLeft={1} flexDirection="row" gap={1}>
+            <text fg={textMuted()}>context</text>
+            <text fg={contextTokens() > 30000 ? warning() : text()}>
+              {(contextTokens() / 1000).toFixed(1)}K
             </text>
           </box>
         </box>
