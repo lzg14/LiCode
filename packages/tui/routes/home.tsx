@@ -258,7 +258,6 @@ export function Home() {
       else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false) }
       return
     }
-    }
   })
 
   return (
@@ -362,45 +361,6 @@ export function Home() {
                   </text>
                 )}
               </For>
-            </box>
-          </box>
-        </Show>
-
-        <Show when={searchOpen()}>
-          <box
-            flexDirection="column"
-            position="absolute"
-            top={0}
-            left={0}
-            width="100%"
-            height="100%"
-            zIndex={5000}
-            alignItems="center"
-            justifyContent="center"
-          >
-            <box
-              flexDirection="column"
-              width={80}
-              paddingX={2}
-              paddingY={1}
-              backgroundColor={backgroundPanel()}
-              border={["top", "bottom", "left", "right"]}
-              borderColor={primary()}
-            >
-              <text fg={primary()}>{`搜索: "${searchQuery()}"  (${searchResults().length} 条结果, Esc 关闭)`}</text>
-              <box height={1} />
-              <Show
-                when={searchResults().length > 0}
-                fallback={<text fg={textMuted()}>未找到匹配的消息</text>}
-              >
-                <For each={searchResults()}>
-                  {(r, i) => (
-                    <text fg={i() === searchIdx() ? primary() : text()}>
-                      {`${i() === searchIdx() ? '▸ ' : '  '}[第 ${r.turn} 轮 · ${r.role}] ${r.snippet}`}
-                    </text>
-                  )}
-                </For>
-              </Show>
             </box>
           </box>
         </Show>
