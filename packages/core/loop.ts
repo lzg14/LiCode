@@ -9,6 +9,8 @@ import { execute } from './phases/execute'
 import { verify } from './phases/verify'
 import { learn } from './phases/learn'
 import { devLogger } from './dev-logger'
+import { homedir } from 'os'
+import { join } from 'path'
 import { Memory } from '../memory/memory'
 import { SessionManager } from '../session/session'
 import { auditLogger } from '../audit/logger'
@@ -39,7 +41,7 @@ export interface LoopContext {
   signal?: AbortSignal
   onLLMCall?: () => void
   onLLMResult?: (usage: { inputTokens: number; outputTokens: number; totalTokens: number }) => void
-  onToolCall?: (toolName: string, args: Record<string, unknown>) => void
+  onToolCall?: (toolName: string, args: Record<string, unknown>, batch: number) => void
   onToolResult?: (result: unknown) => void
   // 流式输出缓冲
   streamBuffer?: string
@@ -81,9 +83,13 @@ export class CoreLoop {
 
   constructor(private config: Config, private llm?: LLMProvider) {
     this.memory = new Memory(config.cwd)
-    this.sessionManager = new SessionManager(
-      config.memory?.path?.replace(/\.\w+$/, '.sessions.db') ?? './licode-sessions.db'
-    )
+    // 展开 ~ 到用户目录
+    const home = homedir()
+    const rawPath = (config.memory?.path ?? './licode-sessions.db').replace(/^~/, home)
+    const memoryPath = /\.\w+$/.test(rawPath)
+      ? rawPath.replace(/\.\w+$/, '.sessions.db')
+      : rawPath + '/licode-sessions.db'
+    this.sessionManager = new SessionManager(memoryPath)
     this.checkpointManager = new CheckpointManager(config.cwd)
     this.projector = new Projector()
     this.compactor = new ContextCompactor()
