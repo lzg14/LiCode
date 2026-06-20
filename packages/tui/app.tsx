@@ -40,14 +40,13 @@ function App() {
   const loop = useLoop()
   const renderer = useRenderer()
   const toast = useToast()
-  const [resizeTick, setResizeTick] = createSignal(0)
 
   onMount(() => {
-    // 首次渲染完成后强制触发终端 resize 事件，
-    // 解决 @opentui 缓存终端尺寸导致的布局错乱
-    setTimeout(() => process.stdout.emit("resize"), 100)
+    // 首次渲染完成后触发 SIGWINCH，强制 @opentui 重新读取终端尺寸
+    // 解决终端 resize 后首次启动布局错乱的问题
+    setTimeout(() => process.emit("SIGWINCH" as any), 100)
 
-    const onResize = () => setResizeTick(t => t + 1)
+    const onResize = () => process.emit("SIGWINCH" as any)
     process.stdout.on("resize", onResize)
     onCleanup(() => process.stdout.off("resize", onResize))
   })
@@ -78,7 +77,7 @@ function App() {
   return (
     <box
       flexDirection="column"
-      height={resizeTick() >= 0 ? "100%" : "100%"}
+      height="100%"
       onMouseUp={() => {
         doCopy(renderer, toast, "已复制到剪贴板")
         setTimeout(() => focusInput(), 10)
