@@ -165,7 +165,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           setPhase(p)
         },
         onPhaseLog: (text: string) => {
-          addMessage({ role: "system", content: text.trimEnd() })
+          devLogger.info('PHASE', text.trimEnd())
         },
         onLLMCall: () => {
           setLlmCallCount(prev => prev + 1)
