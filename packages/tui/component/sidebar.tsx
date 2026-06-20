@@ -2,11 +2,12 @@ import { createMemo, Show } from "solid-js"
 import { useTheme } from "../context/theme"
 import { useConfig } from "../context/config"
 import { useLoop } from "../context/loop"
+import { getModelConfig } from "../../llm/catalog"
 
 const VERSION = "0.1.0"
 
 export function Sidebar() {
-  const { text, textMuted, backgroundPanel, success, primary, warning } = useTheme()
+  const { text, textMuted, backgroundPanel, success, primary, warning, error } = useTheme()
   const config = useConfig()
   const { phase, isProcessing, messages, llmCallCount, llmTokenUsage, contextTokens, currentModel } = useLoop()
 
@@ -19,6 +20,16 @@ export function Sidebar() {
     if (!firstUser) return "新对话"
     const title = firstUser.content.slice(0, 30)
     return title.length < firstUser.content.length ? title + "..." : title
+  })
+
+  // 模型上下文窗口信息
+  const modelInfo = createMemo(() => getModelConfig(currentModel()))
+  const maxContext = createMemo(() => modelInfo()?.contextWindow ?? 128000)
+  const contextUsage = createMemo(() => maxContext() > 0 ? (contextTokens() / maxContext()) * 100 : 0)
+  const contextColor = createMemo(() => {
+    if (contextUsage() > 90) return error()
+    if (contextUsage() > 70) return warning()
+    return text()
   })
 
   const cwd = () => {
@@ -96,8 +107,8 @@ export function Sidebar() {
           </box>
           <box paddingLeft={1} flexDirection="row" gap={1}>
             <text fg={textMuted()}>context</text>
-            <text fg={contextTokens() > 30000 ? warning() : text()}>
-              {(contextTokens() / 1000).toFixed(1)}K
+            <text fg={contextColor()}>
+              {(contextTokens() / 1000).toFixed(1)}K / {(maxContext() / 1000).toFixed(0)}K ({contextUsage().toFixed(0)}%)
             </text>
           </box>
         </box>
