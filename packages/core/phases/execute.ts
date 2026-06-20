@@ -65,6 +65,8 @@ export interface ExecuteContext {
   onStreamText?: (text: string) => void
   onToolCall?: (toolName: string, args: Record<string, unknown>, batch: number) => void
   onToolResult?: (result: unknown) => void
+  /** 工具调用循环中，每轮 LLM 返回文本时触发（用于保存中间 assistant 消息） */
+  onIntermediateText?: (text: string) => void
   /**
    * 完整的 AI SDK 消息历史（含 tool-call/tool-result parts）。
    * 来自 sessionManager.getMessagesAsModelMessages()
