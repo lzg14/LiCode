@@ -15,6 +15,8 @@ export interface PromptProps {
 }
 
 let focusFn: (() => void) | null = null
+let setTextFn: ((text: string) => void) | null = null
+let prependTextFn: ((text: string) => void) | null = null
 
 export function Prompt(props: PromptProps) {
   const { primary, text, textMuted, backgroundElement, borderActive } = useTheme()
@@ -31,6 +33,23 @@ export function Prompt(props: PromptProps) {
   createEffect(() => {
     focusFn = () => {
       if (!input || input.isDestroyed) return
+      input.focus()
+    }
+  })
+
+  createEffect(() => {
+    setTextFn = (text: string) => {
+      if (!input || input.isDestroyed) return
+      input.setText(text)
+      input.focus()
+    }
+  })
+
+  createEffect(() => {
+    prependTextFn = (text: string) => {
+      if (!input || input.isDestroyed) return
+      const current = input.plainText
+      input.setText(current + text)
       input.focus()
     }
   })
@@ -156,4 +175,12 @@ export function Prompt(props: PromptProps) {
 
 export function focusInput() {
   focusFn?.()
+}
+
+export function setPromptText(text: string) {
+  setTextFn?.(text)
+}
+
+export function prependPromptText(text: string) {
+  prependTextFn?.(text)
 }
