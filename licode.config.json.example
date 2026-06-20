@@ -18,7 +18,7 @@
     "deniedPaths": []
   },
   "memory": {
-    "path": "~/.licode/memory.sessions.db",
+    "path": "~/.licode/licode-sessions.db",
     "retentionDays": 30
   },
   "subagent": {

@@ -20,7 +20,7 @@ export const DEFAULT_CONFIG: Config = {
     deniedPaths: ['/etc', '/sys', '/proc'],
   },
   memory: {
-    path: '~/.licode/memory',
+    path: '~/.licode/licode-sessions.db',
     retentionDays: 30,
   },
   subagent: {
