@@ -45,8 +45,11 @@ export interface LoopContext {
   llmTokenUsage: Accessor<{ input: number; output: number; total: number }>
   compactSession: () => Promise<void>
   currentModel: Accessor<string>
+  currentProvider: Accessor<string>
   switchModel: (modelId: string) => void
+  switchProvider: (providerId: string) => void
   getAvailableModels: () => string[]
+  getAvailableProviders: () => string[]
   contextTokens: Accessor<number>
 }
 
@@ -63,6 +66,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const [llmCallCount, setLlmCallCount] = createSignal(0)
   const [llmTokenUsage, setLlmTokenUsage] = createSignal({ input: 0, output: 0, total: 0 })
   const [currentModel, setCurrentModel] = createSignal(props.model?.modelId ?? "unknown")
+  const [currentProvider, setCurrentProvider] = createSignal(props.provider ?? "deepseek")
 
   const [pendingCount, setPendingCount] = createSignal(0)
   const inputQueue: string[] = []
@@ -71,16 +75,29 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   let abortController: AbortController | null = null
   const abort = () => { abortController?.abort() }
   let activeModel: any = props.model
+  // 工具调用轮次上限确认机制
+  let confirmResolve: ((value: boolean) => void) | null = null
 
   const switchModel = (modelId: string) => {
-    const provider = props.provider ?? "deepseek"
-    activeModel = createModel({ provider, model: modelId })
+    activeModel = createModel({ provider: currentProvider(), model: modelId })
     setCurrentModel(modelId)
   }
 
+  const switchProvider = (providerId: string) => {
+    const models = listModelsByProvider(providerId)
+    if (models.length === 0) return
+    activeModel = createModel({ provider: providerId, model: models[0] })
+    setCurrentProvider(providerId)
+    setCurrentModel(models[0])
+  }
+
   const getAvailableModels = (): string[] => {
-    const provider = props.provider ?? "deepseek"
-    return listModelsByProvider(provider)
+    return listModelsByProvider(currentProvider())
+  }
+
+  const getAvailableProviders = (): string[] => {
+    const all = ["anthropic", "openai", "deepseek", "MiniMax"] as const
+    return all.filter(p => listModelsByProvider(p).length > 0)
   }
 
   // 持久化 session ID，跨轮对话复用同一个 session
@@ -127,6 +144,17 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   }
 
   const run = async (input: string): Promise<void> => {
+    // 如果正在等待用户确认是否继续 tool call 迭代
+    if (confirmResolve) {
+      const shouldContinue = input.trim().toLowerCase() === "y"
+      const resolve = confirmResolve
+      confirmResolve = null
+      setIsProcessing(true)
+      addMessage({ role: "system", content: shouldContinue ? "继续执行..." : "停止工具调用" })
+      resolve(shouldContinue)
+      return
+    }
+
     if (isProcessing()) {
       inputQueue.push(input)
       setPendingCount(inputQueue.length)
@@ -201,6 +229,16 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
               return [...prev.slice(0, -1), { ...last, toolStatus: "completed", duration }]
             }
             return prev
+          })
+        },
+        onConfirmContinue: () => {
+          return new Promise<boolean>((resolve) => {
+            confirmResolve = resolve
+            addMessage({ role: "system", content: "已达最大迭代次数。输入 y 继续，其他任意键停止。" })
+            setStreamingText("")
+            streamingBuffer = ""
+            // 临时解除 processing 以允许用户输入
+            setIsProcessing(false)
           })
         },
       }
@@ -282,8 +320,11 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     llmTokenUsage,
     compactSession,
     currentModel,
+    currentProvider,
     switchModel,
+    switchProvider,
     getAvailableModels,
+    getAvailableProviders,
     contextTokens,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>

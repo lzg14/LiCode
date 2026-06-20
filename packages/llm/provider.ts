@@ -18,5 +18,8 @@ export function createModel(config: ModelConfig) {
   if (provider === "anthropic") {
     return createAnthropic({ apiKey, baseURL: config.baseUrl })(config.model)
   }
+  if (provider === "MiniMax") {
+    return createOpenAI({ apiKey, baseURL: config.baseUrl ?? "https://api.MiniMax.chat/v1" }).chat(config.model)
+  }
   return createOpenAI({ apiKey, baseURL: config.baseUrl }).chat(config.model)
 }

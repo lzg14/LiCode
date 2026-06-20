@@ -44,6 +44,7 @@ export interface LoopContext {
   onToolCall?: (toolName: string, args: Record<string, unknown>, batch: number) => void
   onToolResult?: (result: unknown) => void
   onIntermediateText?: (text: string) => void
+  onConfirmContinue?: () => Promise<boolean>
   // 流式输出缓冲
   streamBuffer?: string
   // Phase-specific fields
@@ -341,6 +342,7 @@ export class CoreLoop {
           onToolCall: ctx.onToolCall,
           onToolResult: ctx.onToolResult,
           onIntermediateText: ctx.onIntermediateText,
+          onConfirmContinue: ctx.onConfirmContinue,
           signal: ctx.signal,
           timer,
         })

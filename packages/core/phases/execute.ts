@@ -67,6 +67,8 @@ export interface ExecuteContext {
   onToolResult?: (result: unknown) => void
   /** 工具调用循环中，每轮 LLM 返回文本时触发（用于保存中间 assistant 消息） */
   onIntermediateText?: (text: string) => void
+  /** 达到最大迭代次数时询问用户是否继续，返回 true 继续，false 停止 */
+  onConfirmContinue?: () => Promise<boolean>
   /**
    * 完整的 AI SDK 消息历史（含 tool-call/tool-result parts）。
    * 来自 sessionManager.getMessagesAsModelMessages()
@@ -129,9 +131,20 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
   }
 
   let fullText = ""
+  let lastChunk = ""
   let toolBatch = 0
   let hasToolCalls = false
-  for (let i = 0; i < MAX_ITERATIONS; i++) {
+  let totalIterations = 0
+
+  while (true) {
+    // 第 9 轮起提醒 LLM 收敛
+    if (totalIterations === MAX_ITERATIONS - 1) {
+      msgs.push({
+        role: "user",
+        content: [{ type: "text", text: "[系统提醒] 这是最后一步，请基于已有信息直接给出最终回复，不要再调用工具。" }],
+      })
+    }
+
     try {
       devLogger.logLLMRequest(
         ctx.model.modelId || 'unknown',
@@ -139,7 +152,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         msgs,
         Object.keys(tools).length > 0 ? tools : undefined
       )
-      const llmId = ctx.timer?.start('llm.generateText', { iteration: i })
+      const llmId = ctx.timer?.start('llm.generateText', { iteration: totalIterations })
       ctx.onLLMCall?.()
       const startTime = Date.now()
       const result = await generateText({
@@ -172,6 +185,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       // 最终轮：如果之前有工具调用，也用 onIntermediateText 保存（避免 streaming→message 重复）
       //         如果无工具调用，用 onStreamText 显示（直接回复场景）
       if (result.text) {
+        lastChunk = result.text
         if (result.toolCalls?.length) {
           hasToolCalls = true
           ctx.onIntermediateText?.(result.text)
@@ -267,12 +281,26 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       }
 
     } catch (e) {
-      devLogger.logException('execute.generateText', e, { iteration: i, messageCount: msgs.length })
+      devLogger.logException('execute.generateText', e, { iteration: totalIterations, messageCount: msgs.length })
       const error = e instanceof Error ? e.message : String(e)
       ctx.onStreamText?.(`[LLM Error] ${error}\n`)
       return `抱歉，AI 调用失败: ${error}`
     }
+
+    totalIterations++
+
+    // 达到最大迭代次数时，询问用户是否继续
+    if (totalIterations >= MAX_ITERATIONS && hasToolCalls) {
+      if (ctx.onConfirmContinue) {
+        const shouldContinue = await ctx.onConfirmContinue()
+        if (shouldContinue) {
+          totalIterations = 0
+          continue
+        }
+      }
+      break
+    }
   }
 
-  return fullText || "已达到最大迭代次数"
+  return fullText || lastChunk || "已达到最大迭代次数"
 }
