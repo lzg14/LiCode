@@ -5,7 +5,7 @@ import { useLoop } from "../context/loop"
 import { sidebarVisible, setSidebarVisible, modelPickerOpen, setModelPickerOpen } from "../context/shortcuts"
 import { Logo } from "../component/logo"
 import { MessageList } from "../component/message-list"
-import { Prompt } from "../component/prompt"
+import { Prompt, setPromptText } from "../component/prompt"
 import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
 
@@ -215,13 +215,10 @@ export function Home() {
       else if (selected.label === '/model') toggleModelPicker()
       else if (selected.label === '/provider') toggleProviderPicker()
       else if (selected.label === '/search') {
-        const q = text.startsWith('/search') ? text.slice(7).trim() : ''
-        if (q) {
-          setSearchQuery(q)
-          performSearch(q)
-          setSearchOpen(true)
-        }
+        // 预填 /search + 空格，让用户继续输入关键词
         setSlashOpen(false)
+        setSlashInput('')
+        setPromptText('/search ')
         return
       }
     }
