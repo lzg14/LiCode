@@ -12,3 +12,5 @@ dist/
 *.sublime-*
 .DS_Store
 Thumbs.db
+.checkpoints/
+memory/
