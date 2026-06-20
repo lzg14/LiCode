@@ -111,19 +111,19 @@ export function Sidebar() {
         </box>
       </Show>
 
-      <Show when={isProcessing()}>
-        <box flexDirection="column" gap={1} paddingTop={1}>
-          <text fg={primary()}>Progress</text>
-          <box flexDirection="row" gap={1}>
-            <text fg={primary()} >phase</text>
-            <text fg={primary()} >{phase()}</text>
+      <box flexDirection="column" gap={1} paddingTop={1}>
+        <text fg={primary()}>Progress</text>
+        <Show when={isProcessing()}>
+          <box paddingLeft={1} flexDirection="row" gap={1}>
+            <text fg={textMuted()}>phase</text>
+            <text fg={primary()}>{phase()}</text>
           </box>
-          <box flexDirection="row" gap={1}>
-            <text fg={textMuted()} >elapsed</text>
-            <text fg={text()} >{elapsedStr()}</text>
+          <box paddingLeft={1} flexDirection="row" gap={1}>
+            <text fg={textMuted()}>elapsed</text>
+            <text fg={text()}>{elapsedStr()}</text>
           </box>
-        </box>
-      </Show>
+        </Show>
+      </box>
 
       <box flexGrow={1} />
 
