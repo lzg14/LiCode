@@ -303,11 +303,19 @@ export class CoreLoop {
 
     // 检查是否需要压缩历史
     if (this.sessionCompactor.shouldCompact(history, ctx.sessionId)) {
-      devLogger.debug('COMPACT', `History ${history.length} messages, triggering compaction agent`)
-      ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
-      this.sessionCompactor.compact(history, ctx.sessionId, this.llm).catch((e) => {
-        devLogger.debug('COMPACT', 'Background compaction failed', e)
-      })
+      devLogger.debug('COMPACT', `History ${history.length} messages, triggering compaction`)
+      // 首次压缩（无摘要）时同步等待，确保当前请求有摘要可用
+      // 已有摘要时只更新（异步），不阻塞
+      const hasExisting = this.sessionCompactor.hasSummary(ctx.sessionId)
+      if (!hasExisting) {
+        const result = await this.sessionCompactor.compact(history, ctx.sessionId, this.llm)
+        ctx.sessionSummary = result.summary
+      } else {
+        ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
+        this.sessionCompactor.compact(history, ctx.sessionId, this.llm).catch((e) => {
+          devLogger.debug('COMPACT', 'Background compaction failed', e)
+        })
+      }
     } else {
       if (!ctx.sessionSummary && this.sessionCompactor.hasSummary(ctx.sessionId)) {
         ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
