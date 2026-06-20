@@ -213,6 +213,14 @@ export class CoreLoop {
         ctx = { ...ctx, ...result }
         timer.end(phaseStartId)
 
+        // 如果阶段返回了不同的下一个阶段，调整循环索引以回退或前进
+        if (result.phase && result.phase !== phase && phase !== 'LEARN') {
+          const prevPhaseIdx = phases.indexOf(result.phase)
+          if (prevPhaseIdx >= 0) {
+            i = prevPhaseIdx - 1 // -1 因为循环结束会 i++
+          }
+        }
+
         // 检查是否需要压缩上下文
         if (ctx.streamBuffer && ctx.streamBuffer.length > 10000) {
           const compactId = timer.start('phase.compact')

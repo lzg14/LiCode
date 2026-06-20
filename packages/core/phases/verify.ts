@@ -59,7 +59,8 @@ export async function verify(ctx: LoopContext): Promise<Partial<LoopContext>> {
       const output = (stdout || stderr || '').trim()
 
       if (output.includes('fail') || output.includes('FAIL')) {
-        ctx.onStreamText?.(`测试失败:\n${output.slice(0, 3000)}\n`)
+        const errorOutput = output.slice(0, 3000)
+        ctx.onStreamText?.(`测试失败:\n${errorOutput}\n`)
         return {
           phase: 'EXECUTE',
           reviewResult: {
@@ -67,6 +68,8 @@ export async function verify(ctx: LoopContext): Promise<Partial<LoopContext>> {
             issues: ['测试未通过，需要修复'],
             status: 'revise',
           },
+          // 注入测试失败信息到上下文中，下一轮 EXECUTE 可以使用
+          aiResponse: ctx.aiResponse ? `${ctx.aiResponse}\n\n---\n测试结果：\n${errorOutput}\n\n需要修复测试失败。` : undefined,
         }
       }
       ctx.onStreamText?.('测试通过 ✓\n')
