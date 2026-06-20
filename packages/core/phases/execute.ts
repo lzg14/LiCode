@@ -87,7 +87,7 @@ export interface ExecuteContext {
   timer?: Timer
 }
 
-const MAX_ITERATIONS = 25
+const MAX_ITERATIONS = 100
 
 function zodToJsonSchema(schema: any): any {
   const raw: any = z.toJSONSchema(schema, { target: 'draft-7' })

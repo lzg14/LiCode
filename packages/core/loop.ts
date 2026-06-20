@@ -123,6 +123,30 @@ export class CoreLoop {
   }
 
   /**
+   * 搜索 session 历史消息（关键词匹配，返回带轮次序号的摘要）
+   */
+  searchSessionMessages(sessionId: string, query: string, limit = 8): Array<{ turn: number; role: string; snippet: string }> {
+    if (!query.trim()) return []
+    const messages = this.getSessionMessages(sessionId)
+    const q = query.toLowerCase()
+    const results: Array<{ turn: number; role: string; snippet: string }> = []
+    let turn = 0
+    for (const m of messages) {
+      if (m.role === 'user') turn++
+      const lower = m.content.toLowerCase()
+      const idx = lower.indexOf(q)
+      if (idx >= 0) {
+        const start = Math.max(0, idx - 30)
+        const end = Math.min(m.content.length, idx + query.length + 30)
+        const snippet = (start > 0 ? '…' : '') + m.content.slice(start, end) + (end < m.content.length ? '…' : '')
+        results.push({ turn, role: m.role, snippet })
+        if (results.length >= limit) break
+      }
+    }
+    return results
+  }
+
+  /**
    * 手动触发 session 压缩（供 /compact 命令调用）
    */
   async compactSession(sessionId: string): Promise<{ summary: string; saved: number } | null> {

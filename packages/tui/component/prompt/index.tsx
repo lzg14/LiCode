@@ -9,7 +9,8 @@ export interface PromptProps {
   disabled?: boolean
   placeholder?: string
   onInputChange?: (text: string) => void
-  pickerOpen?: boolean
+  /** 外部弹窗（model picker/provider picker/slash menu）打开时让出上下/回车/ESC */
+  popupOpen?: boolean
 }
 
 let focusFn: (() => void) | null = null
@@ -43,8 +44,12 @@ export function Prompt(props: PromptProps) {
 
   const handleKeyDown = (e: any) => {
     if (props.disabled) return
-    // 弹窗打开时，不拦截键盘事件，交给 useKeyboard 处理
-    if (props.pickerOpen) return
+
+    // 弹框打开时，让出 up/down/return/escape 给外层 useKeyboard 处理
+    // （不能 preventDefault，否则外层 useKeyboard 收不到）
+    if (props.popupOpen && (e.name === "up" || e.name === "down" || e.name === "return" || e.name === "escape")) {
+      return
+    }
 
     if (e.name === "up" && (input.plainText.length === 0 || input.cursorOffset === 0)) {
       e.preventDefault()

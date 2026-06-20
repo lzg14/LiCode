@@ -4,6 +4,7 @@ import type { CoreLoop } from "../../core/loop"
 import { createModel } from "../../llm/provider"
 import { listModelsByProvider } from "../../llm/catalog"
 import { devLogger } from "../../core/dev-logger"
+import { WorkflowEngine, BuiltinScriptRegistry } from "../../workflow"
 
 export interface Message {
   id: string
@@ -15,6 +16,8 @@ export interface Message {
   toolStatus?: "pending" | "running" | "completed" | "error"
   toolBatch?: number
   duration?: number
+  /** 队列中等待发送的 user 消息 */
+  queued?: boolean
 }
 
 type AddMessageInput = {
@@ -26,6 +29,7 @@ type AddMessageInput = {
   toolStatus?: "pending" | "running" | "completed" | "error"
   toolBatch?: number
   duration?: number
+  queued?: boolean
 }
 
 export interface LoopContext {
@@ -38,12 +42,15 @@ export interface LoopContext {
   streamingText: Accessor<string>
   messages: Accessor<Message[]>
   addMessage: (msg: AddMessageInput) => void
+  updateMessage: (id: string, patch: Partial<Message>) => void
   clearMessages: () => void
   toolCallExpanded: Accessor<boolean>
   toggleToolCallExpanded: () => void
   llmCallCount: Accessor<number>
   llmTokenUsage: Accessor<{ input: number; output: number; total: number }>
   compactSession: () => Promise<void>
+  runWorkflow: (name: string, args: any) => Promise<any>
+  listWorkflows: () => string[]
   currentModel: Accessor<string>
   currentProvider: Accessor<string>
   switchModel: (modelId: string) => void
@@ -78,6 +85,41 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   let activeModel: any = props.model
   // 工具调用轮次上限确认机制
   let confirmResolve: ((value: boolean) => void) | null = null
+
+  // Workflow 引擎
+  const wfEngine = new WorkflowEngine({
+    maxConcurrentAgents: 3,
+    maxDepth: 2,
+    timeoutMs: 600_000,
+    cwd: process.cwd(),
+    llmProvider: props.model
+      ? {
+          modelId: props.model.modelId ?? currentModel(),
+          complete: async (req) => {
+            // 把 LLM 调用代理到当前模型
+            const { generateText } = await import("ai")
+            const result = await generateText({
+              model: props.model,
+              messages: req.messages,
+              temperature: req.temperature ?? 0.7,
+            })
+            return { content: result.text }
+          },
+        }
+      : undefined,
+    toolExecutor: async (name, input) => {
+      const { globalToolRegistry } = await import("../../tools/registry")
+      return globalToolRegistry.execute(name, input)
+    },
+    scriptRegistry: new BuiltinScriptRegistry(),
+  })
+
+  const runWorkflow = async (name: string, args: any) => {
+    const result = await wfEngine.run({ name, args })
+    return result
+  }
+
+  const listWorkflows = (): string[] => wfEngine["config"]?.scriptRegistry?.list() ?? ["coding", "research", "review"]
 
   const switchModel = (modelId: string) => {
     activeModel = createModel({ provider: currentProvider(), model: modelId })
@@ -140,8 +182,13 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       toolArgs: input.toolArgs,
       toolStatus: input.toolStatus,
       duration: input.duration,
+      queued: input.queued,
     }
     setMessages((prev) => [...prev, msg])
+  }
+
+  const updateMessage = (id: string, patch: Partial<Message>) => {
+    setMessages((prev) => prev.map(m => m.id === id ? { ...m, ...patch } : m))
   }
 
   const clearMessages = () => {
@@ -162,8 +209,12 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     }
 
     if (isProcessing()) {
-      inputQueue.push(input)
+      // 记录到 inputQueue 等待后续发送
+      const msgId = `queued_${++toolCallIdCounter}`
+      inputQueue.push({ id: msgId, text: input })
       setPendingCount(inputQueue.length)
+      // 同步插入 message-list，标记 queued（显示在对话列表底部）
+      addMessage({ id: msgId, role: "user", content: input, queued: true })
       return
     }
 
@@ -320,12 +371,15 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     streamingText,
     messages,
     addMessage,
+    updateMessage,
     clearMessages,
     toolCallExpanded,
     toggleToolCallExpanded,
     llmCallCount,
     llmTokenUsage,
     compactSession,
+    runWorkflow,
+    listWorkflows,
     currentModel,
     currentProvider,
     switchModel,
