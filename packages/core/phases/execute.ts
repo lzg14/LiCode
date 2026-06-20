@@ -126,7 +126,22 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
   }
 
   // 完整重建 msgs：摘要（如果存在）+ 历史 + 本轮 user 输入
-  const history = ctx.history ?? []
+  // 过滤掉 tool 角色消息（MiniMax 等 OpenAI 兼容端点不支持 tool 角色）
+  // 同时把含 tool-call 的 assistant 消息转为纯文本（避免格式不兼容）
+  const history = (ctx.history ?? [])
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => {
+      if (m.role === 'assistant' && Array.isArray(m.content)) {
+        const textParts = m.content.filter((p: any) => p.type === 'text')
+        if (textParts.length === 0 && m.content.some((p: any) => p.type === 'tool-call')) {
+          return { role: 'assistant', content: [{ type: 'text', text: '[已执行工具调用]' }] }
+        }
+        if (textParts.length < m.content.length) {
+          return { role: 'assistant', content: textParts }
+        }
+      }
+      return m
+    })
   const lastInHistory = history[history.length - 1]
   const isDuplicate = lastInHistory
     && lastInHistory.role === 'user'
