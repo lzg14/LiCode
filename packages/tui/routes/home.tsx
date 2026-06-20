@@ -81,6 +81,25 @@ export function Home() {
       }
       return
     }
+    if (text.startsWith('/search')) {
+      const query = text.slice(7).trim()
+      if (!query) {
+        addMessage({ role: "system", content: '用法: /search <关键词>' })
+        return
+      }
+      const results = messages().filter(m =>
+        m.content.toLowerCase().includes(query.toLowerCase())
+      )
+      if (results.length === 0) {
+        addMessage({ role: "system", content: `未找到包含 "${query}" 的消息` })
+      } else {
+        const lines = results.map((m, i) =>
+          `${i + 1}. [${m.role}] ${m.content.slice(0, 120).replace(/\n/g, ' ')}${m.content.length > 120 ? '...' : ''}`
+        )
+        addMessage({ role: "system", content: `找到 ${results.length} 条匹配 "${query}":\n${lines.join('\n')}` })
+      }
+      return
+    }
     if (text.startsWith('/save')) {
       const name = text.slice(5).trim() || `session-${Date.now()}`
       try {
