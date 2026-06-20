@@ -9,7 +9,6 @@ export interface PromptProps {
   disabled?: boolean
   placeholder?: string
   onInputChange?: (text: string) => void
-  /** 当外部弹窗（模型选择器/命令菜单）打开时，阻止 Prompt 拦截上下/回车/ESC */
   pickerOpen?: boolean
 }
 
@@ -44,11 +43,6 @@ export function Prompt(props: PromptProps) {
 
   const handleKeyDown = (e: any) => {
     if (props.disabled) return
-
-    // 外部弹窗打开时，不拦截上下/回车/ESC，交给父组件处理
-    if (props.pickerOpen) {
-      return
-    }
 
     if (e.name === "up" && (input.plainText.length === 0 || input.cursorOffset === 0)) {
       e.preventDefault()
@@ -85,7 +79,13 @@ export function Prompt(props: PromptProps) {
     }
 
     // 文字输入类按键：通知父组件文本变化
-    if (e.name && e.name.length === 1) {
+    // opentui 中普通字符按键的 name 是单字符（"a"、"B"、"/"、"5" 等）
+    // 控制键（up/down/escape/return/tab 等）name 是多个字符
+    const isControlKey = ["up", "down", "left", "right", "return", "escape", "tab",
+      "backspace", "delete", "home", "end", "pageup", "pagedown",
+      "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"]
+      .includes(e.name)
+    if (!isControlKey && !e.ctrl && !e.alt && !e.meta) {
       setTimeout(() => props.onInputChange?.(input.plainText), 0)
     }
   }

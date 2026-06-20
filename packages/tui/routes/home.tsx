@@ -1,7 +1,7 @@
 import { createSignal, createMemo, Show, For } from "solid-js"
-import { useKeyboard } from "@opentui/solid"
 import { useTheme } from "../context/theme"
 import { useLoop } from "../context/loop"
+import { sidebarVisible, setSidebarVisible, modelPickerOpen, setModelPickerOpen } from "../context/shortcuts"
 import { Logo } from "../component/logo"
 import { MessageList } from "../component/message-list"
 import { Prompt } from "../component/prompt"
@@ -9,63 +9,21 @@ import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
 
 export function Home() {
-  const { phase, isProcessing, messages, run, compactSession, currentModel, switchModel, getAvailableModels, addMessage } = useLoop()
+  const { phase, isProcessing, messages, run, compactSession, currentModel, currentProvider, switchModel, switchProvider, getAvailableModels, getAvailableProviders, addMessage } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted } = useTheme()
-  const [sidebarVisible, setSidebarVisible] = createSignal(true)
-  const [modelPickerOpen, setModelPickerOpen] = createSignal(false)
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
+  const [providerPickerOpen, setProviderPickerOpen] = createSignal(false)
+  const [providerPickerIdx, setProviderPickerIdx] = createSignal(0)
 
   const toggleModelPicker = () => {
     setModelPickerOpen(prev => !prev)
     setModelPickerIdx(0)
   }
 
-  useKeyboard((evt) => {
-    if (evt.ctrl && evt.name === "b") {
-      evt.preventDefault()
-      setSidebarVisible(prev => !prev)
-    }
-    if (evt.ctrl && evt.name === "m") {
-      evt.preventDefault()
-      toggleModelPicker()
-    }
-    // 模型选择器导航
-    if (modelPickerOpen()) {
-      const models = getAvailableModels()
-      if (evt.name === "up") {
-        evt.preventDefault()
-        setModelPickerIdx(prev => (prev - 1 + models.length) % models.length)
-      } else if (evt.name === "down") {
-        evt.preventDefault()
-        setModelPickerIdx(prev => (prev + 1) % models.length)
-      } else if (evt.name === "return") {
-        evt.preventDefault()
-        const selected = models[modelPickerIdx()]
-        if (selected) switchModel(selected)
-        setModelPickerOpen(false)
-      } else if (evt.name === "escape") {
-        evt.preventDefault()
-        setModelPickerOpen(false)
-      }
-    }
-    // 斜杠命令菜单导航
-    if (slashOpen()) {
-      const items = slashItems()
-      if (evt.name === "up") {
-        evt.preventDefault()
-        setSlashIdx(prev => (prev - 1 + items.length) % items.length)
-      } else if (evt.name === "down") {
-        evt.preventDefault()
-        setSlashIdx(prev => (prev + 1) % items.length)
-      } else if (evt.name === "return") {
-        evt.preventDefault()
-        handleSlashSubmit()
-      } else if (evt.name === "escape") {
-        evt.preventDefault()
-        setSlashOpen(false)
-      }
-    }
-  })
+  const toggleProviderPicker = () => {
+    setProviderPickerOpen(prev => !prev)
+    setProviderPickerIdx(0)
+  }
 
   const handleSubmit = async (text: string) => {
     if (text.startsWith('/compact')) {
@@ -85,6 +43,22 @@ export function Home() {
         addMessage({ role: "system", content: `模型已切换为 ${match}` })
       } else {
         addMessage({ role: "system", content: `未找到模型 "${arg}"，可用: ${models.join(', ')}` })
+      }
+      return
+    }
+    if (text.startsWith('/provider')) {
+      const arg = text.slice(9).trim()
+      if (!arg) {
+        toggleProviderPicker()
+        return
+      }
+      const providers = getAvailableProviders()
+      const match = providers.find(p => p.toLowerCase() === arg.toLowerCase())
+      if (match) {
+        switchProvider(match)
+        addMessage({ role: "system", content: `Provider 已切换为 ${match}` })
+      } else {
+        addMessage({ role: "system", content: `未找到 provider "${arg}"，可用: ${providers.join(', ')}` })
       }
       return
     }
@@ -113,7 +87,8 @@ export function Home() {
   const slashItems = createMemo(() => {
     const items: { type: string; label: string; desc: string }[] = [
       { type: 'cmd', label: '/compact', desc: '压缩对话历史' },
-      { type: 'cmd', label: '/model', desc: '切换模型' },
+      { type: 'cmd', label: '/model', desc: '切换模型（当前 provider）' },
+      { type: 'cmd', label: '/provider', desc: '切换 LLM provider (anthropic/openai/deepseek)' },
     ]
     for (const s of availableSkills()) {
       items.push({ type: 'skill', label: `/skill ${s}`, desc: `加载技能 ${s}` })
@@ -140,9 +115,56 @@ export function Home() {
     if (selected.type === 'cmd') {
       if (selected.label === '/compact') compactSession()
       else if (selected.label === '/model') toggleModelPicker()
+      else if (selected.label === '/provider') toggleProviderPicker()
     }
     setSlashOpen(false)
   }
+
+  // 全局快捷键（不受 textarea 焦点限制）
+  useKeyboard((evt) => {
+    if (evt.ctrl && evt.name === "b") {
+      evt.preventDefault()
+      setSidebarVisible(prev => !prev)
+      return
+    }
+    if (evt.ctrl && evt.name === "m") {
+      evt.preventDefault()
+      toggleModelPicker()
+      return
+    }
+    if (modelPickerOpen()) {
+      const models = getAvailableModels()
+      if (evt.name === "up") { evt.preventDefault(); setModelPickerIdx(prev => (prev - 1 + models.length) % models.length) }
+      else if (evt.name === "down") { evt.preventDefault(); setModelPickerIdx(prev => (prev + 1) % models.length) }
+      else if (evt.name === "return") {
+        evt.preventDefault()
+        const m = models[modelPickerIdx()]
+        if (m) switchModel(m)
+        setModelPickerOpen(false)
+      } else if (evt.name === "escape") { evt.preventDefault(); setModelPickerOpen(false) }
+      return
+    }
+    if (providerPickerOpen()) {
+      const providers = getAvailableProviders()
+      if (evt.name === "up") { evt.preventDefault(); setProviderPickerIdx(prev => (prev - 1 + providers.length) % providers.length) }
+      else if (evt.name === "down") { evt.preventDefault(); setProviderPickerIdx(prev => (prev + 1) % providers.length) }
+      else if (evt.name === "return") {
+        evt.preventDefault()
+        const p = providers[providerPickerIdx()]
+        if (p) switchProvider(p)
+        setProviderPickerOpen(false)
+      } else if (evt.name === "escape") { evt.preventDefault(); setProviderPickerOpen(false) }
+      return
+    }
+    if (slashOpen()) {
+      const items = slashItems()
+      if (evt.name === "up") { evt.preventDefault(); setSlashIdx(prev => (prev - 1 + items.length) % items.length) }
+      else if (evt.name === "down") { evt.preventDefault(); setSlashIdx(prev => (prev + 1) % items.length) }
+      else if (evt.name === "return") { evt.preventDefault(); handleSlashSubmit() }
+      else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false) }
+      return
+    }
+  })
 
   return (
     <box flexDirection="row" height="100%">
@@ -151,25 +173,79 @@ export function Home() {
           <box
             flexDirection="column"
             position="absolute"
-            bottom={4}
-            left={1}
+            top={0}
+            left={0}
+            width="100%"
+            height="100%"
             zIndex={5000}
-            width={50}
-            paddingX={2}
-            paddingY={1}
-            backgroundColor={backgroundPanel()}
-            border={["top", "bottom", "left", "right"]}
-            borderColor={primary()}
+            alignItems="center"
+            justifyContent="center"
           >
-            <text fg={primary()}>{`选择模型 (↑↓ 选择, Enter 确认, Esc 取消)`}</text>
-            <box height={1} />
-            <For each={getAvailableModels()}>
-              {(model, i) => (
-                <text fg={i() === modelPickerIdx() ? primary() : text()}>
-                  {`${i() === modelPickerIdx() ? '▸ ' : '  '}${model}${model === currentModel() ? ' (当前)' : ''}`}
-                </text>
-              )}
-            </For>
+            <box
+              flexDirection="column"
+              width={60}
+              paddingX={2}
+              paddingY={1}
+              backgroundColor={backgroundPanel()}
+              border={["top", "bottom", "left", "right"]}
+              borderColor={primary()}
+              onKeyDown={(e: any) => {
+                if (e.name === "up") { e.preventDefault(); setModelPickerIdx(prev => (prev - 1 + getAvailableModels().length) % getAvailableModels().length) }
+                else if (e.name === "down") { e.preventDefault(); setModelPickerIdx(prev => (prev + 1) % getAvailableModels().length) }
+                else if (e.name === "return") { e.preventDefault(); const m = getAvailableModels()[modelPickerIdx()]; if (m) { switchModel(m); setModelPickerOpen(false) } }
+                else if (e.name === "escape") { e.preventDefault(); setModelPickerOpen(false) }
+              }}
+            >
+              <text fg={primary()}>{`选择模型 (↑↓ 选择, Enter 确认, Esc 取消)`}</text>
+              <box height={1} />
+              <For each={getAvailableModels()}>
+                {(model, i) => (
+                  <text fg={i() === modelPickerIdx() ? primary() : text()}>
+                    {`${i() === modelPickerIdx() ? '▸ ' : '  '}${model}${model === currentModel() ? ' (当前)' : ''}`}
+                  </text>
+                )}
+              </For>
+            </box>
+          </box>
+        </Show>
+
+        <Show when={providerPickerOpen()}>
+          <box
+            flexDirection="column"
+            position="absolute"
+            top={0}
+            left={0}
+            width="100%"
+            height="100%"
+            zIndex={5000}
+            alignItems="center"
+            justifyContent="center"
+          >
+            <box
+              flexDirection="column"
+              width={60}
+              paddingX={2}
+              paddingY={1}
+              backgroundColor={backgroundPanel()}
+              border={["top", "bottom", "left", "right"]}
+              borderColor={primary()}
+              onKeyDown={(e: any) => {
+                if (e.name === "up") { e.preventDefault(); setProviderPickerIdx(prev => (prev - 1 + getAvailableProviders().length) % getAvailableProviders().length) }
+                else if (e.name === "down") { e.preventDefault(); setProviderPickerIdx(prev => (prev + 1) % getAvailableProviders().length) }
+                else if (e.name === "return") { e.preventDefault(); const p = getAvailableProviders()[providerPickerIdx()]; if (p) { switchProvider(p); setProviderPickerOpen(false) } }
+                else if (e.name === "escape") { e.preventDefault(); setProviderPickerOpen(false) }
+              }}
+            >
+              <text fg={primary()}>{`选择 Provider (↑↓ 选择, Enter 确认, Esc 取消)`}</text>
+              <box height={1} />
+              <For each={getAvailableProviders()}>
+                {(p, i) => (
+                  <text fg={i() === providerPickerIdx() ? primary() : text()}>
+                    {`${i() === providerPickerIdx() ? '▸ ' : '  '}${p}${p === currentProvider() ? ' (当前)' : ''}`}
+                  </text>
+                )}
+              </For>
+            </box>
           </box>
         </Show>
 
@@ -177,25 +253,39 @@ export function Home() {
           <box
             flexDirection="column"
             position="absolute"
-            bottom={4}
-            left={1}
+            top={0}
+            left={0}
+            width="100%"
+            height="100%"
             zIndex={5000}
-            width={50}
-            paddingX={2}
-            paddingY={1}
-            backgroundColor={backgroundPanel()}
-            border={["top", "bottom", "left", "right"]}
-            borderColor={primary()}
+            alignItems="center"
+            justifyContent="center"
           >
-            <text fg={primary()}>命令 ({slashInput()})</text>
-            <box height={1} />
-            <For each={slashItems()}>
-              {(item, i) => (
-                <text fg={i() === slashIdx() ? primary() : text()}>
-                  {`${i() === slashIdx() ? '▸ ' : '  '}${item.label}  ${item.desc}`}
-                </text>
-              )}
-            </For>
+            <box
+              flexDirection="column"
+              width={60}
+              paddingX={2}
+              paddingY={1}
+              backgroundColor={backgroundPanel()}
+              border={["top", "bottom", "left", "right"]}
+              borderColor={primary()}
+              onKeyDown={(e: any) => {
+                if (e.name === "up") { e.preventDefault(); setSlashIdx(prev => (prev - 1 + slashItems().length) % slashItems().length) }
+                else if (e.name === "down") { e.preventDefault(); setSlashIdx(prev => (prev + 1) % slashItems().length) }
+                else if (e.name === "return") { e.preventDefault(); handleSlashSubmit() }
+                else if (e.name === "escape") { e.preventDefault(); setSlashOpen(false) }
+              }}
+            >
+              <text fg={primary()}>命令 ({slashInput()})</text>
+              <box height={1} />
+              <For each={slashItems()}>
+                {(item, i) => (
+                  <text fg={i() === slashIdx() ? primary() : text()}>
+                    {`${i() === slashIdx() ? '▸ ' : '  '}${item.label}  ${item.desc}`}
+                  </text>
+                )}
+              </For>
+            </box>
           </box>
         </Show>
 
@@ -224,12 +314,14 @@ export function Home() {
         </Show>
 
         <box flexShrink={0}>
-          <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange} pickerOpen={modelPickerOpen() || slashOpen()} />
+          <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange} />
           <StatusBar />
         </box>
       </box>
 
-      <Sidebar visible={sidebarVisible()} />
+      <Show when={sidebarVisible()}>
+        <Sidebar />
+      </Show>
     </box>
   )
 }

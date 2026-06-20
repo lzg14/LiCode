@@ -96,6 +96,18 @@ export const MODEL_CATALOG: Record<string, ModelConfig> = {
     costPer1kInput: 0.0001,
     costPer1kOutput: 0.0002,
   },
+  'MiniMax-M3': {
+    id: 'MiniMax-M3',
+    provider: 'MiniMax',
+    displayName: 'MiniMax M3',
+    contextWindow: 128000,
+    maxOutput: 16384,
+    supportsVision: false,
+    supportsToolUse: true,
+    supportsStreaming: true,
+    costPer1kInput: 0.001,
+    costPer1kOutput: 0.008,
+  },
 }
 
 export function getModelConfig(modelId: string): ModelConfig | undefined {
