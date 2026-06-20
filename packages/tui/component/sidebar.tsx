@@ -8,7 +8,7 @@ const VERSION = "0.1.0"
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning } = useTheme()
   const config = useConfig()
-  const { phase, isProcessing, elapsed, messages, llmCallCount, llmTokenUsage, contextTokens } = useLoop()
+  const { phase, isProcessing, elapsed, messages, llmCallCount, llmTokenUsage, contextTokens, currentModel } = useLoop()
 
   const msgCount = createMemo(() => messages().length)
   const toolCallCount = createMemo(() => messages().filter((m) => m.role === "tool").length)
@@ -49,7 +49,7 @@ export function Sidebar() {
         <text fg={primary()} >{sessionTitle()}</text>
         <box flexDirection="row" gap={1}>
           <text fg={textMuted()} >model</text>
-          <text fg={text()} >{config.config().llm.model}</text>
+          <text fg={text()} >{currentModel()}</text>
         </box>
         <box flexDirection="row" gap={1}>
           <text fg={textMuted()} >provider</text>
