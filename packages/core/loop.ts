@@ -83,12 +83,8 @@ export class CoreLoop {
 
   constructor(private config: Config, private llm?: LLMProvider) {
     this.memory = new Memory(config.cwd)
-    // 展开 ~ 到用户目录
     const home = homedir()
-    const rawPath = (config.memory?.path ?? './licode-sessions.db').replace(/^~/, home)
-    const memoryPath = /\.\w+$/.test(rawPath)
-      ? rawPath.replace(/\.\w+$/, '.sessions.db')
-      : rawPath + '/licode-sessions.db'
+    const memoryPath = (config.memory?.path ?? './licode-sessions.db').replace(/^~/, home)
     this.sessionManager = new SessionManager(memoryPath)
     this.checkpointManager = new CheckpointManager(config.cwd)
     this.projector = new Projector()

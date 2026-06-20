@@ -100,7 +100,7 @@ export class ConfigLoader {
             baseUrl: isDeepSeek ? 'https://api.deepseek.com' : claudeConfig.baseUrl,
           },
           security: { commandWhitelist: [], allowedPaths: [], deniedPaths: [] },
-          memory: { path: '~/.licode/memory.sessions.db', retentionDays: 30 },
+          memory: { path: '~/.licode/licode-sessions.db', retentionDays: 30 },
           subagent: {
             maxConcurrent: 3,
             maxDepth: 1,

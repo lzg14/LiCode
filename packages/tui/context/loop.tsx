@@ -10,6 +10,7 @@ export interface Message {
   toolName?: string
   toolArgs?: Record<string, unknown>
   toolStatus?: "pending" | "running" | "completed" | "error"
+  toolBatch?: number
   duration?: number
 }
 
@@ -20,6 +21,7 @@ type AddMessageInput = {
   toolName?: string
   toolArgs?: Record<string, unknown>
   toolStatus?: "pending" | "running" | "completed" | "error"
+  toolBatch?: number
   duration?: number
 }
 
@@ -159,11 +161,11 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           streamingBuffer += text
           setStreamingText(streamingBuffer)
         },
-        onToolCall: (toolName: string, args: Record<string, unknown>) => {
+        onToolCall: (toolName: string, args: Record<string, unknown>, batch: number) => {
           toolCallIdCounter++
           const id = `tool_${toolCallIdCounter}`
           toolStartTimes.set(id, Date.now())
-          addMessage({ id, role: "tool", content: toolName, toolName, toolArgs: args, toolStatus: "running" })
+          addMessage({ id, role: "tool", content: toolName, toolName, toolArgs: args, toolStatus: "running", toolBatch: batch })
         },
         onToolResult: () => {
           setMessages((prev) => {

@@ -58,7 +58,7 @@ export interface ExecuteContext {
   onLLMCall?: () => void
   onLLMResult?: (usage: { inputTokens: number; outputTokens: number; totalTokens: number }) => void
   onStreamText?: (text: string) => void
-  onToolCall?: (toolName: string, args: Record<string, unknown>) => void
+  onToolCall?: (toolName: string, args: Record<string, unknown>, batch: number) => void
   onToolResult?: (result: unknown) => void
   /**
    * 完整的 AI SDK 消息历史（含 tool-call/tool-result parts）。
@@ -122,6 +122,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
   }
 
   let fullText = ""
+  let toolBatch = 0
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     try {
       devLogger.logLLMRequest(
@@ -214,10 +215,11 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       }
 
       const toolResults: any[] = []
+      toolBatch++
       for (const tc of result.toolCalls) {
         devLogger.logToolCall(tc.toolName, tc.input)
         const tcInput = tc.input as Record<string, unknown>
-        ctx.onToolCall?.(tc.toolName, tcInput)
+        ctx.onToolCall?.(tc.toolName, tcInput, toolBatch)
         const toolId = ctx.timer?.start(`tool.${tc.toolName}`)
         const execResult = await globalToolRegistry.execute(tc.toolName, tcInput, { cwd: ctx.cwd })
         devLogger.logToolCall(tc.toolName, tc.input, execResult)

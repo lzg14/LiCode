@@ -129,26 +129,19 @@ export function MessageList() {
     <box flexDirection="column" flexGrow={1} paddingX={1}>
       <For each={messages()}>
         {(msg, idx) => {
-          // 工具调用折叠逻辑：连续 tool 消息超过 MAX_VISIBLE_TOOLS 时折叠
           const allMsgs = messages()
           if (msg.role === "tool") {
-            const start = findToolBatchStart(allMsgs, idx())
-            const end = findToolBatchEnd(allMsgs, idx())
-            const batchSize = end - start + 1
+            const batchId = msg.toolBatch ?? 0
+            const prevMsg = idx() > 0 ? allMsgs[idx() - 1] : null
+            const isFirstInBatch = !prevMsg || prevMsg.role !== "tool" || prevMsg.toolBatch !== batchId
+            const isLastInBatch = idx() + 1 >= allMsgs.length || allMsgs[idx() + 1].role !== "tool" || allMsgs[idx() + 1].toolBatch !== batchId
 
-            if (batchSize > MAX_VISIBLE_TOOLS && !toolCallExpanded()) {
-              const posInBatch = idx() - start
-              if (posInBatch === MAX_VISIBLE_TOOLS) {
-                return (
-                  <box
-                    marginBottom={0}
-                    flexDirection="row"
-                  >
-                    <text fg={textMuted()}>{`    … ${batchSize - MAX_VISIBLE_TOOLS} 个工具调用已折叠 · Ctrl+E 展开`}</text>
-                  </box>
-                )
-              }
-              if (posInBatch > MAX_VISIBLE_TOOLS) return null
+            if (isFirstInBatch && batchId > 1) {
+              return (
+                <box marginTop={0}>
+                  <MessageItem msg={msg} />
+                </box>
+              )
             }
           }
           return <MessageItem msg={msg} />
