@@ -8,7 +8,7 @@ const VERSION = "0.1.0"
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning } = useTheme()
   const config = useConfig()
-  const { phase, isProcessing, elapsed, messages, llmCallCount, llmTokenUsage, contextTokens, currentModel } = useLoop()
+  const { phase, isProcessing, messages, llmCallCount, llmTokenUsage, contextTokens, currentModel } = useLoop()
 
   const msgCount = createMemo(() => messages().length)
   const toolCallCount = createMemo(() => messages().filter((m) => m.role === "tool").length)
@@ -20,14 +20,6 @@ export function Sidebar() {
     const title = firstUser.content.slice(0, 30)
     return title.length < firstUser.content.length ? title + "..." : title
   })
-
-  const elapsedStr = () => {
-    const secs = elapsed()
-    if (secs < 60) return `${secs}s`
-    const m = Math.floor(secs / 60)
-    const s = secs % 60
-    return `${m}m${s}s`
-  }
 
   const cwd = () => {
     const dir = config.config().cwd || process.cwd()
@@ -117,10 +109,6 @@ export function Sidebar() {
           <box paddingLeft={1} flexDirection="row" gap={1}>
             <text fg={textMuted()}>phase</text>
             <text fg={primary()}>{phase()}</text>
-          </box>
-          <box paddingLeft={1} flexDirection="row" gap={1}>
-            <text fg={textMuted()}>elapsed</text>
-            <text fg={text()}>{elapsedStr()}</text>
           </box>
         </Show>
       </box>
