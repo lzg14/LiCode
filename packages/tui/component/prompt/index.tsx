@@ -8,6 +8,7 @@ export interface PromptProps {
   onSubmit: (text: string) => void
   disabled?: boolean
   placeholder?: string
+  onInputChange?: (text: string) => void
 }
 
 let focusFn: (() => void) | null = null
@@ -46,12 +47,14 @@ export function Prompt(props: PromptProps) {
       e.preventDefault()
       const prev = history.up()
       if (prev !== undefined) input.setText(prev)
+      props.onInputChange?.(input.plainText)
       return
     }
 
     if (e.name === "down" && (input.plainText.length === 0 || input.cursorOffset >= input.plainText.length)) {
       e.preventDefault()
       input.setText(history.down())
+      props.onInputChange?.(input.plainText)
       return
     }
 
@@ -72,6 +75,11 @@ export function Prompt(props: PromptProps) {
       e.preventDefault()
       if (props.disabled) abort()
       return
+    }
+
+    // 文字输入类按键：通知父组件文本变化
+    if (e.name && e.name.length === 1) {
+      setTimeout(() => props.onInputChange?.(input.plainText), 0)
     }
   }
 

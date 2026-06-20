@@ -179,6 +179,11 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           streamingBuffer += text
           setStreamingText(streamingBuffer)
         },
+        onIntermediateText: (text: string) => {
+          addMessage({ role: "assistant", content: text })
+          streamingBuffer = ""
+          setStreamingText("")
+        },
         onToolCall: (toolName: string, args: Record<string, unknown>, batch: number) => {
           toolCallIdCounter++
           const id = `tool_${toolCallIdCounter}`
