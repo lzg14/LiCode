@@ -10,7 +10,7 @@ import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
 
 export function Home() {
-  const { phase, isProcessing, messages, run, compactSession, currentModel, currentProvider, switchModel, switchProvider, getAvailableModels, getAvailableProviders, addMessage, searchHistory, runWorkflow, listWorkflows } = useLoop()
+  const { phase, isProcessing, messages, run, compactSession, currentModel, currentProvider, switchModel, switchProvider, getAvailableModels, getAvailableProviders, addMessage, runWorkflow, listWorkflows } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [providerPickerOpen, setProviderPickerOpen] = createSignal(false)
@@ -153,17 +153,6 @@ export function Home() {
   const [slashIdx, setSlashIdx] = createSignal(0)
   const [availableSkills, setAvailableSkills] = createSignal<string[]>([])
 
-  // ===== 历史搜索 =====
-  const [searchOpen, setSearchOpen] = createSignal(false)
-  const [searchQuery, setSearchQuery] = createSignal("")
-  const [searchResults, setSearchResults] = createSignal<Array<{ turn: number; role: string; snippet: string }>>([])
-  const [searchIdx, setSearchIdx] = createSignal(0)
-  const performSearch = (q: string) => {
-    const r = searchHistory(q)
-    setSearchResults(r)
-    setSearchIdx(0)
-  }
-
   const scanSkills = async () => {
     const { readdir } = await import("fs/promises")
     const { join } = await import("path")
@@ -269,11 +258,6 @@ export function Home() {
       else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false) }
       return
     }
-    if (searchOpen()) {
-      if (evt.name === "up") { evt.preventDefault(); setSearchIdx(prev => Math.max(0, prev - 1)) }
-      else if (evt.name === "down") { evt.preventDefault(); setSearchIdx(prev => Math.min(searchResults().length - 1, prev + 1)) }
-      else if (evt.name === "escape" || evt.name === "return") { evt.preventDefault(); setSearchOpen(false) }
-      return
     }
   })
 

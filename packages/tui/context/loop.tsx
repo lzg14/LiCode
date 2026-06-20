@@ -80,7 +80,6 @@ export interface LoopContext {
   getAvailableModels: () => string[]
   getAvailableProviders: () => string[]
   contextTokens: Accessor<number>
-  searchHistory: (query: string) => Array<{ turn: number; role: string; snippet: string }>
 }
 
 const Ctx = createContext<LoopContext>()
@@ -103,7 +102,12 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   let toolCallIdCounter = 0
   const toolStartTimes = new Map<string, number>()
   let abortController: AbortController | null = null
-  const abort = () => { abortController?.abort() }
+  const abort = () => {
+    abortController?.abort()
+    // 清空队列
+    inputQueue.length = 0
+    setPendingCount(0)
+  }
   let activeModel: any = props.model
   // 工具调用轮次上限确认机制
   let confirmResolve: ((value: boolean) => void) | null = null
@@ -167,11 +171,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
 
   // 持久化 session ID，跨轮对话复用同一个 session
   let persistentSessionId: string | undefined = props.sessionId
-
-  const searchHistory = (query: string) => {
-    if (!persistentSessionId || !props.loop) return []
-    return props.loop.searchSessionMessages(persistentSessionId, query)
-  }
 
   onMount(() => {
     if (props.sessionId && props.loop) {
@@ -346,7 +345,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       setPhase("DONE")
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e)
-      addMessage({ role: "system", content: `错误: ${error}` })
+      // AbortError 是用户主动取消，不显示错误
+      if (!error.includes('abort') && !error.includes('Abort')) {
+        addMessage({ role: "system", content: `错误: ${error}` })
+      }
       setPhase("DONE")
     } finally {
       abortController = null
@@ -418,7 +420,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     getAvailableModels,
     getAvailableProviders,
     contextTokens,
-    searchHistory,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }
