@@ -1,5 +1,5 @@
 import { TextareaRenderable } from "@opentui/core"
-import { createEffect, createSignal } from "solid-js"
+import { createEffect } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useHistory } from "../../context/history"
 import { useLoop } from "../../context/loop"
@@ -43,19 +43,19 @@ export function Prompt(props: PromptProps) {
 
   const handleKeyDown = (e: any) => {
     if (props.disabled) return
+    // 弹窗打开时，不拦截键盘事件，交给 useKeyboard 处理
+    if (props.pickerOpen) return
 
     if (e.name === "up" && (input.plainText.length === 0 || input.cursorOffset === 0)) {
       e.preventDefault()
       const prev = history.up()
       if (prev !== undefined) input.setText(prev)
-      props.onInputChange?.(input.plainText)
       return
     }
 
     if (e.name === "down" && (input.plainText.length === 0 || input.cursorOffset >= input.plainText.length)) {
       e.preventDefault()
       input.setText(history.down())
-      props.onInputChange?.(input.plainText)
       return
     }
 
@@ -78,16 +78,8 @@ export function Prompt(props: PromptProps) {
       return
     }
 
-    // 文字输入类按键：通知父组件文本变化
-    // opentui 中普通字符按键的 name 是单字符（"a"、"B"、"/"、"5" 等）
-    // 控制键（up/down/escape/return/tab 等）name 是多个字符
-    const isControlKey = ["up", "down", "left", "right", "return", "escape", "tab",
-      "backspace", "delete", "home", "end", "pageup", "pagedown",
-      "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"]
-      .includes(e.name)
-    if (!isControlKey && !e.ctrl && !e.alt && !e.meta) {
-      setTimeout(() => props.onInputChange?.(input.plainText), 0)
-    }
+    // 普通字符输入：依赖 50ms 轮询捕获文本变化
+    // 不在这里同步调用，因为 opentui keydown 触发时 plainText 可能尚未更新
   }
 
   return (
@@ -134,6 +126,7 @@ export function Prompt(props: PromptProps) {
             { name: "return", action: "submit" },
           ]}
           onSubmit={handleSubmit}
+          onContentChange={() => props.onInputChange?.(input.plainText)}
           onKeyDown={handleKeyDown}
         />
       </box>
