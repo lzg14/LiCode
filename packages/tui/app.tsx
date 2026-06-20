@@ -42,11 +42,20 @@ function App() {
   const toast = useToast()
 
   onMount(() => {
-    // 首次渲染完成后触发 SIGWINCH，强制 @opentui 重新读取终端尺寸
-    // 解决终端 resize 后首次启动布局错乱的问题
-    setTimeout(() => process.emit("SIGWINCH" as any), 100)
+    // 首次渲染完成后手动触发 resize，强制重排
+    // 解决终端尺寸缓存导致首次布局错乱的问题
+    setTimeout(() => {
+      const w = process.stdout.columns || 80
+      const h = process.stdout.rows || 24
+      renderer.handleResize?.(w, h)
+    }, 50)
 
-    const onResize = () => process.emit("SIGWINCH" as any)
+    // 窗口改变时同步触发
+    const onResize = () => {
+      const w = process.stdout.columns || 80
+      const h = process.stdout.rows || 24
+      renderer.handleResize?.(w, h)
+    }
     process.stdout.on("resize", onResize)
     onCleanup(() => process.stdout.off("resize", onResize))
   })
