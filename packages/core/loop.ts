@@ -1,13 +1,7 @@
 import type { Phase, Config } from './types'
 import type { LLMProvider } from '../llm/types'
 import { createModel } from '../llm/provider'
-import { observe } from './phases/observe'
-import { think } from './phases/think'
-import { plan } from './phases/plan'
-import { build } from './phases/build'
 import { execute } from './phases/execute'
-import { verify } from './phases/verify'
-import { learn } from './phases/learn'
 import { devLogger } from './dev-logger'
 import { homedir } from 'os'
 import { join } from 'path'
@@ -20,8 +14,6 @@ import { CheckpointManager, type SessionCheckpoint } from './checkpoint'
 import { Projector } from './projector'
 import { ContextCompactor } from './compaction'
 import { SessionCompactor } from './session-compactor'
-import { join } from 'path'
-import { homedir } from 'os'
 import { Timer, type PerfTrace } from './perf'
 
 
@@ -71,11 +63,6 @@ export interface LoopContext {
   activeSkill?: string
   activeSkillInstructions?: string
 }
-
-const PHASE_ORDER: Phase[] = ['OBSERVE', 'THINK', 'PLAN', 'BUILD', 'EXECUTE', 'VERIFY', 'LEARN']
-
-// E1 快速路径：跳过 THINK/PLAN/BUILD
-const FAST_PATH: Phase[] = ['OBSERVE', 'EXECUTE', 'VERIFY']
 
 export class CoreLoop {
   private memory: Memory
@@ -212,48 +199,26 @@ export class CoreLoop {
     auditLogger.logSessionStart(ctx.sessionId)
 
     try {
-      // 先执行 OBSERVE 判断 Effort Level
-      timer.checkpoint('phase.OBSERVE.start')
-      ctx.onPhaseChange?.('OBSERVE')
-      const observeResult = await observe(ctx)
-      ctx = { ...ctx, ...observeResult }
-      timer.checkpoint('phase.OBSERVE.end')
+      // 直接执行，让 LLM 自己决定用什么工具、做什么
+      ctx.onPhaseChange?.('EXECUTE')
+      const executeId = timer.start('phase.EXECUTE')
 
-      // 根据 Effort Level 选择路径
-      const phases = ctx.effortLevel === 1 ? FAST_PATH : PHASE_ORDER
-      const startIndex = 1 // 从 THINK 开始
+      // 创建 checkpoint
+      await this.checkpointManager.save(ctx.sessionId, {
+        phase: 'EXECUTE',
+        context: { phase: 'EXECUTE', effortLevel: ctx.effortLevel },
+        timestamp: Date.now(),
+      })
 
-      for (let i = startIndex; i < phases.length; i++) {
-        const phase = phases[i]
-        const phaseStartId = timer.start(`phase.${phase}`, { effortLevel: ctx.effortLevel })
+      const result = await this.executePhase('EXECUTE', ctx, timer)
+      ctx = { ...ctx, ...result }
+      timer.end(executeId)
 
-        // 在每个阶段开始前创建 checkpoint
-        if (phase === 'EXECUTE' || phase === 'VERIFY') {
-          await this.checkpointManager.save(ctx.sessionId, {
-            phase,
-            context: { phase, effortLevel: ctx.effortLevel },
-            timestamp: Date.now(),
-          })
-        }
-
-        const result = await this.executePhase(phase, ctx, timer)
-        ctx = { ...ctx, ...result }
-        timer.end(phaseStartId)
-
-        // 如果阶段返回了不同的下一个阶段，调整循环索引以回退或前进
-        if (result.phase && result.phase !== phase && phase !== 'LEARN') {
-          const prevPhaseIdx = phases.indexOf(result.phase)
-          if (prevPhaseIdx >= 0) {
-            i = prevPhaseIdx - 1 // -1 因为循环结束会 i++
-          }
-        }
-
-        // 检查是否需要压缩上下文
-        if (ctx.streamBuffer && ctx.streamBuffer.length > 10000) {
-          const compactId = timer.start('phase.compact')
-          ctx = await this.compactContext(ctx)
-          timer.end(compactId)
-        }
+      // 检查是否需要压缩上下文
+      if (ctx.streamBuffer && ctx.streamBuffer.length > 10000) {
+        const compactId = timer.start('phase.compact')
+        ctx = await this.compactContext(ctx)
+        timer.end(compactId)
       }
 
       // 记录 AI 回复
@@ -331,67 +296,47 @@ export class CoreLoop {
     // 通知阶段变化
     ctx.onPhaseChange?.(phase)
 
-    switch (phase) {
-      case 'OBSERVE':
-        return observe(ctx)
-      case 'THINK':
-        return think(ctx)
-      case 'PLAN':
-        return plan(ctx)
-      case 'BUILD':
-        return build(ctx)
-      case 'EXECUTE': {
-        // 加载 session 历史消息
-        const historyStartId = timer.start('history.load')
-        const history = this.sessionManager.getMessagesAsModelMessages(ctx.sessionId)
-        timer.end(historyStartId, { count: history.length })
+    // 加载 session 历史消息
+    const historyStartId = timer.start('history.load')
+    const history = this.sessionManager.getMessagesAsModelMessages(ctx.sessionId)
+    timer.end(historyStartId, { count: history.length })
 
-        // 检查是否需要压缩历史
-        // 同步部分立即执行（规则提取），异步部分（LLM 精炼）走子 agent 不阻塞
-        if (this.sessionCompactor.shouldCompact(history, ctx.sessionId)) {
-          devLogger.debug('COMPACT', `History ${history.length} messages, triggering compaction agent`)
-          // 先加载已有摘要（如果有）
-          ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
-          // 异步触发压缩，走子 agent（便宜模型），不阻塞主流程
-          this.sessionCompactor.compact(history, ctx.sessionId, this.llm).catch((e) => {
-            devLogger.debug('COMPACT', 'Background compaction failed', e)
-          })
-        } else {
-          // 即使不需要压缩，也尝试加载已有摘要（跨启动恢复时）
-          if (!ctx.sessionSummary && this.sessionCompactor.hasSummary(ctx.sessionId)) {
-            ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
-          }
-        }
-
-        const aiResponse = await execute({
-          model: ctx.model,
-          userInput: ctx.userInput,
-          history,
-          sessionSummary: ctx.sessionSummary,
-          sessionId: ctx.sessionId,
-          sessionManager: this.sessionManager,
-          cwd: ctx.cwd,
-          activeSkill: ctx.activeSkill,
-          activeSkillInstructions: ctx.activeSkillInstructions,
-          onStreamText: ctx.onStreamText,
-          onLLMCall: ctx.onLLMCall,
-          onLLMResult: ctx.onLLMResult,
-          onToolCall: ctx.onToolCall,
-          onToolResult: ctx.onToolResult,
-          onIntermediateText: ctx.onIntermediateText,
-          onConfirmContinue: ctx.onConfirmContinue,
-          signal: ctx.signal,
-          timer,
-        })
-        return { phase: 'VERIFY', aiResponse, deliverable: ctx.intermediateResults }
+    // 检查是否需要压缩历史
+    if (this.sessionCompactor.shouldCompact(history, ctx.sessionId)) {
+      devLogger.debug('COMPACT', `History ${history.length} messages, triggering compaction agent`)
+      ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
+      this.sessionCompactor.compact(history, ctx.sessionId, this.llm).catch((e) => {
+        devLogger.debug('COMPACT', 'Background compaction failed', e)
+      })
+    } else {
+      if (!ctx.sessionSummary && this.sessionCompactor.hasSummary(ctx.sessionId)) {
+        ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
       }
-      case 'VERIFY':
-        return verify(ctx)
-      case 'LEARN':
-        return learn(ctx)
-      default:
-        throw new Error(`Unknown phase: ${phase}`)
     }
+
+    // 直接执行，让 LLM 自己决定用什么工具、做什么
+    const aiResponse = await execute({
+      model: ctx.model,
+      userInput: ctx.userInput,
+      history,
+      sessionSummary: ctx.sessionSummary,
+      sessionId: ctx.sessionId,
+      sessionManager: this.sessionManager,
+      cwd: ctx.cwd,
+      activeSkill: ctx.activeSkill,
+      activeSkillInstructions: ctx.activeSkillInstructions,
+      onStreamText: ctx.onStreamText,
+      onLLMCall: ctx.onLLMCall,
+      onLLMResult: ctx.onLLMResult,
+      onToolCall: ctx.onToolCall,
+      onToolResult: ctx.onToolResult,
+      onIntermediateText: ctx.onIntermediateText,
+      onConfirmContinue: ctx.onConfirmContinue,
+      signal: ctx.signal,
+      timer,
+    })
+
+    return { aiResponse, deliverable: ctx.intermediateResults }
   }
 
 }
