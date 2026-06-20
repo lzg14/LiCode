@@ -60,6 +60,42 @@ export const MODEL_CATALOG: Record<string, ModelConfig> = {
     costPer1kInput: 0.00015,
     costPer1kOutput: 0.0006,
   },
+  'deepseek-v4-flash': {
+    id: 'deepseek-v4-flash',
+    provider: 'deepseek',
+    displayName: 'DeepSeek V4 Flash',
+    contextWindow: 128000,
+    maxOutput: 16384,
+    supportsVision: false,
+    supportsToolUse: true,
+    supportsStreaming: true,
+    costPer1kInput: 0.0001,
+    costPer1kOutput: 0.0002,
+  },
+  'deepseek-chat': {
+    id: 'deepseek-chat',
+    provider: 'deepseek',
+    displayName: 'DeepSeek Chat',
+    contextWindow: 128000,
+    maxOutput: 8192,
+    supportsVision: false,
+    supportsToolUse: true,
+    supportsStreaming: true,
+    costPer1kInput: 0.0001,
+    costPer1kOutput: 0.0002,
+  },
+  'deepseek-coder': {
+    id: 'deepseek-coder',
+    provider: 'deepseek',
+    displayName: 'DeepSeek Coder',
+    contextWindow: 128000,
+    maxOutput: 8192,
+    supportsVision: false,
+    supportsToolUse: true,
+    supportsStreaming: true,
+    costPer1kInput: 0.0001,
+    costPer1kOutput: 0.0002,
+  },
 }
 
 export function getModelConfig(modelId: string): ModelConfig | undefined {
@@ -75,4 +111,8 @@ export function listModels(provider?: string): ModelConfig[] {
 export function supportsFeature(modelId: string, feature: keyof Pick<ModelConfig, 'supportsVision' | 'supportsToolUse' | 'supportsStreaming'>): boolean {
   const config = MODEL_CATALOG[modelId]
   return config ? config[feature] : false
+}
+
+export function listModelsByProvider(provider: string): string[] {
+  return listModels(provider).map(m => m.id)
 }

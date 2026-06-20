@@ -1,8 +1,9 @@
-import { createContext, useContext, createSignal, onMount, type JSX, type Accessor } from "solid-js"
+import { createContext, useContext, createSignal, createMemo, onMount, type JSX, type Accessor } from "solid-js"
 import type { Phase } from "../../core/types"
 import type { CoreLoop } from "../../core/loop"
 import { createModel } from "../../llm/provider"
-import { MODEL_CATALOG } from "../../config/schema"
+import { listModelsByProvider } from "../../llm/catalog"
+import { devLogger } from "../../core/dev-logger"
 
 export interface Message {
   id: string
@@ -79,7 +80,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
 
   const getAvailableModels = (): string[] => {
     const provider = props.provider ?? "deepseek"
-    return MODEL_CATALOG[provider] ?? []
+    return listModelsByProvider(provider)
   }
 
   // 持久化 session ID，跨轮对话复用同一个 session
