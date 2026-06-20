@@ -66,6 +66,19 @@ export function Prompt(props: PromptProps) {
   }
 
   const handleKeyDown = async (e: any) => {
+    // ESC: 中断当前执行 + 清空队列（disabled 时也要响应）
+    if (e.name === "escape") {
+      e.preventDefault()
+      if (props.disabled) {
+        abort()
+        addMessage({ role: "system", content: "已取消当前执行" })
+      } else if (pendingCount() > 0) {
+        abort()
+        addMessage({ role: "system", content: `已清空队列（${pendingCount()} 条）` })
+      }
+      return
+    }
+
     if (props.disabled) return
 
     // Ctrl+V: 检查剪贴板图片
@@ -79,9 +92,9 @@ export function Prompt(props: PromptProps) {
       // 无图片则让终端处理普通粘贴
     }
 
-    // 弹框打开时，让出 up/down/return/escape 给外层 useKeyboard 处理
+    // 弹框打开时，让出 up/down/return 给外层 useKeyboard 处理
     // （不能 preventDefault，否则外层 useKeyboard 收不到）
-    if (props.popupOpen && (e.name === "up" || e.name === "down" || e.name === "return" || e.name === "escape")) {
+    if (props.popupOpen && (e.name === "up" || e.name === "down" || e.name === "return")) {
       return
     }
 
@@ -107,19 +120,6 @@ export function Prompt(props: PromptProps) {
     if (e.ctrl && e.name === "e") {
       e.preventDefault()
       toggleToolCallExpanded()
-      return
-    }
-
-    // ESC: 中断当前执行 + 清空队列
-    if (e.name === "escape") {
-      e.preventDefault()
-      if (props.disabled) {
-        abort()
-        addMessage({ role: "system", content: "已取消当前执行" })
-      } else if (pendingCount() > 0) {
-        abort()
-        addMessage({ role: "system", content: `已清空队列（${pendingCount()} 条）` })
-      }
       return
     }
 
