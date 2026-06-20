@@ -43,15 +43,25 @@ function MessageItem(props: { msg: Message }) {
   if (props.msg.role === "user") {
     const lineCount = props.msg.content.split('\n').length
     const isLong = lineCount > 3 || props.msg.content.length > 200
+    const hasImages = props.msg.images && props.msg.images.length > 0
     return (
-      <box flexDirection="row" marginBottom={1}>
-        <text fg={props.msg.queued ? textMuted() : primary()}>
-          {props.msg.queued ? "┃ [queued] " : "┃ "}
-        </text>
-        <Show when={!isLong} fallback={
-          <text fg={textMuted()}>[pasted ~ {lineCount} lines]</text>
-        }>
-          <text fg={props.msg.queued ? textMuted() : text()}>{props.msg.content}</text>
+      <box flexDirection="column" marginBottom={1}>
+        <box flexDirection="row">
+          <text fg={props.msg.queued ? textMuted() : primary()}>
+            {props.msg.queued ? "┃ [queued] " : "┃ "}
+          </text>
+          <Show when={!isLong} fallback={
+            <text fg={textMuted()}>[pasted ~ {lineCount} lines]</text>
+          }>
+            <text fg={props.msg.queued ? textMuted() : text()}>{props.msg.content}</text>
+          </Show>
+        </box>
+        <Show when={hasImages}>
+          <box flexDirection="row" paddingLeft={2}>
+            <text fg={textMuted()}>
+              {`📎 ${props.msg.images!.length} 张图片已附带`}
+            </text>
+          </box>
         </Show>
       </box>
     )

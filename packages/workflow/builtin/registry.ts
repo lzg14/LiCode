@@ -1,13 +1,9 @@
-import { FileSystemScriptRegistry } from "../workflow"
-import codingScript from "../workflow/builtin/coding.js"
-import researchScript from "../workflow/builtin/research.js"
-import reviewScript from "../workflow/builtin/review.js"
+import { readFileSync } from "fs"
+import { dirname, join } from "path"
+import { fileURLToPath } from "url"
+import { FileSystemScriptRegistry } from "../registries"
 
-const BUILTIN: Record<string, string> = {
-  coding: codingScript,
-  research: researchScript,
-  review: reviewScript,
-}
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /**
  * 内置 + 文件系统脚本注册器
@@ -16,8 +12,8 @@ const BUILTIN: Record<string, string> = {
 export class BuiltinScriptRegistry extends FileSystemScriptRegistry {
   constructor(dirs: string[] = []) {
     super(dirs)
-    // 预置内置脚本
-    for (const [name, script] of Object.entries(BUILTIN)) {
+    for (const name of ["coding", "research", "review"]) {
+      const script = readFileSync(join(__dirname, `${name}.js`), "utf-8")
       this.scripts.set(name, script)
     }
   }

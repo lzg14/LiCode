@@ -5,6 +5,25 @@ import { createModel } from "../../llm/provider"
 import { listModelsByProvider } from "../../llm/catalog"
 import { devLogger } from "../../core/dev-logger"
 import { WorkflowEngine, BuiltinScriptRegistry } from "../../workflow"
+import { readImageFile } from "../../tools/builtin"
+
+/** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
+function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
+  const images: Array<{ base64: string; mimeType: string }> = []
+  // 匹配 @ 后跟文件路径（支持绝对路径、相对路径、~ 路径）
+  const cleaned = text.replace(/@(\S+\.(?:png|jpe?g|gif|webp|bmp|svg))/gi, (_, filePath: string) => {
+    const resolved = filePath.startsWith('~')
+      ? filePath.replace(/^~/, process.env.HOME || process.env.USERPROFILE || '')
+      : filePath
+    const img = readImageFile(resolved)
+    if (img) {
+      images.push(img)
+      return `[图片: ${filePath}]`
+    }
+    return `@${filePath}`
+  })
+  return { text: cleaned, images }
+}
 
 export interface Message {
   id: string
@@ -18,6 +37,8 @@ export interface Message {
   duration?: number
   /** 队列中等待发送的 user 消息 */
   queued?: boolean
+  /** 附带的图片列表（base64 + mimeType），用于 multimodal 消息 */
+  images?: Array<{ base64: string; mimeType: string }>
 }
 
 type AddMessageInput = {
@@ -30,10 +51,11 @@ type AddMessageInput = {
   toolBatch?: number
   duration?: number
   queued?: boolean
+  images?: Message["images"]
 }
 
 export interface LoopContext {
-  run: (input: string) => Promise<void>
+  run: (input: string, images?: Array<{ base64: string; mimeType: string }>) => Promise<void>
   abort: () => void
   phase: Accessor<Phase>
   isProcessing: Accessor<boolean>
@@ -77,7 +99,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const [currentProvider, setCurrentProvider] = createSignal(props.provider ?? "deepseek")
 
   const [pendingCount, setPendingCount] = createSignal(0)
-  const inputQueue: string[] = []
+  const inputQueue: { id: string; text: string }[] = []
   let toolCallIdCounter = 0
   const toolStartTimes = new Map<string, number>()
   let abortController: AbortController | null = null
@@ -183,6 +205,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       toolStatus: input.toolStatus,
       duration: input.duration,
       queued: input.queued,
+      images: input.images,
     }
     setMessages((prev) => [...prev, msg])
   }
@@ -196,7 +219,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     setStreamingText("")
   }
 
-  const run = async (input: string): Promise<void> => {
+  const run = async (input: string, clipboardImages?: Array<{ base64: string; mimeType: string }>): Promise<void> => {
     // 如果正在等待用户确认是否继续 tool call 迭代
     if (confirmResolve) {
       const shouldContinue = input.trim().toLowerCase() === "y"
@@ -218,8 +241,13 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       return
     }
 
+    // 解析用户输入中的图片引用（@/path/to/image.png）
+    const { text: cleanText, images: parsedImages } = parseImageRefs(input)
+    // 合并剪贴板图片 + 文件引用图片
+    const allImages = [...parsedImages, ...(clipboardImages ?? [])]
+
     abortController = new AbortController()
-    addMessage({ role: "user", content: input })
+    addMessage({ role: "user", content: cleanText, images: allImages.length > 0 ? allImages : undefined })
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
     setIsProcessing(true)
@@ -240,7 +268,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       }
       const ctx = {
         sessionId: persistentSessionId,
-        userInput: input,
+        userInput: cleanText,
+        userImages: allImages.length > 0 ? allImages : undefined,
         signal: abortController.signal,
         effortLevel: 1,
         phase: "OBSERVE" as Phase,

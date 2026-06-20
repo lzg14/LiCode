@@ -1,9 +1,9 @@
 import { readFile, writeFile, stat, readdir, mkdir, unlink, copyFile, rename } from 'fs/promises'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
 import { glob } from 'glob'
-import { join, dirname, resolve } from 'path'
+import { join, dirname, resolve, extname } from 'path'
 import { Database } from 'bun:sqlite'
 import { z } from 'zod'
 import { globalToolRegistry } from './registry'
@@ -667,4 +667,94 @@ export function registerBuiltinTools(): void {
       }
     },
   })
+
+  // ========== 图片 ==========
+  // 支持的图片扩展名
+  const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'])
+
+  globalToolRegistry.register({
+    name: 'read_image',
+    description: '读取图片文件并返回 base64 数据（供视觉模型分析）。支持 PNG/JPG/GIF/WebP/BMP/SVG。',
+    inputSchema: z.object({
+      path: z.string().describe('图片文件路径'),
+    }),
+    handler: async ({ path }) => {
+      try {
+        const absPath = resolve(path)
+        if (!existsSync(absPath)) return { success: false, error: `文件不存在: ${absPath}` }
+        const ext = extname(absPath).toLowerCase()
+        if (!IMAGE_EXTS.has(ext)) return { success: false, error: `不支持的图片格式: ${ext}。支持: ${[...IMAGE_EXTS].join(', ')}` }
+        const buffer = readFileSync(absPath)
+        const mime = ext === '.svg' ? 'image/svg+xml' : `image/${ext.slice(1) === 'jpg' ? 'jpeg' : ext.slice(1)}`
+        const base64 = buffer.toString('base64')
+        return { success: true, output: `[图片已读取: ${absPath} (${(buffer.length / 1024).toFixed(1)} KB, ${mime})]`, imageData: { base64, mimeType: mime } }
+      } catch (e) {
+        return { success: false, error: String(e) }
+      }
+    },
+  })
+}
+
+/**
+ * 从系统剪贴板读取图片（Windows/macOS/Linux）
+ * 返回 { data: base64, mime: string } 或 undefined
+ */
+export async function readClipboardImage(): Promise<{ data: string; mime: string } | undefined> {
+  const platform = process.platform
+
+  if (platform === 'win32') {
+    const script = `Add-Type -AssemblyName System.Windows.Forms; $img = [System.Windows.Forms.Clipboard]::GetImage(); if ($img) { $ms = New-Object System.IO.MemoryStream; $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); [System.Convert]::ToBase64String($ms.ToArray()) }`
+    try {
+      const { stdout } = await promisify(exec)(
+        `powershell.exe -NonInteractive -NoProfile -command "${script}"`,
+        { timeout: 5000, maxBuffer: 10 * 1024 * 1024 }
+      )
+      const trimmed = stdout.trim()
+      if (trimmed && trimmed.length > 0) {
+        return { data: trimmed, mime: 'image/png' }
+      }
+    } catch {}
+  }
+
+  if (platform === 'darwin') {
+    const tmpfile = join(require('os').tmpdir(), 'licode-clipboard.png')
+    try {
+      await promisify(exec)(
+        `osascript -e 'set imageData to the clipboard as "PNGf"' -e 'set fileRef to open for access POSIX file "${tmpfile}" with write permission' -e 'set eof fileRef to 0' -e 'write imageData to fileRef' -e 'close access fileRef'`,
+        { timeout: 5000 }
+      )
+      const buffer = readFileSync(tmpfile)
+      return { data: buffer.toString('base64'), mime: 'image/png' }
+    } catch {} finally {
+      try { require('fs').unlinkSync(tmpfile) } catch {}
+    }
+  }
+
+  if (platform === 'linux') {
+    try {
+      const { stdout } = await promisify(execFile)('xclip', ['-selection', 'clipboard', '-t', 'image/png', '-o'], { timeout: 5000 })
+      if (stdout.length > 0) {
+        return { data: Buffer.from(stdout).toString('base64'), mime: 'image/png' }
+      }
+    } catch {}
+  }
+
+  return undefined
+}
+
+/**
+ * 读取图片文件并返回 base64（供 loop.tsx 使用）
+ */
+export function readImageFile(filePath: string): { base64: string; mimeType: string } | undefined {
+  try {
+    const absPath = resolve(filePath)
+    if (!existsSync(absPath)) return undefined
+    const ext = extname(absPath).toLowerCase()
+    if (!IMAGE_EXTS.has(ext)) return undefined
+    const buffer = readFileSync(absPath)
+    const mime = ext === '.svg' ? 'image/svg+xml' : `image/${ext.slice(1) === 'jpg' ? 'jpeg' : ext.slice(1)}`
+    return { base64: buffer.toString('base64'), mimeType: mime }
+  } catch {
+    return undefined
+  }
 }

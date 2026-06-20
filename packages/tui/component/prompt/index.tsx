@@ -1,11 +1,12 @@
 import { TextareaRenderable } from "@opentui/core"
-import { createEffect } from "solid-js"
+import { createEffect, createSignal } from "solid-js"
 import { useTheme } from "../../context/theme"
 import { useHistory } from "../../context/history"
 import { useLoop } from "../../context/loop"
+import { readClipboardImage } from "../../../tools/builtin"
 
 export interface PromptProps {
-  onSubmit: (text: string) => void
+  onSubmit: (text: string, images?: Array<{ base64: string; mimeType: string }>) => void
   disabled?: boolean
   placeholder?: string
   onInputChange?: (text: string) => void
@@ -20,6 +21,7 @@ export function Prompt(props: PromptProps) {
   const history = useHistory()
   const { toggleToolCallExpanded, abort, pendingCount } = useLoop()
   let input: TextareaRenderable
+  const [pendingImages, setPendingImages] = createSignal<Array<{ base64: string; mimeType: string }>>([])
 
   createEffect(() => {
     if (!input || input.isDestroyed) return
@@ -36,14 +38,27 @@ export function Prompt(props: PromptProps) {
   const handleSubmit = () => {
     if (!input || input.isDestroyed) return
     const text = input.plainText.trim()
-    if (!text) return
-    props.onSubmit(text)
-    history.add(text)
+    const images = pendingImages()
+    if (!text && images.length === 0) return
+    props.onSubmit(text, images.length > 0 ? images : undefined)
+    if (text) history.add(text)
+    setPendingImages([])
     input.clear()
   }
 
-  const handleKeyDown = (e: any) => {
+  const handleKeyDown = async (e: any) => {
     if (props.disabled) return
+
+    // Ctrl+V: 检查剪贴板图片
+    if (e.ctrl && e.name === "v") {
+      const img = await readClipboardImage()
+      if (img) {
+        e.preventDefault()
+        setPendingImages(prev => [...prev, img])
+        return
+      }
+      // 无图片则让终端处理普通粘贴
+    }
 
     // 弹框打开时，让出 up/down/return/escape 给外层 useKeyboard 处理
     // （不能 preventDefault，否则外层 useKeyboard 收不到）
@@ -120,7 +135,7 @@ export function Prompt(props: PromptProps) {
           ref={(r: TextareaRenderable) => { input = r }}
           placeholder={props.disabled
             ? pendingCount() > 0 ? `等待中（队列 ${pendingCount()} 条）...` : "等待响应中..."
-            : props.placeholder ?? "输入消息..."}
+            : pendingImages().length > 0 ? `已附带 ${pendingImages().length} 张图片，输入文字后发送...` : props.placeholder ?? "输入消息..."}
           placeholderColor={textMuted()}
           textColor={props.disabled ? textMuted() : text()}
           focusedTextColor={text()}
