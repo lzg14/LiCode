@@ -13,4 +13,4 @@ dist/
 .DS_Store
 Thumbs.db
 .checkpoints/
-memory/
+# memory/  # 忽略 packages/memory 目录下的文件
