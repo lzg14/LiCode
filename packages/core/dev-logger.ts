@@ -144,7 +144,7 @@ export class DevLogger {
 
   // LLM 流式片段日志
   logLLMChunk(chunk: unknown, isComplete: boolean): void {
-    this.debug('LLM', `... LLM chunk | complete=${isComplete}`, chunk)
+    this.debug('LLM', `... LLM chunk | complete=${isComplete}`, redact(chunk))
   }
 
   // 工具调用日志

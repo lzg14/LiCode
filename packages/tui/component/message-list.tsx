@@ -13,9 +13,12 @@ function stripSystemTags(content: string): string {
 
 /** 提取 thinking 内容，返回 [thinking, rest] */
 function extractThinking(content: string): [string, string] {
-  const match = content.match(/^<thinking>([\s\S]*?)<\/thinking>\s*([\s\S]*)$/)
+  // 匹配任意位置的 <thinking>...</thinking>
+  const match = content.match(/<thinking>([\s\S]*?)<\/thinking>/)
   if (match) {
-    return [match[1].trim(), match[2].trim()]
+    const thinking = match[1].trim()
+    const rest = content.replace(match[0], '').trim()
+    return [thinking, rest]
   }
   return ["", content]
 }
