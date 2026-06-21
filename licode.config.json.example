@@ -26,5 +26,15 @@
     "maxDepth": 1,
     "timeoutMs": 900000,
     "blockedTools": ["delegate_task", "clarify", "memory_write", "send_message", "execute_code"]
+  },
+  "mcp": {
+    "// mcpServers": "MCP 服务器配置",
+    "mcpServers": {
+      "// filesystem": "示例：文件系统 MCP 服务器",
+      "filesystem": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+      }
+    }
   }
 }

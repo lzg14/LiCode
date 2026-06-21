@@ -164,6 +164,50 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     scriptRegistry: new BuiltinScriptRegistry(),
   })
 
+  // MCP 集成
+  const initMCP = async () => {
+    try {
+      const config = await import("../../config/config")
+      const mcpConfig = config.getConfigSync?.()?.mcp?.mcpServers
+      if (!mcpConfig || Object.keys(mcpConfig).length === 0) return
+
+      const { MCPIntegration } = await import("../../integration/mcp")
+      const { globalToolRegistry } = await import("../../tools/registry")
+
+      for (const [id, serverConfig] of Object.entries(mcpConfig)) {
+        try {
+          const mcp = new MCPIntegration(serverConfig as any)
+          await mcp.connect()
+          const tools = await mcp.discoverTools()
+
+          // 注册 MCP 工具到 globalToolRegistry
+          for (const tool of tools) {
+            const toolName = `mcp__${id}__${tool.name}`
+            globalToolRegistry.register({
+              name: toolName,
+              description: `[MCP: ${id}] ${tool.description ?? tool.name}`,
+              inputSchema: await import("zod").then(z => z.z.object({})),
+              handler: async (input: any) => {
+                const result = await mcp.callTool(tool.name, input)
+                return {
+                  success: !result.isError,
+                  output: result.content.map(c => c.text ?? '').join('\n'),
+                }
+              },
+            })
+          }
+
+          devLogger.log('MCP', `Registered ${tools.length} tools from ${id}`)
+        } catch (e) {
+          devLogger.log('MCP', `Failed to connect ${id}: ${e}`)
+        }
+      }
+    } catch (e) {
+      devLogger.log('MCP', `Init failed: ${e}`)
+    }
+  }
+  initMCP()
+
   const runWorkflow = async (name: string, args: any) => {
     const result = await wfEngine.run({ name, args })
     return result

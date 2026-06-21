@@ -3,12 +3,9 @@ import { useTheme } from "../context/theme"
 import { useConfig } from "../context/config"
 import { useLoop } from "../context/loop"
 import { getModelConfig } from "../../llm/catalog"
+import { todos } from "../context/todos"
 
 const VERSION = "0.1.0"
-
-// 全局 todos 状态
-const [todos, setTodos] = createSignal<Array<{id: string; content: string; status: string; activeForm?: string}>>([])
-;(globalThis as any).__setTodos = setTodos
 
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning, error } = useTheme()
