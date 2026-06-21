@@ -11,6 +11,15 @@ function stripSystemTags(content: string): string {
   return content.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").replace(/\n{3,}/g, "\n\n").trim()
 }
 
+/** 提取 thinking 内容，返回 [thinking, rest] */
+function extractThinking(content: string): [string, string] {
+  const match = content.match(/^<thinking>([\s\S]*?)<\/thinking>\s*([\s\S]*)$/)
+  if (match) {
+    return [match[1].trim(), match[2].trim()]
+  }
+  return ["", content]
+}
+
 function MarkdownText(props: { content: string; streaming?: boolean }) {
   const { primary, warning, success, info, text, textMuted, background, border } = useTheme()
   const syntaxStyle = createMemo(() => createMarkdownSyntaxStyle({
@@ -68,9 +77,18 @@ function MessageItem(props: { msg: Message }) {
   }
 
   if (props.msg.role === "assistant") {
+    const cleaned = stripSystemTags(props.msg.content)
+    const [thinking, rest] = extractThinking(cleaned)
     return (
       <box flexDirection="column" marginBottom={1} flexShrink={0}>
-        <MarkdownText content={stripSystemTags(props.msg.content)} />
+        <Show when={thinking}>
+          <box flexDirection="column" paddingLeft={1} borderStyle="round" borderColor={textMuted()}>
+            <text fg={textMuted()}>{`💭 thinking...`}</text>
+          </box>
+        </Show>
+        <Show when={rest}>
+          <MarkdownText content={rest} />
+        </Show>
         <Show when={props.msg.duration !== undefined}>
           <text fg={textMuted()}>{`  ${props.msg.duration}s`}</text>
         </Show>
