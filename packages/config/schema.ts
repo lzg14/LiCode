@@ -37,7 +37,7 @@ export const MemoryConfigSchema = z.object({
 export const MCPConfigSchema = z.object({
   command: z.string(),
   args: z.array(z.string()).optional(),
-  env: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
   timeout: z.number().optional(),
 })
 
@@ -47,7 +47,7 @@ export const ConfigSchema = z.object({
   memory: MemoryConfigSchema,
   subagent: SubagentConfigSchema,
   mcp: z.object({
-    mcpServers: z.record(MCPConfigSchema).optional(),
+    mcpServers: z.record(z.string(), MCPConfigSchema).optional(),
   }).optional(),
 })
 
