@@ -1,5 +1,5 @@
 import type { Config } from './schema'
-import { getDefaultWhitelist } from '../security/whitelist'
+import { PLATFORM_DEFAULTS } from '../security/merge'
 
 /**
  * 默认配置
@@ -15,14 +15,7 @@ export const DEFAULT_CONFIG: Config = {
     model: 'claude-sonnet-4-20250514',
     apiKeyEnv: 'ANTHROPIC_API_KEY',
   },
-  security: {
-    commandWhitelist: getDefaultWhitelist(),
-    blockedCommands: [],
-    allowedPaths: ['~'],
-    deniedPaths: process.platform === 'win32'
-      ? ['C:\\Windows', 'C:\\Program Files']
-      : ['/etc', '/sys', '/proc'],
-  },
+  security: PLATFORM_DEFAULTS,
   memory: {
     path: '~/.licode/licode-sessions.db',
     retentionDays: 30,
