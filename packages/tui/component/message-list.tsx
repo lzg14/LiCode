@@ -193,9 +193,24 @@ export function MessageList() {
       </For>
 
       <Show when={streamingText()}>
-        <box marginBottom={1}>
-          <MarkdownText content={stripSystemTags(streamingText())} streaming={true} />
-        </box>
+        {(() => {
+          const cleaned = stripSystemTags(streamingText())
+          const [thinking, rest] = extractThinking(cleaned)
+          return (
+            <>
+              <Show when={thinking && !rest}>
+                <box marginBottom={1} flexDirection="column" paddingLeft={1} borderStyle="rounded" borderColor={textMuted()}>
+                  <text fg={textMuted()}>{`💭 thinking...`}</text>
+                </box>
+              </Show>
+              <Show when={rest}>
+                <box marginBottom={1}>
+                  <MarkdownText content={rest} streaming={true} />
+                </box>
+              </Show>
+            </>
+          )
+        })()}
       </Show>
 
       <Show when={isProcessing() && !streamingText()}>
