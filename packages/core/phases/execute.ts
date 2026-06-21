@@ -162,7 +162,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         }
         return m
       })
-      .filter(Boolean)
+      .filter((m): m is NonNullable<typeof m> => m !== null)
   } else {
     // 无摘要：保留全部，校验 tool/tool-call 配对
     history = sliced
