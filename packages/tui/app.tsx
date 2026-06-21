@@ -5,6 +5,7 @@ import { CoreLoop } from "../core/loop"
 import { configLoader } from "../config/loader"
 import { createModel } from "../llm/provider"
 import { registerBuiltinTools } from "../tools/builtin"
+import { createSecurityLayer, setSecurityLayer } from "../security"
 import { devLogger, setupGlobalErrorHandlers } from "../core/dev-logger"
 import { doCopy } from "./util/selection"
 import { focusInput } from "./component/prompt"
@@ -98,6 +99,40 @@ function App() {
 export async function tui(config: any) {
   devLogger.info('APP', `Starting licode TUI | log=${devLogger.getLogFile()}`)
   devLogger.logSession('TUI started', config)
+
+  // 创建 SecurityLayer，**追加**用户配置到默认上
+  // 默认白名单：DEFAULT_CONFIG.security.commandWhitelist（平台默认）
+  // 用户白名单：config.security?.commandWhitelist（追加）
+  // 这样新用户开箱即用，不需要理解"覆盖 vs 追加"
+  const defaultConfig = (await import("../config/defaults")).DEFAULT_CONFIG
+  const securityConfig = {
+    commandWhitelist: [
+      ...new Set([
+        ...(defaultConfig.security?.commandWhitelist ?? []),
+        ...(config.security?.commandWhitelist ?? []),
+      ]),
+    ],
+    blockedCommands: [
+      ...new Set([
+        ...(defaultConfig.security?.blockedCommands ?? []),
+        ...(config.security?.blockedCommands ?? []),
+      ]),
+    ],
+    allowedPaths: config.security?.allowedPaths ?? defaultConfig.security?.allowedPaths ?? [],
+    deniedPaths: [
+      ...new Set([
+        ...(defaultConfig.security?.deniedPaths ?? []),
+        ...(config.security?.deniedPaths ?? []),
+      ]),
+    ],
+    maxFileSize: config.security?.maxFileSize ?? defaultConfig.security?.maxFileSize ?? 10 * 1024 * 1024,
+    sensitivePatterns: config.security?.sensitivePatterns ?? defaultConfig.security?.sensitivePatterns ?? [
+      'password', 'api_key', 'apikey', 'secret', 'token', 'private_key',
+    ],
+  }
+  const securityLayer = createSecurityLayer(securityConfig)
+  setSecurityLayer(securityLayer)
+  devLogger.info('APP', `SecurityLayer created: ${securityConfig.commandWhitelist.length} commands allowed`)
 
   const model = createModel(config.llm)
   const loop = new CoreLoop(config, undefined)

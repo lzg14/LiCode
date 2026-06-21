@@ -1,7 +1,12 @@
 import type { Config } from './schema'
+import { getDefaultWhitelist } from '../security/whitelist'
 
 /**
  * 默认配置
+ *
+ * security.commandWhitelist：开箱即用的平台默认白名单
+ * 用户在 licode.config.json 配的 commandWhitelist 会**追加**到默认上
+ * （见 packages/tui/app.tsx 的 merge 逻辑）
  */
 
 export const DEFAULT_CONFIG: Config = {
@@ -11,13 +16,12 @@ export const DEFAULT_CONFIG: Config = {
     apiKeyEnv: 'ANTHROPIC_API_KEY',
   },
   security: {
-    commandWhitelist: [
-      'git', 'npm', 'npx', 'node', 'python', 'pip',
-      'cargo', 'rustc', 'go', 'java', 'javac',
-      'ls', 'cat', 'grep', 'find', 'echo', 'pwd',
-    ],
+    commandWhitelist: getDefaultWhitelist(),
+    blockedCommands: [],
     allowedPaths: ['~'],
-    deniedPaths: ['/etc', '/sys', '/proc'],
+    deniedPaths: process.platform === 'win32'
+      ? ['C:\\Windows', 'C:\\Program Files']
+      : ['/etc', '/sys', '/proc'],
   },
   memory: {
     path: '~/.licode/licode-sessions.db',
@@ -39,26 +43,12 @@ export const DEV_CONFIG: Partial<Config> = {
     provider: 'local',
     model: 'codellama',
   },
-  security: {
-    commandWhitelist: ['*'],
-    allowedPaths: ['~'],
-    deniedPaths: [],
-  },
 }
 
 /**
  * 生产环境配置
  */
-export const PROD_CONFIG: Partial<Config> = {
-  security: {
-    commandWhitelist: [
-      'git', 'npm', 'npx', 'node',
-      'ls', 'cat', 'grep', 'find',
-    ],
-    allowedPaths: ['~'],
-    deniedPaths: ['/etc', '/sys', '/proc', '/root'],
-  },
-}
+export const PROD_CONFIG: Partial<Config> = {}
 
 /**
  * 获取环境配置

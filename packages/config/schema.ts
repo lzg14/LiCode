@@ -12,8 +12,11 @@ export const LLMConfigSchema = z.object({
 
 export const SecurityConfigSchema = z.object({
   commandWhitelist: z.array(z.string()),
+  blockedCommands: z.array(z.string()).optional(),
   allowedPaths: z.array(z.string()),
   deniedPaths: z.array(z.string()),
+  maxFileSize: z.number().optional(),
+  sensitivePatterns: z.array(z.string()).optional(),
 })
 
 export const SubagentConfigSchema = z.object({
