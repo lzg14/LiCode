@@ -38,7 +38,7 @@ export function Home() {
       const arg = text.slice(6).trim()
       if (!arg || arg === 'list') {
         const skillList = availableSkills().length > 0
-          ? availableSkills().join(', ')
+          ? availableSkills().map(s => `/${s.name}`).join(', ')
           : '无可用技能（搜索路径: ~/.claude/skills/, ~/.licode/skills/）'
         addMessage({ role: "system", content: `可用技能: ${skillList}\n\n用法: /skill <名称>` })
         return
@@ -55,23 +55,24 @@ export function Home() {
   const [slashOpen, setSlashOpen] = createSignal(false)
   const [slashInput, setSlashInput] = createSignal("")
   const [slashIdx, setSlashIdx] = createSignal(0)
-  const [availableSkills, setAvailableSkills] = createSignal<string[]>([])
+  const [availableSkills, setAvailableSkills] = createSignal<Array<{ name: string; description: string }>>([])
 
   const scanSkills = async () => {
     // 用新的 skill loader，直接消费 Claude Code `~/.claude/skills/`
-    const skills = loadAllSkills(process.cwd())
-    setAvailableSkills([...new Set(skills.map(s => s.name))])
+    const skills = await loadAllSkills(process.cwd())
+    setAvailableSkills(skills.map(s => ({ name: s.name, description: s.description })))
   }
   scanSkills()
+
+  const truncate = (s: string, n = 40) => s.length > n ? s.slice(0, n) + '…' : s
 
   const slashItems = createMemo(() => {
     const items: { type: string; label: string; desc: string }[] = [
       { type: 'cmd', label: '/clear', desc: '开新会话（清空当前对话）' },
       { type: 'cmd', label: '/compact', desc: '压缩对话历史' },
-      { type: 'cmd', label: '/skill', desc: '加载技能 (/skill list 或 /skill <名称>)' },
     ]
     for (const s of availableSkills()) {
-      items.push({ type: 'skill', label: `/skill ${s}`, desc: `加载技能 ${s}` })
+      items.push({ type: 'skill', label: `/${s.name}`, desc: truncate(s.description) })
     }
     const filter = slashInput().slice(1).toLowerCase()
     if (!filter) return items
@@ -97,15 +98,9 @@ export function Home() {
         clearSession()
       } else if (selected.label === '/compact') {
         compactSession()
-      } else if (selected.label === '/skill') {
-        setSlashOpen(false)
-        setSlashInput('')
-        setPromptText('/skill ')
-        return
       }
     } else if (selected.type === 'skill') {
-      // /skill xxx → 调用 setActiveSkill
-      const skillName = selected.label.replace('/skill ', '')
+      const skillName = selected.label.replace(/^\//, '')
       setSlashOpen(false)
       setSlashInput('')
       setActiveSkill(skillName)

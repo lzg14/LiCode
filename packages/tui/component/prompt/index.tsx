@@ -41,6 +41,7 @@ export function Prompt(props: PromptProps) {
     setTextFn = (text: string) => {
       if (!input || input.isDestroyed) return
       input.setText(text)
+      input.cursorOffset = text.length  // 光标移到末尾
       input.focus()
     }
   })
