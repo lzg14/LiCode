@@ -768,11 +768,9 @@ export function registerBuiltinTools(): void {
       if (new Set(ids).size !== ids.length) {
         return { success: false, error: '存在重复的 todo id' }
       }
-      // 存储到全局变量
-      ;(globalThis as any).__todos = items
-      // 更新 TUI 侧栏
-      const setTodos = (globalThis as any).__setTodos
-      if (setTodos) setTodos(items)
+      // 更新全局 todo 状态
+      const { setTodos } = await import('../tui/context/todos')
+      setTodos(items)
       return { success: true, output: `已更新 ${items.length} 个 todo` }
     },
   })
@@ -782,7 +780,8 @@ export function registerBuiltinTools(): void {
     description: '读取当前 todo 列表。',
     inputSchema: z.object({}),
     handler: async () => {
-      const items = (globalThis as any).__todos || []
+      const { todos } = await import('../tui/context/todos')
+      const items = todos()
       if (items.length === 0) {
         return { success: true, output: '暂无 todo' }
       }
