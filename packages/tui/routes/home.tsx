@@ -91,9 +91,17 @@ export function Home() {
       }
       const [name, ...rest] = arg.split(/\s+/)
       const inputArgs = { input: rest.join(" ") || name }
-      addMessage({ role: "system", content: `运行 workflow: ${name}...` })
+      addMessage({ role: "system", content: `切换到 ${name} 模式...` })
       const result = await runWorkflow(name, inputArgs)
-      if (result.success) {
+      if (result.success && result.presetPrompt) {
+        // presetPrompt 模式：直接发送用户输入，system prompt 已切换
+        const userInput = rest.join(" ")
+        if (userInput) {
+          run(userInput)
+        } else {
+          addMessage({ role: "system", content: `已切换到 ${name} 模式，请输入任务。` })
+        }
+      } else if (result.success) {
         addMessage({ role: "system", content: `✓ workflow 完成\n\n${result.output?.summary || JSON.stringify(result.output).slice(0, 500)}` })
       } else {
         addMessage({ role: "system", content: `✗ workflow 失败: ${result.error}` })

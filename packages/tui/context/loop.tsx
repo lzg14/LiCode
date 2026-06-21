@@ -167,7 +167,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   // MCP 集成
   const initMCP = async () => {
     try {
-      const config = await import("../../config/config")
+      const config = await import("../../config")
       const mcpConfig = config.getConfigSync?.()?.mcp?.mcpServers
       if (!mcpConfig || Object.keys(mcpConfig).length === 0) return
 
@@ -183,10 +183,13 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           // 注册 MCP 工具到 globalToolRegistry
           for (const tool of tools) {
             const toolName = `mcp__${id}__${tool.name}`
+            // MCP 工具的 inputSchema 是 JSON Schema，用 z.any() 透传
+            // AI SDK 会用这个 schema 构建 tool 定义，z.any() 接受任意输入
+            const inputSchema = await import("zod").then(z => z.z.any())
             globalToolRegistry.register({
               name: toolName,
               description: `[MCP: ${id}] ${tool.description ?? tool.name}`,
-              inputSchema: await import("zod").then(z => z.z.object({})),
+              inputSchema,
               handler: async (input: any) => {
                 const result = await mcp.callTool(tool.name, input)
                 return {
@@ -197,23 +200,48 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             })
           }
 
-          devLogger.log('MCP', `Registered ${tools.length} tools from ${id}`)
+          devLogger.info('MCP', `Registered ${tools.length} tools from ${id}`)
         } catch (e) {
-          devLogger.log('MCP', `Failed to connect ${id}: ${e}`)
+          devLogger.info('MCP', `Failed to connect ${id}: ${e}`)
         }
       }
     } catch (e) {
-      devLogger.log('MCP', `Init failed: ${e}`)
+      devLogger.info('MCP', `Init failed: ${e}`)
     }
   }
   initMCP()
 
+  // Preset Prompts（workflow 模板）
+  const presetPrompts: Record<string, string> = {}
+  const loadPresetPrompts = async () => {
+    try {
+      const { readFile } = await import("fs/promises")
+      const { join } = await import("path")
+      const builtinDir = join(__dirname, "..", "..", "workflow", "builtin")
+      const prompts = ["coding", "research", "review"]
+      for (const name of prompts) {
+        try {
+          const content = await readFile(join(builtinDir, `${name}.prompt.md`), "utf-8")
+          presetPrompts[name] = content
+        } catch {}
+      }
+    } catch {}
+  }
+  loadPresetPrompts()
+
   const runWorkflow = async (name: string, args: any) => {
+    // 如果有 preset prompt，返回 presetPrompt 让调用方处理
+    if (presetPrompts[name]) {
+      return { success: true, presetPrompt: presetPrompts[name] }
+    }
+    // 否则走旧的 workflow engine
     const result = await wfEngine.run({ name, args })
     return result
   }
 
-  const listWorkflows = (): string[] => wfEngine["config"]?.scriptRegistry?.list() ?? ["coding", "research", "review"]
+  const listWorkflows = (): string[] => Object.keys(presetPrompts).length > 0
+    ? Object.keys(presetPrompts)
+    : ["coding", "research", "review"]
 
   const setActiveSkill = async (name: string | null) => {
     if (!name) {
@@ -397,6 +425,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         model: activeModel,
         activeSkill: activeSkill() ?? undefined,
         activeSkillInstructions: activeSkillInstructions() ?? undefined,
+        presetPrompt: null as string | null,
         onPhaseChange: (p: Phase) => {
           setPhase(p)
         },
