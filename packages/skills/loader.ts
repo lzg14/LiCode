@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, readdirSync, mkdirSync, writeFileSync } from 'fs'
-import { join, extname } from 'path'
+import { join, extname, dirname } from 'path'
 import { homedir } from 'os'
 import type { Skill } from './types'
 import { globalSkillRegistry } from './registry'
@@ -188,33 +188,33 @@ export const skillLoader = new SkillLoader()
 /**
  * 加载所有技能（global + project）
  */
-export function loadAllSkills(cwd?: string): Skill[] {
+export async function loadAllSkills(cwd?: string): Promise<Skill[]> {
   const home = homedir()
-  
+
   // 全局 Claude Code skills
   const globalDirs = [
     join(home, '.claude', 'skills'),
     join(home, '.licode', 'skills'),
   ]
-  
+
   // 项目级 skills（向上找第一个 .claude/skills/）
   const projectDirs: string[] = []
   if (cwd) {
     let dir = cwd
-    while (dir !== require('path').dirname(dir)) {
+    while (dir !== dirname(dir)) {
       const claudeSkills = join(dir, '.claude', 'skills')
       if (existsSync(claudeSkills)) {
         projectDirs.push(claudeSkills)
         break
       }
-      dir = require('path').dirname(dir)
+      dir = dirname(dir)
     }
   }
 
   // 加载顺序：project → global（global 覆盖 project）
   const allDirs = [...projectDirs, ...globalDirs]
   for (const dir of allDirs) {
-    skillLoader.loadFromDir(dir)
+    await skillLoader.loadFromDir(dir)
   }
 
   return globalSkillRegistry.list()
@@ -223,7 +223,7 @@ export function loadAllSkills(cwd?: string): Skill[] {
 /**
  * 按名查找技能
  */
-export function findSkill(name: string, cwd?: string): Skill | undefined {
-  loadAllSkills(cwd)
+export async function findSkill(name: string, cwd?: string): Promise<Skill | undefined> {
+  await loadAllSkills(cwd)
   return globalSkillRegistry.findByName(name)
 }
