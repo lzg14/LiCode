@@ -46,6 +46,7 @@ describe('getDefaultWhitelist', () => {
     expect(wl).toContain('git')
     expect(wl).toContain('npm')
     expect(wl).toContain('node')
+    expect(wl).toContain('bun')
     expect(wl).toContain('ls')
   })
 
