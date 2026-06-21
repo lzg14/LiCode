@@ -8,12 +8,14 @@ import { MessageList } from "../component/message-list"
 import { Prompt, setPromptText } from "../component/prompt"
 import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
+import { HelpPanel } from "../component/help-panel"
 import { loadAllSkills } from "../../skills/loader"
 
 export function Home() {
-  const { phase, isProcessing, messages, run, compactSession, clearSession, currentModel, currentProvider, switchModel, getAvailableModels, addMessage, setActiveSkill } = useLoop()
+  const { isProcessing, messages, run, compactSession, clearSession, currentModel, currentProvider, switchModel, getAvailableModels, addMessage, setActiveSkill } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
+  const [helpOpen, setHelpOpen] = createSignal(false)
 
   const toggleModelPicker = () => {
     setModelPickerOpen(prev => !prev)
@@ -24,6 +26,10 @@ export function Home() {
     // 单独的 "/" 不发送（用户取消 slash 菜单后残留）
     if (text.trim() === '/') {
       addMessage({ role: "system", content: "输入 / 后用 ↑↓ 选择技能/命令，或直接输入 /compact、/clear" })
+      return
+    }
+    if (text === '/help' || text === '?') {
+      setHelpOpen(true)
       return
     }
     if (text.startsWith('/compact')) {
@@ -70,6 +76,7 @@ export function Home() {
     const items: { type: string; label: string; desc: string }[] = [
       { type: 'cmd', label: '/clear', desc: '开新会话（清空当前对话）' },
       { type: 'cmd', label: '/compact', desc: '压缩对话历史' },
+      { type: 'cmd', label: '/help', desc: '查看所有快捷键' },
     ]
     for (const s of availableSkills()) {
       items.push({ type: 'skill', label: `/${s.name}`, desc: truncate(s.description) })
@@ -98,6 +105,10 @@ export function Home() {
         clearSession()
       } else if (selected.label === '/compact') {
         compactSession()
+      } else if (selected.label === '/help') {
+        setSlashOpen(false)
+        setHelpOpen(true)
+        return
       }
     } else if (selected.type === 'skill') {
       const skillName = selected.label.replace(/^\//, '')
@@ -112,6 +123,21 @@ export function Home() {
 
   // 全局快捷键（不受 textarea 焦点限制）
   useKeyboard((evt) => {
+    // F1: 帮助面板
+    if (evt.name === "f1") {
+      evt.preventDefault()
+      setHelpOpen(prev => !prev)
+      return
+    }
+    // 帮助面板打开时，Esc/F1 关闭
+    if (helpOpen()) {
+      if (evt.name === "escape" || evt.name === "f1") {
+        evt.preventDefault()
+        setHelpOpen(false)
+        return
+      }
+      return
+    }
     if (evt.ctrl && evt.name === "b") {
       evt.preventDefault()
       setSidebarVisible(prev => !prev)
@@ -236,6 +262,10 @@ export function Home() {
               )}
             </For>
           </box>
+        </Show>
+
+        <Show when={helpOpen()}>
+          <HelpPanel onClose={() => setHelpOpen(false)} />
         </Show>
 
         <box flexShrink={0}>
