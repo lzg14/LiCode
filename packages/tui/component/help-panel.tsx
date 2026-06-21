@@ -37,7 +37,7 @@ export function HelpPanel(props: { onClose: () => void }) {
                 <For each={section.entries}>
                   {(entry) => (
                     <box flexDirection="row" paddingLeft={2}>
-                      <text fg={text()} style={{ width: '24ch' }}>{entry.keys.padEnd(24)}</text>
+                      <text fg={text()} style={{ width: 24 }}>{entry.keys.padEnd(24)}</text>
                       <text fg={textMuted()}>{entry.desc}</text>
                     </box>
                   )}

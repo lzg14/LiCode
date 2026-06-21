@@ -2,7 +2,7 @@ import type { ToolDefinition, ToolResult } from './types'
 import type { ToolContext } from './context'
 import { createToolContext } from './context'
 import { truncateOutput } from './truncate'
-import { securityLayer, checkDangerousPattern } from '../security'
+import { getSecurityLayer, checkDangerousPattern } from '../security'
 
 export type PreExecuteHook = (
   name: string,
@@ -96,7 +96,7 @@ globalToolRegistry.addPreExecuteHook((name, input) => {
         if (dangerous.dangerous) {
           return { allowed: false, reason: dangerous.reason }
         }
-        const check = securityLayer.checkCommand(command)
+        const check = getSecurityLayer().checkCommand(command)
         if (!check.allowed) {
           return { allowed: false, reason: check.reason }
         }
@@ -122,7 +122,7 @@ globalToolRegistry.addPreExecuteHook((name, input) => {
       const parsed = typeof input === 'object' && input !== null ? input : JSON.parse(String(input))
       const path = (parsed as any)?.path ?? (parsed as any)?.filePath ?? (parsed as any)?.source
       if (typeof path === 'string') {
-        const check = securityLayer.checkPath(path)
+        const check = getSecurityLayer().checkPath(path)
         if (!check.allowed) {
           return { allowed: false, reason: check.reason }
         }

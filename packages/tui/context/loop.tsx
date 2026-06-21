@@ -60,7 +60,6 @@ type AddMessageInput = {
 export interface LoopContext {
   run: (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }> }) => Promise<void>
   abort: () => void
-  phase: Accessor<Phase>
   isProcessing: Accessor<boolean>
   pendingCount: Accessor<number>
   elapsed: Accessor<number>
@@ -90,7 +89,6 @@ export interface LoopContext {
 const Ctx = createContext<LoopContext>()
 
 export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; provider?: string; sessionId?: string; llmConfig?: { provider: string; model: string; apiKey?: string; baseUrl?: string } }) {
-  const [phase, setPhase] = createSignal<Phase>("EXECUTE")
   const [isProcessing, setIsProcessing] = createSignal(false)
   const [elapsed, setElapsed] = createSignal(0)
   const [streamingText, setStreamingText] = createSignal("")
@@ -346,7 +344,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
     setIsProcessing(true)
-    setPhase("EXECUTE")
     setStreamingText("")
 
     let streamingBuffer = ""
@@ -372,9 +369,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         model: activeModel,
         activeSkill: activeSkill() ?? undefined,
         activeSkillInstructions: activeSkillInstructions() ?? undefined,
-        onPhaseChange: (p: Phase) => {
-          setPhase(p)
-        },
+        onPhaseChange: undefined,
         onPhaseLog: (text: string) => {
           devLogger.info('PHASE', text.trimEnd())
         },
@@ -444,14 +439,12 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           duration: Math.floor((Date.now() - startTime) / 1000),
         })
       }
-      setPhase("DONE")
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e)
       // AbortError 是用户主动取消，不显示错误
       if (!error.includes('abort') && !error.includes('Abort')) {
         addMessage({ role: "system", content: `错误: ${error}` })
       }
-      setPhase("DONE")
     } finally {
       abortController = null
       setIsProcessing(false)
@@ -499,7 +492,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const value: LoopContext = {
     run,
     abort,
-    phase,
     isProcessing,
     pendingCount,
     elapsed,

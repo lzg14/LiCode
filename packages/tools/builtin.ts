@@ -7,7 +7,7 @@ import { join, dirname, resolve, extname } from 'path'
 import { Database } from 'bun:sqlite'
 import { z } from 'zod'
 import { globalToolRegistry } from './registry'
-import { securityLayer } from '../security'
+import { getSecurityLayer } from '../security'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -270,7 +270,7 @@ export function registerBuiltinTools(): void {
     inputSchema: z.object({ command: z.string(), cwd: z.string().optional(), timeout: z.number().optional() }),
     handler: async ({ command, cwd, timeout }, ctx) => {
       // 安全检查：命令白名单
-      const cmdCheck = securityLayer.checkCommand(command)
+      const cmdCheck = getSecurityLayer().checkCommand(command)
       if (!cmdCheck.allowed) {
         return { success: false, error: cmdCheck.reason ?? '命令被安全策略阻止' }
       }
@@ -598,7 +598,7 @@ export function registerBuiltinTools(): void {
     }),
     handler: async ({ filePath, patch, reverse }) => {
       // 安全检查：apply_patch 等同于写文件
-      const pathCheck = securityLayer.checkPath(filePath)
+      const pathCheck = getSecurityLayer().checkPath(filePath)
       if (!pathCheck.allowed) {
         return { success: false, error: pathCheck.reason ?? '路径被安全策略阻止' }
       }
