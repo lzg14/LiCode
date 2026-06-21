@@ -386,6 +386,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             setIsProcessing(false)
           })
         },
+        onCompaction: (summary: string, originalCount: number, preservedCount: number) => {
+          addMessage({ role: "system", content: `🗜️ 已压缩对话历史：${originalCount} 条 → 保留 ${preservedCount} 条\n\n摘要预览：\n${summary.slice(0, 500)}${summary.length > 500 ? '...' : ''}` })
+        },
       }
 
       const result = await props.loop.run(ctx)

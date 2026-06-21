@@ -37,6 +37,7 @@ export interface LoopContext {
   onToolResult?: (result: unknown) => void
   onIntermediateText?: (text: string) => void
   onConfirmContinue?: () => Promise<boolean>
+  onCompaction?: (summary: string, originalCount: number, preservedCount: number) => void
   // 流式输出缓冲
   streamBuffer?: string
   // Phase-specific fields
@@ -304,15 +305,16 @@ export class CoreLoop {
     // 检查是否需要压缩历史
     if (this.sessionCompactor.shouldCompact(history, ctx.sessionId)) {
       devLogger.debug('COMPACT', `History ${history.length} messages, triggering compaction`)
-      // 首次压缩（无摘要）时同步等待，确保当前请求有摘要可用
-      // 已有摘要时只更新（异步），不阻塞
       const hasExisting = this.sessionCompactor.hasSummary(ctx.sessionId)
       if (!hasExisting) {
         const result = await this.sessionCompactor.compact(history, ctx.sessionId, this.llm)
         ctx.sessionSummary = result.summary
+        ctx.onCompaction?.(result.summary, result.originalCount, result.preservedCount)
       } else {
         ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
-        this.sessionCompactor.compact(history, ctx.sessionId, this.llm).catch((e) => {
+        this.sessionCompactor.compact(history, ctx.sessionId, this.llm).then((result) => {
+          ctx.onCompaction?.(result.summary, result.originalCount, result.preservedCount)
+        }).catch((e) => {
           devLogger.debug('COMPACT', 'Background compaction failed', e)
         })
       }
