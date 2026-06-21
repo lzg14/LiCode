@@ -81,7 +81,7 @@ function MessageItem(props: { msg: Message }) {
     const [thinking, rest] = extractThinking(cleaned)
     return (
       <box flexDirection="column" marginBottom={1} flexShrink={0}>
-        <Show when={thinking}>
+        <Show when={thinking && !rest}>
           <box flexDirection="column" paddingLeft={1} borderStyle="round" borderColor={textMuted()}>
             <text fg={textMuted()}>{`💭 thinking...`}</text>
           </box>

@@ -75,7 +75,7 @@ export interface LoopContext {
   llmCallCount: Accessor<number>
   llmTokenUsage: Accessor<{ input: number; output: number; total: number }>
   compactSession: () => Promise<void>
-  listSkills: () => string[]
+  listSkills: () => Promise<string[]>
   activeSkill: Accessor<string | null>
   setActiveSkill: (name: string | null) => void
   currentModel: Accessor<string>
@@ -196,12 +196,13 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     }
     try {
       const { findSkill, loadAllSkills } = await import("../../skills/loader")
-      const skill = findSkill(name, process.cwd())
+      const skill = await findSkill(name, process.cwd())
       if (skill) {
         setActiveSkillState(name)
         setActiveSkillInstructions(skill.instructions)
       } else {
-        const available = loadAllSkills(process.cwd()).map(s => s.name).join(', ')
+        const all = await loadAllSkills(process.cwd())
+        const available = all.map(s => s.name).join(', ')
         addMessage({ role: 'system', content: `未找到 skill: ${name}\n可用: ${available || '(无)'}` })
       }
     } catch (e) {
@@ -209,10 +210,11 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     }
   }
 
-  const listSkills = (): string[] => {
+  const listSkills = async (): Promise<string[]> => {
     try {
-      const { loadAllSkills } = require("../../skills/loader")
-      return loadAllSkills(process.cwd()).map((s: any) => s.name)
+      const { loadAllSkills } = await import("../../skills/loader")
+      const all = await loadAllSkills(process.cwd())
+      return all.map(s => s.name)
     } catch {
       return []
     }

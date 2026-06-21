@@ -1,0 +1,505 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/ProjectFile/licode[39m
+
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mregisterIntegration 和 discoverTools 缓存工具
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mgetToolByName 返回注册工具
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22msearchTools 按名称和描述搜索
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mvalidateArguments 缺失必填字段报错
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mvalidateArguments 所有必填存在时通过
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mvalidateArguments 无 schema 时视为有效
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mvalidateArguments 工具不存在报错
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mclearCache 清除工具缓存
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mcallToolByName 代理调用集成
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mcallTool 工具不存在抛出
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mgetToolsByServer 按 serverId 筛选
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22munregisterIntegration 移除集成及其工具
+ [32m✓[39m packages/integration/__tests__/mcp-tools.test.ts[2m > [22mMCPToolAdapter[2m > [22mgetToolSchema 返回工具的 inputSchema
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22maddServer 添加并连接
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22maddServer 重复 id 抛出
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22maddServer 连接失败设置错误状态
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mgetServer 和 getServerStatus 查询
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mremoveServer 断开并移除
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mremoveServer 不存在跳过
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mgetAllServerStatus 返回所有状态
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mgetConnectedServers 过滤已连接
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mdisconnectServer 断开并更新状态
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mdisconnectServer 不存在抛出
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mconnectServer 重新连接
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mcheckHealth 更新健康状态
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mcheckAllHealth 检查所有
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mshutdown 清理所有
+ [32m✓[39m packages/integration/__tests__/mcp-server.test.ts[2m > [22mMCPServerManager[2m > [22mstartGlobalHealthCheck / stopGlobalHealthCheck
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mconnect 检测 .obsidian 目录
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mconnect 无 .obsidian 抛出
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mreadNote 解析 frontmatter
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mreadNote 解析布尔 frontmatter
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mreadNote 提取 wiki 链接
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mreadNote 提取 embed 链接
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mreadNote 提取标签
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22msearchNotes 搜索 frontmatter
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22msearchByTag 精确匹配（大小写不敏感）
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mgetBacklinks 找到反向链接
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mparseFrontmatter 解析 YAML 类型
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mparseFrontmatter 无 frontmatter 返回原内容
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mparseLinks 解析 wiki 和 tag
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mparseLinks 解析 embed
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mgetDailyNotePath 格式化日期
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22mgetDailyNotePath 自定义格式
+ [32m✓[39m packages/integration/__tests__/notes-obsidian.test.ts[2m > [22mObsidianIntegration[2m > [22misSupportedFile 仅 .md / .markdown
+ [32m✓[39m packages/core/__tests__/perf.test.ts[2m > [22mTimer[2m > [22mrecords a simple span
+ [32m✓[39m packages/core/__tests__/perf.test.ts[2m > [22mTimer[2m > [22msupports nested spans with parent
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mconnect 在 .git 存在时启用
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mconnect 无 .git 时不启用
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mdisconnect 设置 enabled=false
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mhealth 在 git 成功时 healthy
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mhealth 在 git 失败时 unhealthy
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetStatus 正确解析 git 输出
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetStatus 无变更状态
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetDiff 返回 diff 字符串
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetDiff 传入 staged 使用 --cached
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetLog 正确解析日志
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22madd 暂存文件
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mcommit 执行提交
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetBranches 解析分支列表
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mcheckDangerousOperation 检测 push --force
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mcheckDangerousOperation 检测 reset --hard
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mcheckDangerousOperation 检测 clean -f 和 branch -D
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [31m×[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mcheckDangerousOperation 放行安全命令
+[31m   → Cannot use simple-git on a directory that does not exist[39m
+ [32m✓[39m packages/core/__tests__/perf.test.ts[2m > [22mTimer[2m > [22mcheckpoint records duration automatically
+ [32m✓[39m packages/core/__tests__/perf.test.ts[2m > [22mTimer[2m > [22mtopSlowest returns slowest spans by duration
+ [32m✓[39m packages/core/__tests__/perf.test.ts[2m > [22mTimer[2m > [22mbuildTrace captures session + turnIndex
+ [32m✓[39m packages/core/__tests__/perf.test.ts[2m > [22mTimer[2m > [22mformat produces hierarchical output
+ [32m✓[39m packages/core/__tests__/perf.test.ts[2m > [22mTimer[2m > [22mmeta is captured on end
+ [32m✓[39m packages/core/__tests__/perf.test.ts[2m > [22mTimer[2m > [22mtotalByPrefix aggregates durations
+ [32m✓[39m packages/core/__tests__/perf.test.ts[2m > [22mTimer[2m > [22msummary separates llm/tool/phase
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mregister 添加插件并调用 init 和 boot
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mregister 重复插件抛出
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mregister 依赖缺失抛出
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mregister 依赖满足时成功
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mregister 成功后 state=active
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mregister 失败时 state=error 并抛出
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mregister 失败调用 onError
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22munregister 调用 shutdown/destroy 并移除
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22munregister 不存在的插件不报错
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mshutdownAll 关闭所有插件
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mon/emit 钩子系统正常工作
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22moff 移除钩子
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mgetPluginsByState 按状态筛选
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22mlist/get/getPluginDependencies 查询方法正常
+ [32m✓[39m packages/integration/__tests__/plugin.test.ts[2m > [22mPluginManager[2m > [22misPluginActive 检查活跃状态
+ [32m✓[39m packages/config/__tests__/loader.test.ts[2m > [22mConfigLoader[2m > [22mshould load config from file
+ [32m✓[39m packages/config/__tests__/loader.test.ts[2m > [22mConfigLoader[2m > [22mshould throw for non-existent file
+ [32m✓[39m packages/config/__tests__/loader.test.ts[2m > [22mConfigLoader[2m > [22mshould save and reload config
+ [32m✓[39m packages/config/__tests__/loader.test.ts[2m > [22mConfigLoader[2m > [22mshould replace environment variables
+ [32m✓[39m packages/config/__tests__/loader.test.ts[2m > [22mConfigLoader[2m > [22mshould use default values for subagent config
+ [32m✓[39m packages/config/__tests__/loader.test.ts[2m > [22mConfigLoader[2m > [22mshould load config correctly
+ [32m✓[39m packages/config/__tests__/loader.test.ts[2m > [22mConfigLoader[2m > [22mshould load with overrides
+ [32m✓[39m packages/core/__tests__/checkpoint.test.ts[2m > [22mCheckpointManager[2m > [22mshould save and restore checkpoint[33m 373[2mms[22m[39m
+[90mstderr[2m | packages/core/__tests__/checkpoint.test.ts[2m > [22m[2mCheckpointManager[2m > [22m[2mshould return null for non-existent session
+[22m[39m[Checkpoint] loadCheckpoints failed for non-existent: Error: ENOENT: no such file or directory, scandir 'v:\Temp\licode-checkpoint-test-1782042111727\.checkpoints\non-existent'
+[90m    at Proxy.readdir (node:internal/fs/promises:953:18)[39m
+    at CheckpointManager.loadCheckpoints [90m(D:\ProjectFile\licode\[39mpackages\core\checkpoint.ts:146:21[90m)[39m
+    at CheckpointManager.restore [90m(D:\ProjectFile\licode\[39mpackages\core\checkpoint.ts:79:20[90m)[39m
+    at [90mD:\ProjectFile\licode\[39mpackages\core\__tests__\checkpoint.test.ts:50:20
+    at [90mfile:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:533:5
+    at runTest [90m(file:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1056:11[90m)[39m
+    at runSuite [90m(file:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1205:15[90m)[39m
+    at runSuite [90m(file:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1205:15[90m)[39m
+    at runFiles [90m(file:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1262:5[90m)[39m
+    at startTests [90m(file:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1271:3[90m)[39m {
+  errno: [33m-4058[39m,
+  code: [32m'ENOENT'[39m,
+  syscall: [32m'scandir'[39m,
+  path: [32m'v:\\Temp\\licode-checkpoint-test-1782042111727\\.checkpoints\\non-existent'[39m
+}
+
+ [32m✓[39m packages/core/__tests__/checkpoint.test.ts[2m > [22mCheckpointManager[2m > [22mshould increment version on multiple saves
+ [32m✓[39m packages/core/__tests__/checkpoint.test.ts[2m > [22mCheckpointManager[2m > [22mshould return null for non-existent session
+ [32m✓[39m packages/core/__tests__/checkpoint.test.ts[2m > [22mCheckpointManager[2m > [22mshould list checkpoints
+ [32m✓[39m packages/core/__tests__/checkpoint.test.ts[2m > [22mCheckpointManager[2m > [22mshould get specific version
+[90mstderr[2m | packages/core/__tests__/checkpoint.test.ts[2m > [22m[2mCheckpointManager[2m > [22m[2mshould delete session checkpoints
+[22m[39m[Checkpoint] loadCheckpoints failed for session-del: Error: ENOENT: no such file or directory, scandir 'v:\Temp\licode-checkpoint-test-1782042111727\.checkpoints\session-del'
+[90m    at Proxy.readdir (node:internal/fs/promises:953:18)[39m
+    at CheckpointManager.loadCheckpoints [90m(D:\ProjectFile\licode\[39mpackages\core\checkpoint.ts:146:21[90m)[39m
+    at CheckpointManager.restore [90m(D:\ProjectFile\licode\[39mpackages\core\checkpoint.ts:79:20[90m)[39m
+    at [90mD:\ProjectFile\licode\[39mpackages\core\__tests__\checkpoint.test.ts:77:20
+    at [90mfile:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:533:5
+    at runTest [90m(file:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1056:11[90m)[39m
+    at runSuite [90m(file:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1205:15[90m)[39m
+    at runSuite [90m(file:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1205:15[90m)[39m
+    at runFiles [90m(file:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1262:5[90m)[39m
+    at startTests [90m(file:///D:/ProjectFile/licode/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1271:3[90m)[39m {
+  errno: [33m-4058[39m,
+  code: [32m'ENOENT'[39m,
+  syscall: [32m'scandir'[39m,
+  path: [32m'v:\\Temp\\licode-checkpoint-test-1782042111727\\.checkpoints\\session-del'[39m
+}
+
+ [32m✓[39m packages/core/__tests__/checkpoint.test.ts[2m > [22mCheckpointManager[2m > [22mshould delete session checkpoints
+ [32m✓[39m packages/core/__tests__/checkpoint.test.ts[2m > [22mCheckpointManager[2m > [22mshould auto-cleanup when exceeding maxCheckpoints
+ [32m✓[39m packages/core/__tests__/checkpoint.test.ts[2m > [22mCheckpointManager[2m > [22mshould persist to disk
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPermissionManager[2m > [22mshould check default allow
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPermissionManager[2m > [22mshould check default ask
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPermissionManager[2m > [22mshould load config overrides
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPermissionManager[2m > [22mshould add and check rules
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPermissionManager[2m > [22mshould merge managers
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPermissionManager[2m > [22mshould remove rules
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPermissionManager[2m > [22mshould export config
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPermissionManager[2m > [22mshould use createPermissionManager helper
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPermissionManager[2m > [22mshould merge permission configs
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPERMISSION_PRESETS[2m > [22mshould have primary preset
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPERMISSION_PRESETS[2m > [22mshould have plan preset
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPERMISSION_PRESETS[2m > [22mshould have explore preset
+ [32m✓[39m packages/security/__tests__/permission.test.ts[2m > [22mPERMISSION_PRESETS[2m > [22mshould have minimal preset
+ [32m✓[39m packages/memory/__tests__/memory.test.ts[2m > [22mMemory[2m > [22mshould store and search memory
+ [32m✓[39m packages/memory/__tests__/memory.test.ts[2m > [22mMemory[2m > [22mshould recall memories
+ [32m✓[39m packages/memory/__tests__/memory.test.ts[2m > [22mMemory[2m > [22mshould list memories by scope
+ [32m✓[39m packages/memory/__tests__/memory.test.ts[2m > [22mMemory[2m > [22mshould list all memories when no scope specified
+ [32m✓[39m packages/memory/__tests__/memory.test.ts[2m > [22mMemory[2m > [22mshould delete memory
+ [32m✓[39m packages/memory/__tests__/memory.test.ts[2m > [22mMemory[2m > [22mshould return false when deleting non-existent memory
+ [32m✓[39m packages/memory/__tests__/memory.test.ts[2m > [22mMemory[2m > [22mshould cleanup expired memories
+ [32m✓[39m packages/memory/__tests__/memory.test.ts[2m > [22mMemory[2m > [22mshould search with scoring
+ [32m✓[39m packages/memory/__tests__/memory.test.ts[2m > [22mMemory[2m > [22mshould limit search results
+ [32m✓[39m packages/integration/__tests__/types.test.ts[2m > [22mTypes + BaseIntegration[2m > [22mBaseIntegration 抽象类结构与属性完整
+ [32m✓[39m packages/integration/__tests__/types.test.ts[2m > [22mTypes + BaseIntegration[2m > [22mwithConnection 在 disabled 时抛出
+ [32m✓[39m packages/integration/__tests__/types.test.ts[2m > [22mTypes + BaseIntegration[2m > [22mwithConnection 在 enabled 时执行并返回结果
+
+<--- Last few GCs --->
+
+[15184:0000028D659A3000]   122679 ms: Scavenge (interleaved) 4050.7 (4069.0) -> 4040.6 (4103.7) MB, pooled: 0 MB, 44.23 / 0.00 ms  (average mu = 0.267, current mu = 0.238) allocation failure; 
+[15184:0000028D659A3000]   129232 ms: Mark-Compact (reduce) 4072.2 (4106.5) -> 4048.9 (4052.7) MB, pooled: 0 MB, 1831.05 / 0.00 ms  (+ 3394.2 ms in 472 steps since start of marking, biggest step 53.0 ms, walltime since start of marking 5400 ms) (average m
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 00007FF7E66DC36F node::OnFatalError+1343
+ 2: 00007FF7E7324D77 v8::Function::NewInstance+423
+ 3: 00007FF7E7125467 v8::base::AddressSpaceReservation::AddressSpaceReservation+322071
+ 4: 00007FF7E7129174 v8::base::AddressSpaceReservation::AddressSpaceReservation+337700
+ 5: 00007FF7E713810C v8::internal::StrongRootAllocatorBase::deallocate_impl+16604
+ 6: 00007FF7E713794B v8::internal::StrongRootAllocatorBase::deallocate_impl+14619
+ 7: 00007FF7E85BDAED v8::base::UnsignedDivisionByConstant<unsigned __int64>+2791421
+ 8: 00007FF7E7122F30 v8::base::AddressSpaceReservation::AddressSpaceReservation+312544
+ 9: 00007FF7E71A6C09 v8::Unlocker::~Unlocker+9273
+10: 00007FF7E6D1C842 v8::String::Utf8Value::~Utf8Value+142210
+11: 0000028D1FE7733A 
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Failed Suites 3 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/core/__tests__/session-recovery.test.ts[2m [ packages/core/__tests__/session-recovery.test.ts ][22m
+[31m[1m[7m FAIL [27m[22m[39m packages/session/__tests__/session.test.ts[2m [ packages/session/__tests__/session.test.ts ][22m
+[31m[1m[7m FAIL [27m[22m[39m packages/tools/__tests__/builtin.test.ts[2m [ packages/tools/__tests__/builtin.test.ts ][22m
+[31m[1mError[22m: Failed to load url bun:sqlite (resolved id: bun:sqlite) in D:/ProjectFile/licode/packages/session/session.ts. Does the file exist?[39m
+[90m [2m❯[22m loadAndTransform node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:[2m51969:17[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/20]⎯[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 17 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mconnect 在 .git 存在时启用
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m15:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mconnect 无 .git 时不启用
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m22:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mdisconnect 设置 enabled=false
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m28:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mhealth 在 git 成功时 healthy
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m36:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mhealth 在 git 失败时 unhealthy
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m43:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetStatus 正确解析 git 输出
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m53:12[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetStatus 无变更状态
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m59:12[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetDiff 返回 diff 字符串
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m64:12[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetDiff 传入 staged 使用 --cached
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m69:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetLog 正确解析日志
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m75:17[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22madd 暂存文件
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m83:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mcommit 执行提交
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m89:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mgetBranches 解析分支列表
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m96:12[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mcheckDangerousOperation 检测 push --force
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m100:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mcheckDangerousOperation 检测 reset --hard
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m107:12[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mcheckDangerousOperation 检测 clean -f 和 branch -D
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m111:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/20]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/integration/__tests__/git.test.ts[2m > [22mGitIntegration[2m > [22mcheckDangerousOperation 放行安全命令
+[31m[1mError[22m: Cannot use simple-git on a directory that does not exist[39m
+[90m [2m❯[22m Proxy.gitInstanceFactory node_modules/simple-git/src/lib/git-factory.ts:[2m51:13[22m[39m
+[36m [2m❯[22m new GitIntegration packages/integration/git.ts:[2m18:16[22m[39m
+    [90m 16| [39m    [35msuper[39m()
+    [90m 17| [39m    [35mthis[39m[33m.[39mrepoPath [33m=[39m repoPath
+    [90m 18| [39m    [35mthis[39m[33m.[39mgit [33m=[39m [34msimpleGit[39m(repoPath)
+    [90m   | [39m               [31m^[39m
+    [90m 19| [39m  }
+    [90m 20| [39m
+[90m [2m❯[22m packages/integration/__tests__/git.test.ts:[2m117:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ task: undefined, config: { baseDir: '/r', binary: 'git', maxConcurrentProcesses: 5, config: [], trimmed: false } }[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/20]⎯[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Unhandled Errors [27m[22m⎯⎯⎯⎯⎯⎯[39m
+[31m[1m
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Unhandled Error [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: Worker exited unexpectedly[39m
+[90m [2m❯[22m ChildProcess.onUnexpectedExit node_modules/tinypool/dist/index.js:[2m118:30[22m[39m
+[90m [2m❯[22m ChildProcess.emit node:events:[2m520:35[22m[39m
+[90m [2m❯[22m ChildProcess._handle.onexit node:internal/child_process:[2m294:12[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39m
+
+[2m Test Files [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m10 passed[39m[22m[90m (15)[39m
+[2m      Tests [22m [1m[31m17 failed[39m[22m[2m | [22m[1m[32m109 passed[39m[22m[90m (138)[39m
+[2m     Errors [22m [1m[31m1 error[39m[22m
+[2m   Start at [22m 19:41:40
+[2m   Duration [22m 134.80s[2m (transform 2.95s, setup 0ms, collect 4.30s, tests 1.95s, environment 17ms, prepare 9.28s)[22m
+
