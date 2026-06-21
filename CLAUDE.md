@@ -150,6 +150,20 @@ docs/plans/<topic>-plan.md
 2. **设计目标 + 边界**（用 `codebase-design` skill）
 3. **写计划 → 实施 → 验证**
 
+### 多 agent 并行开发（强制）
+
+派 ≥2 个 subagent 且需要改文件时，**每个 agent 必须用独立 git worktree**，避免数据竞争 / 文件锁 / 合并噩梦：
+
+```bash
+# 1. 起 worktree（每个 agent 一个）
+git worktree add ../licode-<feature>-<agent> -b feature/<feature>
+
+# 2. agent 在 worktree 里工作（cwd 指向该路径）
+# 3. 完工后用 finishing-branch skill 整合
+```
+
+参考全局 `~/.claude/skills/git-worktrees/SKILL.md` 和 `parallel-agents/SKILL.md`。
+
 ---
 
 ## 架构现状（重要）
