@@ -129,8 +129,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const initMCPCore = async () => {
     try {
       const { configLoader } = await import("../../config")
-      const cfg = configLoader.getConfig() as any
-      const mcpConfig = cfg?.mcp?.mcpServers
+      const config = configLoader.getConfig()
+      const mcpConfig = config?.mcp?.mcpServers
       if (!mcpConfig || Object.keys(mcpConfig).length === 0) return
 
       const { MCPIntegration } = await import("../../integration/mcp")

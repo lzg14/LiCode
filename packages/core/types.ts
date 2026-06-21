@@ -18,7 +18,15 @@ export interface Config {
   security: SecurityConfig
   memory: MemoryConfig
   subagent: SubagentConfig
+  mcp?: { mcpServers?: Record<string, MCPConfig> }
   cwd?: string
+}
+
+export interface MCPConfig {
+  command: string
+  args?: string[]
+  env?: Record<string, string>
+  timeout?: number
 }
 
 export interface LLMConfig {

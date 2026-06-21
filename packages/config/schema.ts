@@ -34,11 +34,21 @@ export const MemoryConfigSchema = z.object({
   retentionDays: z.number().default(30),
 })
 
+export const MCPConfigSchema = z.object({
+  command: z.string(),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string()).optional(),
+  timeout: z.number().optional(),
+})
+
 export const ConfigSchema = z.object({
   llm: LLMConfigSchema,
   security: SecurityConfigSchema,
   memory: MemoryConfigSchema,
   subagent: SubagentConfigSchema,
+  mcp: z.object({
+    mcpServers: z.record(MCPConfigSchema).optional(),
+  }).optional(),
 })
 
 export type Config = z.infer<typeof ConfigSchema>
