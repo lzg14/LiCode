@@ -51,9 +51,36 @@ export function registerBuiltinTools(): void {
     }),
     handler: async ({ path, content }) => {
       try {
+        // 读取旧内容（如果存在）
+        let oldContent = ''
+        try {
+          if (existsSync(path)) {
+            oldContent = await readFile(path, 'utf-8')
+          }
+        } catch {}
+
         await mkdir(dirname(path), { recursive: true })
         await writeFile(path, content, 'utf-8')
-        return { success: true, output: `已写入 ${path}` }
+
+        // 生成 diff
+        const diff: string[] = [`--- a/${path}`, `+++ b/${path}`]
+        if (oldContent) {
+          const oldLines = oldContent.split('\n')
+          const newLines = content.split('\n')
+          const maxLines = Math.max(oldLines.length, newLines.length)
+          for (let i = 0; i < maxLines; i++) {
+            if (oldLines[i] !== newLines[i]) {
+              diff.push(`@@ -${i + 1},+${i + 1} @@`)
+              if (oldLines[i] !== undefined) diff.push(`-${oldLines[i]}`)
+              if (newLines[i] !== undefined) diff.push(`+${newLines[i]}`)
+            }
+          }
+        } else {
+          diff.push(`@@ -0,0 +1,${content.split('\n').length} @@`)
+          content.split('\n').forEach(line => diff.push(`+${line}`))
+        }
+
+        return { success: true, output: `已写入 ${path}`, diff: diff.join('\n') }
       } catch (e) {
         return { success: false, error: String(e) }
       }
@@ -76,7 +103,29 @@ export function registerBuiltinTools(): void {
         if (!content.includes(oldString)) return { success: false, error: `在 ${path} 中未找到 oldString` }
         const newContent = replaceAll ? content.split(oldString).join(newString) : content.replace(oldString, newString)
         await writeFile(path, newContent, 'utf-8')
-        return { success: true, output: `已编辑 ${path}` }
+
+        // 生成 unified diff
+        const oldLines = content.split('\n')
+        const newLines = newContent.split('\n')
+        const diff: string[] = [`--- a/${path}`, `+++ b/${path}`]
+        let oldLineNum = 1
+        let newLineNum = 1
+
+        // 简单 diff 算法：找出不同行
+        const maxLines = Math.max(oldLines.length, newLines.length)
+        for (let i = 0; i < maxLines; i++) {
+          const oldLine = oldLines[i]
+          const newLine = newLines[i]
+          if (oldLine !== newLine) {
+            diff.push(`@@ -${oldLineNum},+${newLineNum} @@`)
+            if (oldLine !== undefined) diff.push(`-${oldLine}`)
+            if (newLine !== undefined) diff.push(`+${newLine}`)
+          }
+          if (oldLine !== undefined) oldLineNum++
+          if (newLine !== undefined) newLineNum++
+        }
+
+        return { success: true, output: `已编辑 ${path}`, diff: diff.join('\n') }
       } catch (e) {
         return { success: false, error: String(e) }
       }

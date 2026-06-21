@@ -88,7 +88,7 @@ export interface LoopContext {
 const Ctx = createContext<LoopContext>()
 
 export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; provider?: string; sessionId?: string; llmConfig?: { provider: string; model: string; apiKey?: string; baseUrl?: string } }) {
-  const [phase, setPhase] = createSignal<Phase>("OBSERVE")
+  const [phase, setPhase] = createSignal<Phase>("EXECUTE")
   const [isProcessing, setIsProcessing] = createSignal(false)
   const [elapsed, setElapsed] = createSignal(0)
   const [streamingText, setStreamingText] = createSignal("")
@@ -147,14 +147,19 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         if (parsed.command) {
           const check = checkDangerousPattern(parsed.command)
           if (check.dangerous) {
-            // 这里简化处理，实际应该弹出 Dialog 让用户确认
-            // 目前先拒绝危险命令
             return { success: false, error: `危险命令被拒绝: ${check.reason}` }
           }
         }
       }
 
-      return globalToolRegistry.execute(name, input) as Promise<{ success: boolean; output?: any; error?: string }>
+      const result = await globalToolRegistry.execute(name, input) as { success: boolean; output?: any; error?: string; diff?: string }
+
+      // 如果有 diff，在输出中附加 diff 信息
+      if (result.diff) {
+        result.output = `${result.output}\n\n--- Diff ---\n${result.diff}`
+      }
+
+      return result
     },
     scriptRegistry: new BuiltinScriptRegistry(),
   })
@@ -322,7 +327,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
     setIsProcessing(true)
-    setPhase("OBSERVE")
+    setPhase("EXECUTE")
     setStreamingText("")
 
     let streamingBuffer = ""
@@ -343,7 +348,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         userImages: allImages.length > 0 ? allImages : undefined,
         signal: abortController.signal,
         effortLevel: 1,
-        phase: "OBSERVE" as Phase,
+        phase: "EXECUTE" as Phase,
         cwd: process.cwd(),
         model: activeModel,
         activeSkill: activeSkill() ?? undefined,

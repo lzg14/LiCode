@@ -28,7 +28,10 @@ export function Home() {
 
   const handleSubmit = async (text: string, images?: Array<{ base64: string; mimeType: string }>) => {
     // 单独的 "/" 不发送（用户取消 slash 菜单后残留）
-    if (text.trim() === '/') return
+    if (text.trim() === '/') {
+      addMessage({ role: "system", content: "输入 / 后用 ↑↓ 选择命令，或直接输入 /compact、/model 等" })
+      return
+    }
     if (text.startsWith('/compact')) {
       await compactSession()
       return
@@ -293,6 +296,16 @@ export function Home() {
       const items = slashItems()
       if (evt.name === "up") { evt.preventDefault(); setSlashIdx(prev => (prev - 1 + items.length) % items.length) }
       else if (evt.name === "down") { evt.preventDefault(); setSlashIdx(prev => (prev + 1) % items.length) }
+      else if (evt.name === "tab") {
+        evt.preventDefault()
+        const selected = items[slashIdx()]
+        if (!selected) return
+        // 把完整命令填入输入框（带空格便于继续输入参数），菜单关闭
+        setPromptText(selected.label + " ")
+        setSlashOpen(false)
+        setSlashInput("")
+        setSlashIdx(0)
+      }
       else if (evt.name === "return") { evt.preventDefault(); handleSlashSubmit() }
       else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false) }
       return

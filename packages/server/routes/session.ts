@@ -75,7 +75,7 @@ sessionRoutes.post('/:id/message', async (c: Context) => {
     sessionId: id,
     userInput: body.content,
     effortLevel: 1,
-    phase: 'OBSERVE',
+    phase: 'EXECUTE',
     cwd: process.cwd(),
     onStreamText: (text: string) => {
       sseManager.broadcast('stream:text', { sessionId: id, text })

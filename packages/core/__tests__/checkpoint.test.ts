@@ -34,7 +34,7 @@ describe('CheckpointManager', () => {
   })
 
   it('should increment version on multiple saves', async () => {
-    await manager.save('session-2', { phase: 'OBSERVE', context: {}, timestamp: Date.now() })
+    await manager.save('session-2', { phase: 'EXECUTE', context: {}, timestamp: Date.now() })
     const v2 = await manager.save('session-2', { phase: 'THINK', context: {}, timestamp: Date.now() })
     const v3 = await manager.save('session-2', { phase: 'PLAN', context: {}, timestamp: Date.now() })
 
@@ -52,7 +52,7 @@ describe('CheckpointManager', () => {
   })
 
   it('should list checkpoints', async () => {
-    await manager.save('session-list', { phase: 'OBSERVE', context: {}, timestamp: Date.now() })
+    await manager.save('session-list', { phase: 'EXECUTE', context: {}, timestamp: Date.now() })
     await manager.save('session-list', { phase: 'BUILD', context: {}, timestamp: Date.now() })
 
     const list = await manager.list('session-list')
@@ -60,18 +60,18 @@ describe('CheckpointManager', () => {
   })
 
   it('should get specific version', async () => {
-    await manager.save('session-ver', { phase: 'OBSERVE', context: {}, timestamp: Date.now() })
+    await manager.save('session-ver', { phase: 'EXECUTE', context: {}, timestamp: Date.now() })
     await manager.save('session-ver', { phase: 'EXECUTE', context: {}, timestamp: Date.now() })
 
     const v1 = await manager.getVersion('session-ver', 1)
-    expect(v1!.phase).toBe('OBSERVE')
+    expect(v1!.phase).toBe('EXECUTE')
 
     const v2 = await manager.getVersion('session-ver', 2)
     expect(v2!.phase).toBe('EXECUTE')
   })
 
   it('should delete session checkpoints', async () => {
-    await manager.save('session-del', { phase: 'OBSERVE', context: {}, timestamp: Date.now() })
+    await manager.save('session-del', { phase: 'EXECUTE', context: {}, timestamp: Date.now() })
     await manager.delete('session-del')
 
     const result = await manager.restore('session-del')
@@ -82,7 +82,7 @@ describe('CheckpointManager', () => {
     const mgr = new CheckpointManager(TEST_DIR, { maxCheckpoints: 2, autoCleanup: true })
     const sid = 'session-cleanup'
 
-    await mgr.save(sid, { phase: 'OBSERVE', context: {}, timestamp: Date.now() })
+    await mgr.save(sid, { phase: 'EXECUTE', context: {}, timestamp: Date.now() })
     await mgr.save(sid, { phase: 'THINK', context: {}, timestamp: Date.now() })
     await mgr.save(sid, { phase: 'BUILD', context: {}, timestamp: Date.now() })
 
@@ -96,7 +96,7 @@ describe('CheckpointManager', () => {
     const mgr2 = new CheckpointManager(TEST_DIR, { maxCheckpoints: 5 })
     const sid = 'session-persist'
 
-    await mgr2.save(sid, { phase: 'OBSERVE', context: { test: true }, timestamp: Date.now() })
+    await mgr2.save(sid, { phase: 'EXECUTE', context: { test: true }, timestamp: Date.now() })
 
     const sessionDir = join(TEST_DIR, '.checkpoints', sid)
     const files = await readdir(sessionDir)
