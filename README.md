@@ -83,13 +83,13 @@ licode/
 
 ```bash
 # 运行所有测试
-bun run vitest run
+bun test
 
 # 运行特定测试
-bun run vitest run packages/config/__tests__/loader.test.ts
+bun test packages/config/__tests__/loader.test.ts
 
 # 监听模式
-bun run vitest watch
+bun test --watch
 ```
 
 ---
