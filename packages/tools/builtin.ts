@@ -597,6 +597,11 @@ export function registerBuiltinTools(): void {
       reverse: z.boolean().optional().describe('是否反向应用（撤销补丁）'),
     }),
     handler: async ({ filePath, patch, reverse }) => {
+      // 安全检查：apply_patch 等同于写文件
+      const pathCheck = securityLayer.checkPath(filePath)
+      if (!pathCheck.allowed) {
+        return { success: false, error: pathCheck.reason ?? '路径被安全策略阻止' }
+      }
       try {
         const absPath = resolve(filePath)
         if (!existsSync(absPath)) return { success: false, error: `文件不存在: ${absPath}` }
@@ -786,36 +791,6 @@ export function registerBuiltinTools(): void {
         return `${icon} [${item.id}] ${item.content}${item.activeForm ? ` (${item.activeForm})` : ''}`
       })
       return { success: true, output: lines.join('\n') }
-    },
-  })
-
-  globalToolRegistry.register({
-    name: 'apply_patch',
-    description: '应用 diff patch 到文件。格式为 unified diff。',
-    inputSchema: z.object({
-      path: z.string().describe('目标文件路径'),
-      patch: z.string().describe('unified diff 格式的 patch'),
-    }),
-    handler: async ({ path, patch }) => {
-      try {
-        const content = await readFile(path, 'utf-8')
-        // 简单的 patch 应用：逐行解析 diff
-        const lines = patch.split('\n')
-        let result = content
-        for (const line of lines) {
-          if (line.startsWith('+') && !line.startsWith('+++')) {
-            // 添加行
-            const newLine = line.slice(1)
-            if (!result.includes(newLine)) {
-              result += '\n' + newLine
-            }
-          }
-        }
-        await writeFile(path, result, 'utf-8')
-        return { success: true, output: `已应用 patch 到 ${path}` }
-      } catch (e) {
-        return { success: false, error: String(e) }
-      }
     },
   })
 }

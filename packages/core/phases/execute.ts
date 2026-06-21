@@ -3,6 +3,74 @@ import { z } from "zod"
 import { globalToolRegistry } from "../../tools/registry"
 import { devLogger } from "../dev-logger"
 import type { Timer } from "../perf"
+import { readFile } from "fs/promises"
+import { existsSync } from "fs"
+import { join, dirname } from "path"
+
+/**
+ * 加载项目配置文件（.licode.md / LICODE.md）
+ */
+async function loadProjectConfig(cwd?: string): Promise<string> {
+  const dir = cwd || process.cwd()
+  const configFiles = ['.licode.md', 'LICODE.md', '.licode/LICODE.md']
+  
+  // 加载全局配置
+  const homes = process.env.HOME || process.env.USERPROFILE || ''
+  let globalConfig = ''
+  if (homes) {
+    const globalPaths = [
+      join(homes, '.licode', 'CLAUDE.md'),
+      join(homes, '.licode', 'LICODE.md'),
+    ]
+    for (const p of globalPaths) {
+      try {
+        if (existsSync(p)) {
+          globalConfig = await readFile(p, 'utf-8')
+          devLogger.debug('PROJECT_CONFIG', `Loaded global ${p}`)
+          break
+        }
+      } catch {}
+    }
+  }
+  
+  // 加载项目配置
+  let projectConfig = ''
+  for (const file of configFiles) {
+    const fullPath = join(dir, file)
+    try {
+      if (existsSync(fullPath)) {
+        projectConfig = await readFile(fullPath, 'utf-8')
+        devLogger.debug('PROJECT_CONFIG', `Loaded project ${fullPath}`)
+        break
+      }
+    } catch {}
+  }
+  
+  // 向上查找项目配置
+  if (!projectConfig) {
+    let currentDir = dir
+    while (currentDir !== dirname(currentDir)) {
+      currentDir = dirname(currentDir)
+      for (const file of configFiles) {
+        const fullPath = join(currentDir, file)
+        try {
+          if (existsSync(fullPath)) {
+            projectConfig = await readFile(fullPath, 'utf-8')
+            devLogger.debug('PROJECT_CONFIG', `Loaded project ${fullPath}`)
+            break
+          }
+        } catch {}
+      }
+      if (projectConfig) break
+    }
+  }
+  
+  // 合并：项目配置优先
+  if (projectConfig && globalConfig) {
+    return `## 全局规则\n\n${globalConfig}\n\n## 项目规则\n\n${projectConfig}`
+  }
+  return projectConfig || globalConfig
+}
 
 const SYSTEM_PROMPT = `你是一个名为 licode 的 AI 助手，专注于代码开发。
 你的核心理念是"宁可慢，不要白干"——宁可多问清楚，也不要假设。
@@ -248,9 +316,15 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       const startTime = Date.now()
       // 拼接激活技能的内容（如果有）
       const activeSkillContent = ctx.activeSkillInstructions
-      const fullSystem = activeSkillContent
-        ? `${SYSTEM_PROMPT}\n\n## 当前激活技能: ${ctx.activeSkill ?? "?"}\n\n${activeSkillContent}\n\n请严格遵循上述技能的指令与规则。`
-        : SYSTEM_PROMPT
+      // 加载项目配置文件
+      const projectConfig = await loadProjectConfig(ctx.cwd)
+      let fullSystem = SYSTEM_PROMPT
+      if (projectConfig) {
+        fullSystem += `\n\n## 项目配置\n\n${projectConfig}`
+      }
+      if (activeSkillContent) {
+        fullSystem += `\n\n## 当前激活技能: ${ctx.activeSkill ?? "?"}\n\n${activeSkillContent}\n\n请严格遵循上述技能的指令与规则。`
+      }
       const result = await generateText({
         model: ctx.model,
         system: fullSystem,

@@ -84,27 +84,42 @@ export class ToolRegistry {
 
 export const globalToolRegistry = new ToolRegistry()
 
-// 注册默认的 bash 安全检查 hook
+// 注册默认的安全检查 hook
 globalToolRegistry.addPreExecuteHook((name, input) => {
+  // bash: 危险命令检查（rm -rf / sudo 等）
   if (name === 'bash') {
-    const parsed = input as { command?: string }
-    if (parsed.command) {
-      const check = securityLayer.checkCommand(parsed.command)
-      if (!check.allowed) {
-        return { allowed: false, reason: check.reason }
+    try {
+      const parsed = JSON.parse(JSON.stringify(input))
+      const command = parsed?.command
+      if (typeof command === 'string') {
+        const { checkDangerousPattern } = require('../security')
+        const dangerous = checkDangerousPattern(command)
+        if (dangerous.dangerous) {
+          return { allowed: false, reason: dangerous.reason }
+        }
+        const { securityLayer } = require('../security')
+        const check = securityLayer.checkCommand(command)
+        if (!check.allowed) {
+          return { allowed: false, reason: check.reason }
+        }
       }
-    }
+    } catch {}
   }
 
-  // write/edit/delete_file 路径检查
-  if (name === 'write' || name === 'edit' || name === 'delete_file') {
-    const parsed = input as { path?: string }
-    if (parsed.path) {
-      const check = securityLayer.checkPath(parsed.path)
-      if (!check.allowed) {
-        return { allowed: false, reason: check.reason }
+  // write/edit/delete_file/apply_patch/move_file/copy_file: 路径检查
+  const pathTools = ['write', 'edit', 'delete_file', 'apply_patch', 'move_file', 'copy_file']
+  if (pathTools.includes(name)) {
+    try {
+      const parsed = JSON.parse(JSON.stringify(input))
+      const path = parsed?.path ?? parsed?.filePath ?? parsed?.source
+      if (typeof path === 'string') {
+        const { securityLayer } = require('../security')
+        const check = securityLayer.checkPath(path)
+        if (!check.allowed) {
+          return { allowed: false, reason: check.reason }
+        }
       }
-    }
+    } catch {}
   }
 
   return null

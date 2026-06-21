@@ -31,8 +31,8 @@ export function Sidebar() {
   const maxContext = createMemo(() => modelInfo()?.contextWindow ?? 128000)
   const contextUsage = createMemo(() => maxContext() > 0 ? (contextTokens() / maxContext()) * 100 : 0)
   const contextColor = createMemo(() => {
-    if (contextUsage() > 90) return error()
-    if (contextUsage() > 70) return warning()
+    if (contextUsage() > 95) return error()
+    if (contextUsage() > 80) return warning()
     return text()
   })
 
