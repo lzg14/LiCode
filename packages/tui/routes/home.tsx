@@ -97,7 +97,7 @@ export function Home() {
         // presetPrompt 模式：直接发送用户输入，system prompt 已切换
         const userInput = rest.join(" ")
         if (userInput) {
-          run(userInput)
+          run(userInput, { presetPrompt: result.presetPrompt })
         } else {
           addMessage({ role: "system", content: `已切换到 ${name} 模式，请输入任务。` })
         }
