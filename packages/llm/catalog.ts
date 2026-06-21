@@ -152,3 +152,5 @@ export function supportsFeature(modelId: string, feature: keyof Pick<ModelConfig
 export function listModelsByProvider(provider: string): string[] {
   return listModels(provider).map(m => m.id)
 }
+
+export const PROVIDER_PRIORITY: string[] = ['anthropic', 'openai', 'deepseek', 'MiniMax']
