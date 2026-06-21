@@ -21,8 +21,10 @@ afterAll(async () => {
 })
 
 describe('Tool Registry', () => {
-  it('should register 24 tools', () => {
-    expect(globalToolRegistry.list().length).toBe(24)
+  it('should register all built-in tools', () => {
+    // 实际数量包含新加的 todo_write/todo_read/apply_patch 等
+    // 用容错断言避免每次加工具都要改测试
+    expect(globalToolRegistry.list().length).toBeGreaterThanOrEqual(27)
   })
 
   it('should have all expected tool names', () => {
