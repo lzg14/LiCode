@@ -375,7 +375,7 @@ export function registerBuiltinTools(): void {
       try {
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), timeout ?? 15_000)
-        const response = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'Licode/0.1.0' } })
+        const response = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'Licode/0.2.0' } })
         clearTimeout(timer)
         if (!response.ok) return { success: false, error: `HTTP ${response.status}` }
         const body = await response.text()

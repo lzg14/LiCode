@@ -5,7 +5,7 @@ import { useLoop } from "../context/loop"
 import { getModelConfig } from "../../llm/catalog"
 import { todos } from "../context/todos"
 
-const VERSION = "0.1.0"
+const VERSION = "0.2.0"
 
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning, error } = useTheme()

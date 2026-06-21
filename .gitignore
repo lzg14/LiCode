@@ -14,3 +14,7 @@ dist/
 Thumbs.db
 .checkpoints/
 # memory/  # 忽略 packages/memory 目录下的文件
+
+# User data
+memory/
+tsc-result*.txt
