@@ -64,7 +64,7 @@ export class ConfigLoader {
         if (isMiniMax) { provider = 'minimax'; baseUrl = 'https://api.minimax.chat/v1' }
         console.log(`[✓] Imported LLM config from Claude Code (${provider})`)
         this.config = {
-          llm: { provider, model: cc.model, apiKeyEnv: 'ANTHROPIC_AUTH_TOKEN', apiKey: cc.apiKey, baseUrl },
+          llm: { provider: provider as any, model: cc.model, apiKeyEnv: 'ANTHROPIC_AUTH_TOKEN', apiKey: cc.apiKey, baseUrl },
           security: { commandWhitelist: [], allowedPaths: [], deniedPaths: [] },
           memory: { path: '~/.licode/licode-sessions.db', retentionDays: 30 },
           subagent: { maxConcurrent: 3, maxDepth: 1, timeoutMs: 900000, blockedTools: ['delegate_task', 'clarify', 'memory_write', 'send_message', 'execute_code'] },

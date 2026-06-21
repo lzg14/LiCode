@@ -4,13 +4,13 @@ import { useTheme } from "../../context/theme"
 import { useHistory } from "../../context/history"
 import { useLoop } from "../../context/loop"
 import { readClipboardImage } from "../../../tools/builtin"
+import { copyToClipboard, readFromClipboard } from "../../util/clipboard"
 
 export interface PromptProps {
   onSubmit: (text: string, images?: Array<{ base64: string; mimeType: string }>) => void
   disabled?: boolean
   placeholder?: string
   onInputChange?: (text: string) => void
-  /** 外部弹窗（model picker/provider picker/slash menu）打开时让出上下/回车/ESC */
   popupOpen?: boolean
 }
 
@@ -41,7 +41,7 @@ export function Prompt(props: PromptProps) {
     setTextFn = (text: string) => {
       if (!input || input.isDestroyed) return
       input.setText(text)
-      input.cursorOffset = text.length  // 光标移到末尾
+      input.cursorOffset = text.length
       input.focus()
     }
   })
@@ -67,10 +67,19 @@ export function Prompt(props: PromptProps) {
   }
 
   const handleKeyDown = async (e: any) => {
-    // ESC: 弹窗打开时让外层 useKeyboard 关闭弹窗；否则用于中断/清队列
+    if (!input || input.isDestroyed) return
+
+    const sel = input.getSelection()
+    const hasSelection = sel !== null && sel.start !== sel.end
+
+    // ESC: 弹窗打开时让外层 useKeyboard 关闭弹窗；否则用于中断/清队列或清除选择
     if (e.name === "escape") {
-      if (props.popupOpen) return  // 让外层 useKeyboard 处理关闭弹窗
+      if (props.popupOpen) return
       e.preventDefault()
+      if (hasSelection) {
+        input.clearSelection()
+        return
+      }
       if (props.disabled) {
         abort()
         addMessage({ role: "system", content: "已取消当前执行" })
@@ -83,23 +92,286 @@ export function Prompt(props: PromptProps) {
 
     if (props.disabled) return
 
-    // Ctrl+V: 检查剪贴板图片
-    if (e.ctrl && e.name === "v") {
-      const img = await readClipboardImage()
-      if (img) {
-        e.preventDefault()
-        setPendingImages(prev => [...prev, { base64: img.data, mimeType: img.mime }])
+    // ─── Ctrl 修饰键 ───────────────────────────────────────
+    if (e.ctrl) {
+      // Ctrl+C: 有选择 → 复制；无选择 → 保留 abort 逻辑
+      if (e.name === "c" && !e.shift) {
+        if (hasSelection) {
+          e.preventDefault()
+          const text = input.getSelectedText()
+          if (text) await copyToClipboard(text)
+          return
+        }
         return
       }
-      // 无图片则让终端处理普通粘贴
+
+      // Ctrl+X: 有选择 → 剪切；无选择 → 删除到行尾
+      if (e.name === "x") {
+        e.preventDefault()
+        if (hasSelection) {
+          const text = input.getSelectedText()
+          if (text) await copyToClipboard(text)
+          input.deleteSelection()
+        } else {
+          input.deleteToLineEnd()
+        }
+        return
+      }
+
+      // Ctrl+V: 检查剪贴板图片
+      if (e.name === "v") {
+        const img = await readClipboardImage()
+        if (img) {
+          e.preventDefault()
+          setPendingImages(prev => [...prev, { base64: img.data, mimeType: img.mime }])
+          return
+        }
+        // 无图片 → 粘贴文本
+        const clipText = await readFromClipboard()
+        if (clipText) {
+          e.preventDefault()
+          if (hasSelection) input.deleteSelection()
+          input.insertText(clipText)
+        }
+        return
+      }
+
+      // Ctrl+Shift+A: 全选
+      if (e.name === "a" && e.shift) {
+        e.preventDefault()
+        input.selectAll()
+        return
+      }
+
+      // Ctrl+A: 移到行首
+      if (e.name === "a" && !e.shift) {
+        e.preventDefault()
+        if (hasSelection) input.clearSelection()
+        input.gotoLineHome()
+        return
+      }
+
+      // Ctrl+E: 移到行尾
+      if (e.name === "e" && !e.shift) {
+        e.preventDefault()
+        if (hasSelection) input.clearSelection()
+        input.gotoLineEnd()
+        return
+      }
+
+      // Ctrl+Shift+E: 展开/折叠工具调用
+      if (e.name === "e" && e.shift) {
+        e.preventDefault()
+        toggleToolCallExpanded()
+        return
+      }
+
+      // Ctrl+B / Ctrl+F: 后退/前进 1 字符
+      if (e.name === "b" && !e.shift) {
+        e.preventDefault()
+        input.moveCursorLeft()
+        return
+      }
+      if (e.name === "f" && !e.shift) {
+        e.preventDefault()
+        input.moveCursorRight()
+        return
+      }
+
+      // Ctrl+D: 删除光标后 1 字符
+      if (e.name === "d") {
+        e.preventDefault()
+        if (hasSelection) {
+          input.deleteSelection()
+        } else {
+          input.moveCursorRight()
+          input.deleteSelection()
+        }
+        return
+      }
+
+      // Ctrl+H: 等价 Backspace
+      if (e.name === "h") {
+        e.preventDefault()
+        if (hasSelection) {
+          input.deleteSelection()
+        } else {
+          input.deleteCharBackward()
+        }
+        return
+      }
+
+      // Ctrl+W: 删除前一个单词
+      if (e.name === "w") {
+        e.preventDefault()
+        if (hasSelection) {
+          input.deleteSelection()
+        } else {
+          input.deleteWordBackward()
+        }
+        return
+      }
+
+      // Ctrl+K: 删除到行尾
+      if (e.name === "k") {
+        e.preventDefault()
+        input.deleteToLineEnd()
+        return
+      }
+
+      // Ctrl+U: 删除到行首
+      if (e.name === "u") {
+        e.preventDefault()
+        input.deleteToLineStart()
+        return
+      }
+
+      // Ctrl+L: 清空输入框
+      if (e.name === "l") {
+        e.preventDefault()
+        input.clear()
+        input.cursorOffset = 0
+        return
+      }
+
+      // Ctrl+Home: 移到文本开头
+      if (e.name === "home") {
+        e.preventDefault()
+        if (hasSelection) input.clearSelection()
+        input.gotoBufferHome()
+        return
+      }
+
+      // Ctrl+End: 移到文本结尾
+      if (e.name === "end") {
+        e.preventDefault()
+        if (hasSelection) input.clearSelection()
+        input.gotoBufferEnd()
+        return
+      }
+
+      // Ctrl+← / Ctrl+→: 按单词跳转
+      if (e.name === "left") {
+        e.preventDefault()
+        input.moveWordBackward()
+        return
+      }
+      if (e.name === "right") {
+        e.preventDefault()
+        input.moveWordForward()
+        return
+      }
+
+      // Shift+Ctrl+← / Shift+Ctrl+→: 按单词选择
+      if (e.name === "left" && e.shift) {
+        e.preventDefault()
+        input.moveWordBackward({ select: true })
+        return
+      }
+      if (e.name === "right" && e.shift) {
+        e.preventDefault()
+        input.moveWordForward({ select: true })
+        return
+      }
+
+      return
+    }
+
+    // ─── Alt 修饰键 (opentui 把 Alt 映射到 meta) ──────────
+    if (e.meta) {
+      // Alt+B / Alt+F: 按单词跳转
+      if (e.name === "b") {
+        e.preventDefault()
+        input.moveWordBackward()
+        return
+      }
+      if (e.name === "f") {
+        e.preventDefault()
+        input.moveWordForward()
+        return
+      }
+
+      // Alt+Backspace: 删除前一个单词
+      if (e.name === "backspace") {
+        e.preventDefault()
+        if (hasSelection) {
+          input.deleteSelection()
+        } else {
+          input.deleteWordBackward()
+        }
+        return
+      }
+
+      // Alt+D: 删除后一个单词
+      if (e.name === "d") {
+        e.preventDefault()
+        input.deleteWordForward()
+        return
+      }
+
+      return
+    }
+
+    // ─── Shift 修饰键 ─────────────────────────────────────
+    if (e.shift) {
+      // Shift+← / Shift+→: 选择 1 字符
+      if (e.name === "left") {
+        e.preventDefault()
+        input.moveCursorLeft({ select: true })
+        return
+      }
+      if (e.name === "right") {
+        e.preventDefault()
+        input.moveCursorRight({ select: true })
+        return
+      }
+
+      // Shift+Home: 选择到行首
+      if (e.name === "home") {
+        e.preventDefault()
+        input.gotoLineHome({ select: true })
+        return
+      }
+
+      // Shift+End: 选择到行尾
+      if (e.name === "end") {
+        e.preventDefault()
+        input.gotoLineEnd({ select: true })
+        return
+      }
+
+      return
+    }
+
+    // ─── 无修饰键 ─────────────────────────────────────────
+
+    // Home / End: 移动光标
+    if (e.name === "home") {
+      e.preventDefault()
+      if (hasSelection) input.clearSelection()
+      input.gotoLineHome()
+      return
+    }
+    if (e.name === "end") {
+      e.preventDefault()
+      if (hasSelection) input.clearSelection()
+      input.gotoLineEnd()
+      return
+    }
+
+    // Tab: 插入 2 个空格
+    if (e.name === "tab") {
+      e.preventDefault()
+      input.insertText('  ')
+      return
     }
 
     // 弹框打开时，让出 up/down/return 给外层 useKeyboard 处理
-    // （不能 preventDefault，否则外层 useKeyboard 收不到）
     if (props.popupOpen && (e.name === "up" || e.name === "down" || e.name === "return")) {
       return
     }
 
+    // Up/Down: 翻历史
     if (e.name === "up" && (input.plainText.length === 0 || input.cursorOffset === 0)) {
       e.preventDefault()
       const prev = history.up()
@@ -112,21 +384,6 @@ export function Prompt(props: PromptProps) {
       input.setText(history.down() ?? "")
       return
     }
-
-    if (e.ctrl && e.name === "l") {
-      e.preventDefault()
-      return
-    }
-
-    // Ctrl+E: 展开/折叠工具调用
-    if (e.ctrl && e.name === "e") {
-      e.preventDefault()
-      toggleToolCallExpanded()
-      return
-    }
-
-    // 普通字符输入：依赖 50ms 轮询捕获文本变化
-    // 不在这里同步调用，因为 opentui keydown 触发时 plainText 可能尚未更新
   }
 
   return (

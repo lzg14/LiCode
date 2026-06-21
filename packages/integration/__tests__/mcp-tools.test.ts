@@ -12,7 +12,7 @@ function mockIntegration() {
     discoverResources: vi.fn(), readResource: vi.fn(),
     getPrompt: vi.fn(),
     withConnection: vi.fn(),
-  }
+  } as any
 }
 
 describe('MCPToolAdapter', () => {

@@ -195,7 +195,7 @@ export class MCPIntegration extends BaseIntegration {
     return Array.from(this.prompts.values())
   }
 
-  private async withConnection<T>(fn: () => Promise<T>): Promise<T> {
+  async withConnection<T>(fn: () => Promise<T>): Promise<T> {
     if (!this.enabled) {
       throw new Error('MCP not connected')
     }

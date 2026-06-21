@@ -70,9 +70,9 @@ describe('GitIntegration', () => {
     expect(execSync).toHaveBeenCalledWith('git diff --cached', expect.any(Object))
   })
 
-  it('getLog 正确解析日志', () => {
+  it('getLog 正确解析日志', async () => {
     vi.mocked(execSync).mockReturnValue('abc|msg|A|d1\ndef|msg2|B|d2\n')
-    const log = new GitIntegration('/r').getLog(2)
+    const log = await new GitIntegration('/r').getLog(2)
     expect(log).toHaveLength(2)
     expect(log[0].hash).toBe('abc')
     expect(log[0].message).toBe('msg')

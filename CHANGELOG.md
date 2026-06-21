@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+### 新增
+- **输入框快捷键**：完整的光标移动（`←/→/Home/End/Ctrl+A/Ctrl+B/Ctrl+E/Ctrl+←`）、选择（`Shift+方向键`/`Ctrl+Shift+A`）、删除（`Ctrl+D/H/W/K/U/X`）、复制粘贴（`Ctrl+C/V`）、清空（`Ctrl+L`）。对齐 VS Code / readline 习惯。
+
 ### 变更
 - **`/` 菜单精简**：移除 `/model`、`/provider`、`/search`、`/save`、`/load`、`/workflow` 六个命令。`/compact` 保留。换模型改用 `Ctrl+M`。
 - **新增 `/clear`**：开新会话（清空 UI，保留 SQLite 数据）。
