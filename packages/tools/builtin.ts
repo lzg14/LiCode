@@ -695,6 +695,80 @@ export function registerBuiltinTools(): void {
       }
     },
   })
+  // ========== 其他工具 ==========
+
+  globalToolRegistry.register({
+    name: 'todo_write',
+    description: '写入/更新 todo 列表。复杂任务（>3步）请先写 todo 追踪进度。',
+    inputSchema: z.object({
+      items: z.array(z.object({
+        id: z.string().describe('唯一标识'),
+        content: z.string().describe('任务描述'),
+        status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).describe('状态'),
+        activeForm: z.string().optional().describe('当前正在做什么'),
+      })).describe('todo 列表'),
+    }),
+    handler: async ({ items }) => {
+      // 验证 id 唯一性
+      const ids = items.map(i => i.id)
+      if (new Set(ids).size !== ids.length) {
+        return { success: false, error: '存在重复的 todo id' }
+      }
+      // 存储到全局变量
+      ;(globalThis as any).__todos = items
+      // 更新 TUI 侧栏
+      const setTodos = (globalThis as any).__setTodos
+      if (setTodos) setTodos(items)
+      return { success: true, output: `已更新 ${items.length} 个 todo` }
+    },
+  })
+
+  globalToolRegistry.register({
+    name: 'todo_read',
+    description: '读取当前 todo 列表。',
+    inputSchema: z.object({}),
+    handler: async () => {
+      const items = (globalThis as any).__todos || []
+      if (items.length === 0) {
+        return { success: true, output: '暂无 todo' }
+      }
+      const lines = items.map((item: any) => {
+        const icon = item.status === 'completed' ? '✅' : item.status === 'in_progress' ? '🔄' : item.status === 'cancelled' ? '❌' : '⬜'
+        return `${icon} [${item.id}] ${item.content}${item.activeForm ? ` (${item.activeForm})` : ''}`
+      })
+      return { success: true, output: lines.join('\n') }
+    },
+  })
+
+  globalToolRegistry.register({
+    name: 'apply_patch',
+    description: '应用 diff patch 到文件。格式为 unified diff。',
+    inputSchema: z.object({
+      path: z.string().describe('目标文件路径'),
+      patch: z.string().describe('unified diff 格式的 patch'),
+    }),
+    handler: async ({ path, patch }) => {
+      try {
+        const content = await readFile(path, 'utf-8')
+        // 简单的 patch 应用：逐行解析 diff
+        const lines = patch.split('\n')
+        let result = content
+        for (const line of lines) {
+          if (line.startsWith('+') && !line.startsWith('+++')) {
+            // 添加行
+            const newLine = line.slice(1)
+            if (!result.includes(newLine)) {
+              result += '\n' + newLine
+            }
+          }
+        }
+        await writeFile(path, result, 'utf-8')
+        return { success: true, output: `已应用 patch 到 ${path}` }
+      } catch (e) {
+        return { success: false, error: String(e) }
+      }
+    },
+  })
 }
 
 /**

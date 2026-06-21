@@ -15,7 +15,7 @@
   "security": {
     "commandWhitelist": ["git", "npm", "pnpm"],
     "allowedPaths": ["./"],
-    "deniedPaths": []
+    "deniedPaths": [".git", ".env", ".ssh", ".aws", ".kube"]
   },
   "memory": {
     "path": "~/.licode/licode-sessions.db",

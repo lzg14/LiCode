@@ -2,11 +2,17 @@ import type { ToolDefinition, ToolResult } from './types'
 import type { ToolContext } from './context'
 import { createToolContext } from './context'
 import { truncateOutput } from './truncate'
-import { securityLayer } from '../security'
+import { securityLayer, checkDangerousPattern } from '../security'
+
+export type PreExecuteHook = (
+  name: string,
+  input: unknown,
+) => { allowed: boolean; reason?: string } | null | Promise<{ allowed: boolean; reason?: string } | null>
 
 export class ToolRegistry {
   private tools = new Map<string, ToolDefinition>()
   private defaultContext: ToolContext
+  private preExecuteHooks: PreExecuteHook[] = []
 
   constructor(defaultContext?: Partial<ToolContext>) {
     this.defaultContext = createToolContext(defaultContext)
@@ -24,6 +30,10 @@ export class ToolRegistry {
     return Array.from(this.tools.values())
   }
 
+  addPreExecuteHook(hook: PreExecuteHook): void {
+    this.preExecuteHooks.push(hook)
+  }
+
   async execute(
     name: string,
     input: unknown,
@@ -34,14 +44,11 @@ export class ToolRegistry {
       return { success: false, error: `Tool not found: ${name}` }
     }
 
-    // 安全检查：bash 工具需要检查命令白名单
-    if (name === 'bash') {
-      const parsed = tool.inputSchema.parse(input) as { command?: string }
-      if (parsed.command) {
-        const check = securityLayer.checkCommand(parsed.command)
-        if (!check.allowed) {
-          return { success: false, error: `安全拦截: ${check.reason}` }
-        }
+    // 执行 pre-execute hooks
+    for (const hook of this.preExecuteHooks) {
+      const result = await hook(name, input)
+      if (result && !result.allowed) {
+        return { success: false, error: `安全拦截: ${result.reason}` }
       }
     }
 
@@ -76,3 +83,29 @@ export class ToolRegistry {
 }
 
 export const globalToolRegistry = new ToolRegistry()
+
+// 注册默认的 bash 安全检查 hook
+globalToolRegistry.addPreExecuteHook((name, input) => {
+  if (name === 'bash') {
+    const parsed = input as { command?: string }
+    if (parsed.command) {
+      const check = securityLayer.checkCommand(parsed.command)
+      if (!check.allowed) {
+        return { allowed: false, reason: check.reason }
+      }
+    }
+  }
+
+  // write/edit/delete_file 路径检查
+  if (name === 'write' || name === 'edit' || name === 'delete_file') {
+    const parsed = input as { path?: string }
+    if (parsed.path) {
+      const check = securityLayer.checkPath(parsed.path)
+      if (!check.allowed) {
+        return { allowed: false, reason: check.reason }
+      }
+    }
+  }
+
+  return null
+})

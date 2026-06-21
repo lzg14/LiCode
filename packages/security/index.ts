@@ -13,6 +13,35 @@ export {
 export type { PermissionAction, PermissionRule, PermissionContext } from './permission'
 
 /**
+ * 危险命令模式 - 需要二次确认
+ */
+export const DANGEROUS_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
+  { pattern: /rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+|-\s+f\s+).*\//g, description: '强制递归删除' },
+  { pattern: /rm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+|-\s+r\s+).*\//g, description: '递归删除目录' },
+  { pattern: /curl\s+.*\|\s*(ba)?sh/g, description: 'curl 管道执行脚本' },
+  { pattern: /wget\s+.*\|\s*(ba)?sh/g, description: 'wget 管道执行脚本' },
+  { pattern: /sudo\s+/g, description: '使用 sudo 提权' },
+  { pattern: /chmod\s+777/g, description: '给所有人写权限' },
+  { pattern: /chmod\s+-R\s+777/g, description: '递归给所有人写权限' },
+  { pattern: /mkfs\./g, description: '格式化磁盘' },
+  { pattern: /dd\s+if=/g, description: 'dd 裸写磁盘' },
+  { pattern: />\s*\/dev\/sd[a-z]/g, description: '直接写磁盘设备' },
+]
+
+/**
+ * 检查命令是否包含危险模式
+ */
+export function checkDangerousPattern(command: string): { dangerous: boolean; reason?: string } {
+  for (const { pattern, description } of DANGEROUS_PATTERNS) {
+    pattern.lastIndex = 0
+    if (pattern.test(command)) {
+      return { dangerous: true, reason: `检测到危险操作: ${description}` }
+    }
+  }
+  return { dangerous: false }
+}
+
+/**
  * 安全层 - 集成命令白名单、文件系统边界、敏感信息检测
  */
 
