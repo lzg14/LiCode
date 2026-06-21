@@ -14,6 +14,9 @@
 - **`/help` 命令**：输入 `/help`、`?` 或按 `F1` 查看所有快捷键（光标/选择/删除/复制粘贴等），按类别分组显示。
 - **输入框快捷键**：完整的光标移动（`←/→/Home/End/Ctrl+A/Ctrl+B/Ctrl+E/Ctrl+←`）、选择（`Shift+方向键`/`Ctrl+Shift+A`）、删除（`Ctrl+D/H/W/K/U/X`）、复制粘贴（`Ctrl+C/V`）、清空（`Ctrl+L`）。对齐 VS Code / readline 习惯。
 
+### 重构
+- **Thinking 显示逻辑抽成纯函数**：`deriveThinkingDisplay()` 在 `packages/tui/util/thinking-display.ts`，4 种状态（empty / thinking-only / has-rest / no-thinking）覆盖所有场景，14 个单测保护。
+
 ### 变更
 - **`/` 菜单精简**：移除 `/model`、`/provider`、`/search`、`/save`、`/load`、`/workflow` 六个命令。`/compact` 保留。换模型改用 `Ctrl+M`。
 - **新增 `/clear`**：开新会话（清空 UI，保留 SQLite 数据）。
