@@ -1,4 +1,4 @@
-const DEFAULT_WHITELIST = [
+const BASE_WHITELIST = [
   'git', 'cargo', 'npm', 'npx', 'pnpm',
   'ruff', 'mypy', 'eslint', 'prettier', 'biome', 'tsc',
   'psql', 'mysql', 'docker', 'playwright',
@@ -9,6 +9,22 @@ const DEFAULT_WHITELIST = [
   'node', 'next',
 ]
 
+const PLATFORM_WHITELIST: Record<string, string[]> = {
+  win32: ['powershell', 'pwsh', 'cmd', 'where', 'tasklist'],
+  darwin: ['open', 'pbcopy', 'pbpaste'],
+  linux: ['xdg-open', 'xclip'],
+}
+
+export function getDefaultWhitelist(platform: NodeJS.Platform = process.platform): string[] {
+  return [
+    ...BASE_WHITELIST,
+    ...(PLATFORM_WHITELIST[platform] ?? []),
+  ]
+}
+
+// 向后兼容的 export
+export const DEFAULT_WHITELIST = getDefaultWhitelist()
+
 const BLOCKED_COMMANDS = [
   'bash', 'sh', 'zsh',
   'rm', 'del',
@@ -18,6 +34,8 @@ const BLOCKED_COMMANDS = [
   'exec', 'eval',
 ]
 
+export { BLOCKED_COMMANDS }
+
 export function isCommandAllowed(command: string): boolean {
   const trimmed = command.trim()
   if (!trimmed) return false
@@ -25,5 +43,3 @@ export function isCommandAllowed(command: string): boolean {
   if (BLOCKED_COMMANDS.includes(base)) return false
   return DEFAULT_WHITELIST.includes(base)
 }
-
-export { DEFAULT_WHITELIST, BLOCKED_COMMANDS }
