@@ -248,25 +248,46 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
     history = sliced
   }
 
-  // 从后往前找到最后一个合法的 user 消息起始点（确保 tool/tool-call 配对完整）
+  // 找到合法的起始位置：确保 tool-call/tool-result 配对完整
+  // 当 history 被 slice 截断时，开头可能出现 orphan tool-result（对应的 assistant+tool-call 被截掉）
   function findValidStart(msgs: typeof history): number {
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role === 'user') {
-        const toolCallIds = new Set<string>()
-        const toolResultIds = new Set<string>()
-        for (let j = i; j < msgs.length; j++) {
-          const m = msgs[j]
-          if (Array.isArray(m.content)) {
-            for (const p of m.content) {
-              if (p.type === 'tool-call') toolCallIds.add(p.toolCallId)
-              if (p.type === 'tool-result') toolResultIds.add(p.toolCallId)
+    // 扫描整个 msgs，收集所有 tool-call ID 和 tool-result ID
+    const allToolCallIds = new Set<string>()
+    const allToolResultIds = new Set<string>()
+    for (const m of msgs) {
+      if (Array.isArray(m.content)) {
+        for (const p of m.content) {
+          if (p.type === 'tool-call') allToolCallIds.add(p.toolCallId)
+          if (p.type === 'tool-result') allToolResultIds.add(p.toolCallId)
+        }
+      }
+    }
+    // 无 orphan → 从头开始
+    for (const rid of allToolResultIds) {
+      if (!allToolCallIds.has(rid)) {
+        // 找到 orphan，从第一个 user 消息开始向后跳过 orphan 区域
+        for (let i = 0; i < msgs.length; i++) {
+          if (msgs[i].role === 'user') {
+            // 检查从 i 到末尾是否还有 orphan
+            const chunkCalls = new Set<string>()
+            const chunkResults = new Set<string>()
+            for (let j = i; j < msgs.length; j++) {
+              const m = msgs[j]
+              if (Array.isArray(m.content)) {
+                for (const p of m.content) {
+                  if (p.type === 'tool-call') chunkCalls.add(p.toolCallId)
+                  if (p.type === 'tool-result') chunkResults.add(p.toolCallId)
+                }
+              }
             }
+            let hasOrphan = false
+            for (const rid of chunkResults) {
+              if (!chunkCalls.has(rid)) { hasOrphan = true; break }
+            }
+            if (!hasOrphan) return i
           }
         }
-        for (const rid of toolResultIds) {
-          if (!toolCallIds.has(rid)) return i + 1
-        }
-        // 无 orphan → 保留所有历史，从头开始
+        // 所有 user 起点都有 orphan → 保留全部（LLM 会报错但我们不丢消息）
         return 0
       }
     }
