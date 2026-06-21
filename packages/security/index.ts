@@ -1,4 +1,4 @@
-import { isCommandAllowed, DEFAULT_WHITELIST, BLOCKED_COMMANDS } from './whitelist'
+import { isCommandAllowed, getDefaultWhitelist, DEFAULT_WHITELIST, BLOCKED_COMMANDS } from './whitelist'
 import { checkSensitivePath } from './sensitive'
 
 // 导出权限系统
@@ -26,6 +26,14 @@ export const DANGEROUS_PATTERNS: Array<{ pattern: RegExp; description: string }>
   { pattern: /mkfs\./g, description: '格式化磁盘' },
   { pattern: /dd\s+if=/g, description: 'dd 裸写磁盘' },
   { pattern: />\s*\/dev\/sd[a-z]/g, description: '直接写磁盘设备' },
+  // PowerShell 危险模式
+  { pattern: /Remove-Item\s+(-Recurse|-Force|-rf)\b/gi, description: 'PowerShell 强制删除' },
+  { pattern: /Set-ExecutionPolicy\s+Unrestricted/gi, description: '禁用 PowerShell 执行策略' },
+  { pattern: /Invoke-Expression\b/gi, description: 'PowerShell 动态执行' },
+  { pattern: /\|\s*iex\b/gi, description: 'iex 管道执行' },
+  { pattern: /Clear-RecycleBin\s+-Force/gi, description: '清空回收站' },
+  { pattern: /Format-Volume\b/gi, description: '格式化磁盘' },
+  { pattern: /Stop-Service\s+-Force/gi, description: '强制停止系统服务' },
 ]
 
 /**
@@ -54,27 +62,25 @@ export interface SecurityConfig {
   sensitivePatterns: string[]
 }
 
-const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
-  commandWhitelist: DEFAULT_WHITELIST,
-  blockedCommands: BLOCKED_COMMANDS,
-  allowedPaths: [],
-  deniedPaths: ['/etc', '/sys', '/proc', 'C:\\Windows'],
-  maxFileSize: 10 * 1024 * 1024, // 10MB
-  sensitivePatterns: [
-    'password',
-    'api_key',
-    'apikey',
-    'secret',
-    'token',
-    'private_key',
-  ],
+export function getDefaultDeniedPaths(): string[] {
+  return process.platform === 'win32'
+    ? ['C:\\Windows', 'C:\\Program Files']
+    : ['/etc', '/sys', '/proc']
 }
 
 export class SecurityLayer {
-  private config: SecurityConfig
+  config: SecurityConfig
 
   constructor(config: Partial<SecurityConfig> = {}) {
-    this.config = { ...DEFAULT_SECURITY_CONFIG, ...config }
+    this.config = {
+      commandWhitelist: getDefaultWhitelist(),
+      blockedCommands: BLOCKED_COMMANDS,
+      allowedPaths: [],
+      deniedPaths: getDefaultDeniedPaths(),
+      maxFileSize: 10 * 1024 * 1024,
+      sensitivePatterns: ['password', 'api_key', 'apikey', 'secret', 'token', 'private_key'],
+      ...config,
+    }
   }
 
   /**
@@ -216,4 +222,23 @@ export class SecurityLayer {
   }
 }
 
-export const securityLayer = new SecurityLayer()
+/**
+ * 创建带 config 的 SecurityLayer 实例
+ */
+export function createSecurityLayer(config?: Partial<SecurityConfig>): SecurityLayer {
+  return new SecurityLayer(config)
+}
+
+// 当前生效的 securityLayer 实例（可在启动时替换）
+let _activeSecurityLayer: SecurityLayer = new SecurityLayer()
+
+export function setSecurityLayer(instance: SecurityLayer): void {
+  _activeSecurityLayer = instance
+}
+
+export function getSecurityLayer(): SecurityLayer {
+  return _activeSecurityLayer
+}
+
+// 向后兼容的单例 export（deprecated，优先用 getSecurityLayer()）
+export const securityLayer = _activeSecurityLayer
