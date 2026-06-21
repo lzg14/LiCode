@@ -89,37 +89,47 @@ globalToolRegistry.addPreExecuteHook((name, input) => {
   // bash: 危险命令检查（rm -rf / sudo 等）
   if (name === 'bash') {
     try {
-      const parsed = JSON.parse(JSON.stringify(input))
-      const command = parsed?.command
+      const parsed = typeof input === 'object' && input !== null ? input : JSON.parse(String(input))
+      const command = (parsed as any)?.command
       if (typeof command === 'string') {
-        const { checkDangerousPattern } = require('../security')
         const dangerous = checkDangerousPattern(command)
         if (dangerous.dangerous) {
           return { allowed: false, reason: dangerous.reason }
         }
-        const { securityLayer } = require('../security')
         const check = securityLayer.checkCommand(command)
         if (!check.allowed) {
           return { allowed: false, reason: check.reason }
         }
       }
-    } catch {}
+    } catch {
+      return { allowed: false, reason: '输入解析失败，安全策略拒绝' }
+    }
   }
 
   // write/edit/delete_file/apply_patch/move_file/copy_file: 路径检查
-  const pathTools = ['write', 'edit', 'delete_file', 'apply_patch', 'move_file', 'copy_file']
-  if (pathTools.includes(name)) {
+  // MCP 工具：mcp__{server}__{tool}，按 tool 段匹配
+  const PATH_TOOLS = new Set(['write', 'edit', 'delete_file', 'apply_patch', 'move_file', 'copy_file'])
+  function isPathTool(n: string): boolean {
+    if (PATH_TOOLS.has(n)) return true
+    if (n.startsWith('mcp__')) {
+      const parts = n.split('__')
+      return PATH_TOOLS.has(parts[parts.length - 1])
+    }
+    return false
+  }
+  if (isPathTool(name)) {
     try {
-      const parsed = JSON.parse(JSON.stringify(input))
-      const path = parsed?.path ?? parsed?.filePath ?? parsed?.source
+      const parsed = typeof input === 'object' && input !== null ? input : JSON.parse(String(input))
+      const path = (parsed as any)?.path ?? (parsed as any)?.filePath ?? (parsed as any)?.source
       if (typeof path === 'string') {
-        const { securityLayer } = require('../security')
         const check = securityLayer.checkPath(path)
         if (!check.allowed) {
           return { allowed: false, reason: check.reason }
         }
       }
-    } catch {}
+    } catch {
+      return { allowed: false, reason: '输入解析失败，安全策略拒绝' }
+    }
   }
 
   return null

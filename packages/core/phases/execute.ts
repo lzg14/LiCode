@@ -179,6 +179,8 @@ export interface ExecuteContext {
   activeSkill?: string | null
   /** 当前激活的技能内容（注入到 system prompt） */
   activeSkillInstructions?: string | null
+  /** 预设 prompt 模板（workflow 模式） */
+  presetPrompt?: string | null
   /** 性能埋点计时器（可选） */
   timer?: Timer
 }
@@ -316,7 +318,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       const activeSkillContent = ctx.activeSkillInstructions
       // 加载项目配置文件
       const projectConfig = await loadProjectConfig(ctx.cwd)
-      let fullSystem = SYSTEM_PROMPT
+      let fullSystem = ctx.presetPrompt || SYSTEM_PROMPT
       if (projectConfig) {
         fullSystem += `\n\n## 项目配置\n\n${projectConfig}`
       }
