@@ -270,7 +270,7 @@ export function Home() {
 
         <box flexShrink={0}>
           <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange}
-            popupOpen={modelPickerOpen() || slashOpen()} />
+            popupOpen={modelPickerOpen() || slashOpen() || helpOpen()} />
           <StatusBar />
         </box>
       </box>

@@ -1,27 +1,9 @@
-import { For, Show, createSignal, onMount, onCleanup } from 'solid-js'
+import { For } from "solid-js"
 import { HELP_CONTENT } from '../util/help-content'
 import { useTheme } from '../context/theme'
 
 export function HelpPanel(props: { onClose: () => void }) {
   const { primary, text, textMuted, backgroundPanel, borderActive } = useTheme()
-  const [scrollOffset, setScrollOffset] = createSignal(0)
-
-  const handleKeyDown = (e: any) => {
-    if (e.name === 'escape' || e.name === 'f1') {
-      e.preventDefault()
-      props.onClose()
-      return
-    }
-    // 滚动控制由 scrollbox 处理
-  }
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown)
-  })
-
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown)
-  })
 
   return (
     <box
@@ -55,7 +37,7 @@ export function HelpPanel(props: { onClose: () => void }) {
                 <For each={section.entries}>
                   {(entry) => (
                     <box flexDirection="row" paddingLeft={2}>
-                      <text fg={text()}>{entry.keys.padEnd(24)}</text>
+                      <text fg={text()} style={{ width: '24ch' }}>{entry.keys.padEnd(24)}</text>
                       <text fg={textMuted()}>{entry.desc}</text>
                     </box>
                   )}
