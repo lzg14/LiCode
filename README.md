@@ -142,6 +142,14 @@ bun run vitest watch
 
 ---
 
+## 安全和隐私
+
+- 日志位于 `~/.licode/logs/dev/`
+- 自动 redact 敏感字段（apiKey / token / password 等）及内联 API key 字符串（sk-ant-* / sk-* / ghp_* / Bearer 等）
+- 如需分享日志，先检查：`grep -E "sk-|Bearer|token" ~/.licode/logs/dev/*.log`
+
+---
+
 ## License
 
 MIT

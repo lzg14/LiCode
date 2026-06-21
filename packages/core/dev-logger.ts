@@ -6,6 +6,47 @@ import { homedir } from 'os'
  * 开发日志系统 - 记录所有异常、LLM请求响应、调试信息
  */
 
+// ===== 敏感字段 redact =====
+
+const REDACT_KEYS = [
+  'apikey', 'api_key', 'api-key',
+  'token', 'access_token', 'refresh_token',
+  'password', 'passwd', 'pwd',
+  'secret', 'client_secret',
+  'authorization', 'auth',
+]
+
+const INLINE_PATTERNS: RegExp[] = [
+  /sk-ant-api[0-9]{2}-[A-Za-z0-9_\-]{20,}/g,  // Anthropic
+  /sk-proj-[A-Za-z0-9_\-]{20,}/g,                // OpenAI 新
+  /sk-[A-Za-z0-9]{20,}/g,                        // OpenAI 旧 / DeepSeek / MiniMax
+  /ghp_[A-Za-z0-9]{20,}/g,                         // GitHub PAT
+  /xox[abpr]-[0-9]+-[0-9]+-[A-Za-z0-9]+/g,      // Slack
+  /Bearer\s+[A-Za-z0-9_\-\.]{20,}/g,             // Bearer token
+  /ANTHROPIC_API_KEY=[^\s]{10,}/g,                // env-style
+  /OPENAI_API_KEY=[^\s]{10,}/g,
+]
+
+export function redact(obj: unknown): unknown {
+  if (obj == null) return obj
+  if (typeof obj === 'string') {
+    return INLINE_PATTERNS.reduce((s, p) => s.replace(p, '***REDACTED***'), obj)
+  }
+  if (Array.isArray(obj)) return obj.map(redact)
+  if (typeof obj === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(obj)) {
+      if (REDACT_KEYS.some(rk => k.toLowerCase().includes(rk))) {
+        out[k] = '***REDACTED***'
+      } else {
+        out[k] = redact(v)
+      }
+    }
+    return out
+  }
+  return obj
+}
+
 const DEV_LOG_DIR = join(homedir(), '.licode', 'logs', 'dev')
 
 export enum LogLevel {
@@ -91,14 +132,14 @@ export class DevLogger {
       tools: tools ? 'yes' : 'no',
       messages: messages.map((m: any) => ({
         role: m.role,
-        content: typeof m.content === 'string' ? m.content.slice(0, 200) + '...' : '[complex]',
+        content: redact(typeof m.content === 'string' ? m.content.slice(0, 200) + '...' : '[complex]'),
       })),
     })
   }
 
   // LLM 响应日志
   logLLMResponse(response: unknown, duration: number): void {
-    this.info('LLM', `<<< LLM Response | duration=${duration}ms`, response)
+    this.info('LLM', `<<< LLM Response | duration=${duration}ms`, redact(response))
   }
 
   // LLM 流式片段日志
@@ -111,7 +152,7 @@ export class DevLogger {
     const msg = duration !== undefined
       ? `>>> Tool Call | ${toolName} | ${duration}ms`
       : `>>> Tool Call | ${toolName}`
-    this.info('TOOL', msg, { args, result })
+    this.info('TOOL', msg, { args: redact(args), result: redact(result) })
   }
 
   // 异常日志（详细）

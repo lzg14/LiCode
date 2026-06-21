@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+### 安全
+- **devLogger 敏感字段 redact**：自动遮蔽 apiKey / token / password 等字段，以及内联 API key 字符串（sk-ant-* / sk-* / ghp_* / Bearer 等）。旧日志已清理。
+
 ### 新增
 - **输入框快捷键**：完整的光标移动（`←/→/Home/End/Ctrl+A/Ctrl+B/Ctrl+E/Ctrl+←`）、选择（`Shift+方向键`/`Ctrl+Shift+A`）、删除（`Ctrl+D/H/W/K/U/X`）、复制粘贴（`Ctrl+C/V`）、清空（`Ctrl+L`）。对齐 VS Code / readline 习惯。
 
