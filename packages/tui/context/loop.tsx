@@ -4,7 +4,6 @@ import type { CoreLoop } from "../../core/loop"
 import { createModel } from "../../llm/provider"
 import { listModelsByProvider } from "../../llm/catalog"
 import { devLogger } from "../../core/dev-logger"
-import { WorkflowEngine, BuiltinScriptRegistry } from "../../workflow"
 import { readImageFile } from "../../tools/builtin"
 import { checkDangerousPattern } from "../../security"
 
@@ -117,58 +116,21 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   // 工具调用轮次上限确认机制
   let confirmResolve: ((value: boolean) => void) | null = null
 
-  // Workflow 引擎
-  const wfEngine = new WorkflowEngine({
-    maxConcurrentAgents: 3,
-    maxDepth: 2,
-    timeoutMs: 600_000,
-    cwd: process.cwd(),
-    llmProvider: props.model
-      ? {
-          modelId: props.model.modelId ?? currentModel(),
-          complete: async (req) => {
-            // 把 LLM 调用代理到当前模型
-            const { generateText } = await import("ai")
-            const result = await generateText({
-              model: props.model,
-              messages: req.messages,
-              temperature: req.temperature ?? 0.7,
-            })
-            return { content: result.text }
-          },
-        }
-      : undefined,
-    toolExecutor: async (name, input) => {
-      const { globalToolRegistry } = await import("../../tools/registry")
-
-      // 危险命令二次确认
-      if (name === 'bash') {
-        const parsed = input as { command?: string }
-        if (parsed.command) {
-          const check = checkDangerousPattern(parsed.command)
-          if (check.dangerous) {
-            return { success: false, error: `危险命令被拒绝: ${check.reason}` }
-          }
-        }
-      }
-
-      const result = await globalToolRegistry.execute(name, input) as { success: boolean; output?: any; error?: string; diff?: string }
-
-      // 如果有 diff，在输出中附加 diff 信息
-      if (result.diff) {
-        result.output = `${result.output}\n\n--- Diff ---\n${result.diff}`
-      }
-
-      return result
-    },
-    scriptRegistry: new BuiltinScriptRegistry(),
-  })
-
   // MCP 集成
   const initMCP = async () => {
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('MCP init timeout')), 5000))
     try {
-      const config = await import("../../config")
-      const mcpConfig = config.getConfigSync?.()?.mcp?.mcpServers
+      await Promise.race([initMCPCore(), timeout])
+    } catch (e) {
+      devLogger.info('MCP', `Init skipped: ${e}`)
+    }
+  }
+
+  const initMCPCore = async () => {
+    try {
+      const { configLoader } = await import("../../config")
+      const cfg = configLoader.getConfig() as any
+      const mcpConfig = cfg?.mcp?.mcpServers
       if (!mcpConfig || Object.keys(mcpConfig).length === 0) return
 
       const { MCPIntegration } = await import("../../integration/mcp")
@@ -192,9 +154,21 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
               inputSchema,
               handler: async (input: any) => {
                 const result = await mcp.callTool(tool.name, input)
+                const parts: string[] = []
+                for (const c of result.content ?? []) {
+                  if (c.type === 'text') {
+                    parts.push(c.text ?? '')
+                  } else if (c.type === 'image') {
+                    parts.push(`[图片: ${c.mimeType ?? 'unknown'}]`)
+                  } else if (c.type === 'resource') {
+                    parts.push(`[资源: ${c.uri ?? 'unknown'}]`)
+                  } else {
+                    parts.push(`[${c.type ?? 'unknown'}]`)
+                  }
+                }
                 return {
                   success: !result.isError,
-                  output: result.content.map(c => c.text ?? '').join('\n'),
+                  output: parts.join('\n') || '(空结果)',
                 }
               },
             })
@@ -212,35 +186,38 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   initMCP()
 
   // Preset Prompts（workflow 模板）
-  const presetPrompts: Record<string, string> = {}
+  const [presetPrompts, setPresetPrompts] = createSignal<Record<string, string>>({})
   const loadPresetPrompts = async () => {
     try {
       const { readFile } = await import("fs/promises")
       const { join } = await import("path")
+      const { fileURLToPath } = await import("url")
+      const __filename = fileURLToPath(import.meta.url)
+      const __dirname = import.meta.dirname ?? __filename.replace(/[\\/][^\\/]+$/, '')
       const builtinDir = join(__dirname, "..", "..", "workflow", "builtin")
       const prompts = ["coding", "research", "review"]
+      const loaded: Record<string, string> = {}
       for (const name of prompts) {
         try {
           const content = await readFile(join(builtinDir, `${name}.prompt.md`), "utf-8")
-          presetPrompts[name] = content
+          loaded[name] = content
         } catch {}
       }
+      setPresetPrompts(loaded)
     } catch {}
   }
   loadPresetPrompts()
 
   const runWorkflow = async (name: string, args: any) => {
     // 如果有 preset prompt，返回 presetPrompt 让调用方处理
-    if (presetPrompts[name]) {
-      return { success: true, presetPrompt: presetPrompts[name] }
+    if (presetPrompts()[name]) {
+      return { success: true, presetPrompt: presetPrompts()[name] }
     }
-    // 否则走旧的 workflow engine
-    const result = await wfEngine.run({ name, args })
-    return result
+    return { success: false, error: `未知的 workflow: ${name}` }
   }
 
-  const listWorkflows = (): string[] => Object.keys(presetPrompts).length > 0
-    ? Object.keys(presetPrompts)
+  const listWorkflows = (): string[] => Object.keys(presetPrompts()).length > 0
+    ? Object.keys(presetPrompts())
     : ["coding", "research", "review"]
 
   const setActiveSkill = async (name: string | null) => {
@@ -367,7 +344,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     setStreamingText("")
   }
 
-  const run = async (input: string, clipboardImages?: Array<{ base64: string; mimeType: string }>): Promise<void> => {
+  const run = async (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }>; presetPrompt?: string }): Promise<void> => {
     // 如果正在等待用户确认是否继续 tool call 迭代
     if (confirmResolve) {
       const shouldContinue = input.trim().toLowerCase() === "y"
@@ -392,7 +369,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     // 解析用户输入中的图片引用（@/path/to/image.png）
     const { text: cleanText, images: parsedImages } = parseImageRefs(input)
     // 合并剪贴板图片 + 文件引用图片
-    const allImages = [...parsedImages, ...(clipboardImages ?? [])]
+    const allImages = [...parsedImages, ...(opts?.clipboardImages ?? [])]
 
     abortController = new AbortController()
     addMessage({ role: "user", content: cleanText, images: allImages.length > 0 ? allImages : undefined })
@@ -425,7 +402,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         model: activeModel,
         activeSkill: activeSkill() ?? undefined,
         activeSkillInstructions: activeSkillInstructions() ?? undefined,
-        presetPrompt: null as string | null,
+        presetPrompt: opts?.presetPrompt ?? null,
         onPhaseChange: (p: Phase) => {
           setPhase(p)
         },
