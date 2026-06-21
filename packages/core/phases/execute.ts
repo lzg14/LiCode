@@ -254,7 +254,8 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         for (const rid of toolResultIds) {
           if (!toolCallIds.has(rid)) return i + 1
         }
-        return i
+        // 无 orphan → 保留所有历史，从头开始
+        return 0
       }
     }
     return 0
