@@ -4,7 +4,7 @@ const BASE_WHITELIST = [
   'psql', 'mysql', 'docker', 'playwright',
   'grep', 'find', 'ls', 'cat', 'head', 'tail', 'wc', 'echo', 'pwd', 'tree',
   'curl', 'wget', 'gh',
-  'pip', 'uv',
+  'pip', 'uv', 'bun',
   'vitest', 'prisma',
   'node', 'next',
 ]
