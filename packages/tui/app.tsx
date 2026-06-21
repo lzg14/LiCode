@@ -43,16 +43,9 @@ function App() {
   const toast = useToast()
 
   onMount(() => {
-    // 首次启动延迟触发 resize 事件，强制 @opentui 重排
-    setTimeout(() => {
-      const w = process.stdout.columns || 80
-      const h = process.stdout.rows || 24
-      renderer.emit?.("resize", w, h)
-      // 再触发一次确保布局正确
-      setTimeout(() => {
-        renderer.emit?.("resize", process.stdout.columns || 80, process.stdout.rows || 24)
-      }, 500)
-    }, 200)
+    const w = process.stdout.columns || 80
+    const h = process.stdout.rows || 24
+    renderer.emit?.("resize", w, h)
   })
 
   useKeyboard((evt) => {
