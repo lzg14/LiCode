@@ -1,5 +1,6 @@
 import { createOpenAI } from "@ai-sdk/openai"
 import { createAnthropic } from "@ai-sdk/anthropic"
+import { PROVIDER_PRIORITY } from "./catalog"
 
 export interface ModelConfig {
   provider: string
@@ -17,8 +18,7 @@ function normalizeMiniMaxModel(model: string): string {
   return model.replace(/\[.*?\]$/, "").trim()
 }
 
-export function createModel(config: ModelConfig) {
-  const provider = config.provider.toLowerCase()
+function createModelForProvider(provider: string, config: ModelConfig) {
   let apiKey = config.apiKey || process.env[`${provider.toUpperCase()}_API_KEY`] || ""
   // fallback: 如果没找到 provider 专属 key，尝试 ANTHROPIC_AUTH_TOKEN
   if (!apiKey) apiKey = process.env.ANTHROPIC_AUTH_TOKEN || ""
@@ -38,4 +38,20 @@ export function createModel(config: ModelConfig) {
     return createAnthropic({ apiKey, baseURL })(model)
   }
   return createOpenAI({ apiKey, baseURL: config.baseUrl }).chat(config.model)
+}
+
+export function createModel(config: ModelConfig) {
+  const primaryProvider = config.provider.toLowerCase()
+  const providers = [primaryProvider, ...PROVIDER_PRIORITY.filter(p => p !== primaryProvider)]
+  
+  for (const provider of providers) {
+    try {
+      return createModelForProvider(provider, { ...config, provider })
+    } catch (error) {
+      console.warn(`Provider ${provider} failed, trying next...`)
+      continue
+    }
+  }
+  
+  throw new Error(`All providers failed for model ${config.model}`)
 }

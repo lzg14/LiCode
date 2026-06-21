@@ -209,9 +209,26 @@ export class CoreLoop {
         timestamp: Date.now(),
       })
 
-      const result = await this.executePhase('EXECUTE', ctx, timer)
-      ctx = { ...ctx, ...result }
+      let result: Partial<LoopContext>
+      let lastError: Error | null = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          result = await this.executePhase('EXECUTE', ctx, timer)
+          break
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err))
+          devLogger.debug('LOOP', `Execute attempt ${attempt + 1} failed`, lastError)
+          if (attempt < 2) {
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
+          }
+        }
+      }
       timer.end(executeId)
+
+      if (lastError) {
+        return { text: `LLM 调用失败（已重试 3 次）: ${lastError.message}`, sessionId: ctx.sessionId }
+      }
+      ctx = { ...ctx, ...result! }
 
       // 检查是否需要压缩上下文
       if (ctx.streamBuffer && ctx.streamBuffer.length > 10000) {
