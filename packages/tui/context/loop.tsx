@@ -55,7 +55,7 @@ type AddMessageInput = {
 }
 
 export interface LoopContext {
-  run: (input: string, images?: Array<{ base64: string; mimeType: string }>) => Promise<void>
+  run: (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }>; presetPrompt?: string }) => Promise<void>
   abort: () => void
   phase: Accessor<Phase>
   isProcessing: Accessor<boolean>

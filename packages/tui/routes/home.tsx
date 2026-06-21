@@ -171,7 +171,7 @@ export function Home() {
       }
       return
     }
-    await run(text, images)
+    await run(text, { clipboardImages: images })
   }
 
   // ===== 斜杠命令菜单 =====
