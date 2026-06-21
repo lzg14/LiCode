@@ -16,6 +16,11 @@
 
 ### 重构
 - **Thinking 显示逻辑抽成纯函数**：`deriveThinkingDisplay()` 在 `packages/tui/util/thinking-display.ts`，4 种状态（empty / thinking-only / has-rest / no-thinking）覆盖所有场景，14 个单测保护。
+- **Security 配置合并逻辑抽成纯函数**：`mergeSecurityConfig()` + `PLATFORM_DEFAULTS` 在 `packages/security/merge.ts`，单一源消除 app.tsx / defaults.ts 重复。
+
+### 测试
+- **append 合并逻辑测试覆盖**：8 个用例验证默认+用户配置正确合并（追加+去重）
+- **PowerShell 危险模式实测**：7 个用例覆盖 Remove-Item / Set-ExecutionPolicy / Invoke-Expression / iex 管道
 
 ### 变更
 - **`/` 菜单精简**：移除 `/model`、`/provider`、`/search`、`/save`、`/load`、`/workflow` 六个命令。`/compact` 保留。换模型改用 `Ctrl+M`。
