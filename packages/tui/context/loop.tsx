@@ -6,6 +6,7 @@ import { listModelsByProvider } from "../../llm/catalog"
 import { devLogger } from "../../core/dev-logger"
 import { WorkflowEngine, BuiltinScriptRegistry } from "../../workflow"
 import { readImageFile } from "../../tools/builtin"
+import { checkDangerousPattern } from "../../security"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
 function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
@@ -139,6 +140,20 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       : undefined,
     toolExecutor: async (name, input) => {
       const { globalToolRegistry } = await import("../../tools/registry")
+
+      // 危险命令二次确认
+      if (name === 'bash') {
+        const parsed = input as { command?: string }
+        if (parsed.command) {
+          const check = checkDangerousPattern(parsed.command)
+          if (check.dangerous) {
+            // 这里简化处理，实际应该弹出 Dialog 让用户确认
+            // 目前先拒绝危险命令
+            return { success: false, error: `危险命令被拒绝: ${check.reason}` }
+          }
+        }
+      }
+
       return globalToolRegistry.execute(name, input) as Promise<{ success: boolean; output?: any; error?: string }>
     },
     scriptRegistry: new BuiltinScriptRegistry(),

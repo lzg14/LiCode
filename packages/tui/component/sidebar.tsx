@@ -1,10 +1,14 @@
-import { createMemo, Show } from "solid-js"
+import { createMemo, Show, For, createSignal, onCleanup } from "solid-js"
 import { useTheme } from "../context/theme"
 import { useConfig } from "../context/config"
 import { useLoop } from "../context/loop"
 import { getModelConfig } from "../../llm/catalog"
 
 const VERSION = "0.1.0"
+
+// 全局 todos 状态
+const [todos, setTodos] = createSignal<Array<{id: string; content: string; status: string; activeForm?: string}>>([])
+;(globalThis as any).__setTodos = setTodos
 
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning, error } = useTheme()
@@ -123,6 +127,25 @@ export function Sidebar() {
           </box>
         </Show>
       </box>
+
+      <Show when={todos().length > 0}>
+        <box flexDirection="column" gap={1} paddingTop={1}>
+          <text fg={primary()}>Todos</text>
+          <box flexDirection="column" paddingLeft={1}>
+            <For each={todos()}>
+              {(item) => {
+                const icon = item.status === 'completed' ? '✅' : item.status === 'in_progress' ? '🔄' : item.status === 'cancelled' ? '❌' : '⬜'
+                const displayText = item.content.length > 20 ? item.content.slice(0, 20) + '...' : item.content
+                return (
+                  <text fg={text()}>
+                    {`${icon} ${displayText}`}
+                  </text>
+                )
+              }}
+            </For>
+          </box>
+        </box>
+      </Show>
 
       <box flexGrow={1} />
 
