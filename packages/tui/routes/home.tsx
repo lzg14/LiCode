@@ -8,6 +8,7 @@ import { MessageList } from "../component/message-list"
 import { Prompt, setPromptText } from "../component/prompt"
 import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
+import { loadAllSkills } from "../../skills/loader"
 
 export function Home() {
   const { phase, isProcessing, messages, run, compactSession, clearSession, currentModel, currentProvider, switchModel, getAvailableModels, addMessage, setActiveSkill } = useLoop()
@@ -57,26 +58,9 @@ export function Home() {
   const [availableSkills, setAvailableSkills] = createSignal<string[]>([])
 
   const scanSkills = async () => {
-    const { readdir } = await import("fs/promises")
-    const { join } = await import("path")
-    const homes = process.env.HOME || process.env.USERPROFILE || ""
-    const paths = [
-      join(homes, '.licode', 'skills'),
-      join(homes, '.licode', 'skills', 'builtin'),
-      join(process.cwd(), 'skills'),
-    ]
-    const skills: string[] = []
-    for (const dir of paths) {
-      try {
-        for (const f of await readdir(dir)) {
-          if (f.endsWith('.skill.md')) skills.push(f.replace('.skill.md', ''))
-          else if (f.endsWith('.skill.json')) skills.push(f.replace('.skill.json', ''))
-          else if (f.endsWith('.md') && !f.startsWith('.')) skills.push(f.replace('.md', ''))
-        }
-      } catch {}
-    }
-    // 去重
-    setAvailableSkills([...new Set(skills)])
+    // 用新的 skill loader，直接消费 Claude Code `~/.claude/skills/`
+    const skills = loadAllSkills(process.cwd())
+    setAvailableSkills([...new Set(skills.map(s => s.name))])
   }
   scanSkills()
 
