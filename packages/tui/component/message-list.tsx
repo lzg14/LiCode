@@ -4,23 +4,13 @@ import { useLoop } from "../context/loop"
 import type { Message } from "../context/loop"
 import { Spinner } from "./spinner"
 import { createMarkdownSyntaxStyle } from "../util/syntax-style"
+import { ThinkingView } from "./thinking-view"
+import { deriveThinkingDisplay } from "../util/thinking-display"
 
 const MAX_VISIBLE_TOOLS = 3
 
 function stripSystemTags(content: string): string {
   return content.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").replace(/\n{3,}/g, "\n\n").trim()
-}
-
-/** 提取 thinking 内容，返回 [thinking, rest] */
-function extractThinking(content: string): [string, string] {
-  // 匹配任意位置的 <thinking>...</thinking>
-  const match = content.match(/<thinking>([\s\S]*?)<\/thinking>/)
-  if (match) {
-    const thinking = match[1].trim()
-    const rest = content.replace(match[0], '').trim()
-    return [thinking, rest]
-  }
-  return ["", content]
 }
 
 function MarkdownText(props: { content: string; streaming?: boolean }) {
@@ -81,17 +71,10 @@ function MessageItem(props: { msg: Message }) {
 
   if (props.msg.role === "assistant") {
     const cleaned = stripSystemTags(props.msg.content)
-    const [thinking, rest] = extractThinking(cleaned)
+    const display = deriveThinkingDisplay(cleaned, true)
     return (
       <box flexDirection="column" marginBottom={1} flexShrink={0}>
-        <Show when={thinking && !rest}>
-          <box flexDirection="column" paddingLeft={1} borderStyle="rounded" borderColor={textMuted()}>
-            <text fg={textMuted()}>{`💭 thinking...`}</text>
-          </box>
-        </Show>
-        <Show when={rest}>
-          <MarkdownText content={rest} />
-        </Show>
+        <ThinkingView display={display} streaming={false} />
         <Show when={props.msg.duration !== undefined}>
           <text fg={textMuted()}>{`  ${props.msg.duration}s`}</text>
         </Show>
@@ -193,24 +176,10 @@ export function MessageList() {
       </For>
 
       <Show when={streamingText()}>
-        {(() => {
-          const cleaned = stripSystemTags(streamingText())
-          const [thinking, rest] = extractThinking(cleaned)
-          return (
-            <>
-              <Show when={thinking && !rest}>
-                <box marginBottom={1} flexDirection="column" paddingLeft={1} borderStyle="rounded" borderColor={textMuted()}>
-                  <text fg={textMuted()}>{`💭 thinking...`}</text>
-                </box>
-              </Show>
-              <Show when={rest}>
-                <box marginBottom={1}>
-                  <MarkdownText content={rest} streaming={true} />
-                </box>
-              </Show>
-            </>
-          )
-        })()}
+        <ThinkingView
+          display={deriveThinkingDisplay(streamingText(), false)}
+          streaming={true}
+        />
       </Show>
 
       <Show when={isProcessing() && !streamingText()}>
