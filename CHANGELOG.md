@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### 变更
+- **`/` 菜单精简**：移除 `/model`、`/provider`、`/search`、`/save`、`/load`、`/workflow` 六个命令。`/compact` 保留。换模型改用 `Ctrl+M`。
+- **新增 `/clear`**：开新会话（清空 UI，保留 SQLite 数据）。
+- **Skill 集成**：从 Claude Code `~/.claude/skills/` 直接加载 SKILL.md 作为 licode 技能，删除硬编码的 coding/research/review workflow 模板。`/skill` 命令可用（`/workflow` 保留为别名，向后兼容）。
+
 ## [0.2.0] - 2026-06-21
 
 ### 新增

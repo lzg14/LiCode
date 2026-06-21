@@ -14,13 +14,12 @@
 | **Terminal-native TUI** | SolidJS + @opentui 终端 UI |
 | **多 LLM Provider** | Anthropic / OpenAI / DeepSeek / MiniMax |
 | **工具系统** | 文件操作、Git、Shell、搜索等内置工具 |
-| **技能系统** | 可扩展的技能定义和激活 |
+| **Skill 系统** | 兼容 Claude Code `~/.claude/skills/` 格式 |
 | **安全层** | 命令白名单、路径限制、危险命令拦截 |
 | **Session 管理** | 持久化会话，跨启动恢复 |
 | **Checkpoint 恢复** | 断点续传，不丢失进度 |
 | **MCP 集成** | 自动连接配置的 MCP 服务器 |
 | **上下文管理** | 项目级 `.licode.md` 配置加载 |
-| **Workflow 模板** | 预设 prompt 模板（coding/research/review） |
 
 ---
 
@@ -57,12 +56,9 @@ licode/
 │   ├── config/         # 配置管理（多层级/环境变量/外部导入）
 │   ├── llm/            # LLM Provider（Anthropic/OpenAI/DeepSeek/MiniMax）
 │   ├── security/       # 安全层（命令白名单、路径限制、危险命令拦截）
-│   ├── skills/         # 技能系统
+│   ├── skills/         # 技能系统（兼容 Claude Code skills）
 │   ├── memory/         # 记忆系统（FTS5、recall）
-│   ├── audit/          # 审计日志
-│   ├── integration/    # 外部集成（MCP、Git、Obsidian）
-│   ├── workflow/       # Workflow 模板（prompt 模板）
-│   └── ...
+│   └── integration/    # 外部集成（MCP、Git）
 ├── docs/               # 设计文档
 └── package.json
 ```
@@ -95,6 +91,24 @@ bun run vitest run packages/config/__tests__/loader.test.ts
 # 监听模式
 bun run vitest watch
 ```
+
+---
+
+## 快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+B` | 切换侧栏 |
+| `Ctrl+M` | 切换模型 |
+
+## 斜杠命令
+
+| 命令 | 功能 |
+|------|------|
+| `/skill <name>` | 激活技能 |
+| `/skill list` | 列出可用技能 |
+| `/compact` | 压缩对话历史 |
+| `/clear` | 开新会话 |
 
 ---
 
