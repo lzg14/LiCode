@@ -100,6 +100,11 @@ function MessageItem(props: { msg: Message }) {
         <Show when={toolArgs}>
           <text fg={textMuted()}>{`    ${toolArgs}`}</text>
         </Show>
+        <Show when={props.msg.diff}>
+          <box flexDirection="column" paddingLeft={2} marginTop={0}>
+            <MarkdownText content={props.msg.diff!} />
+          </box>
+        </Show>
       </box>
     )
   }

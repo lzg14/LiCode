@@ -35,6 +35,8 @@ export interface Message {
   toolStatus?: "pending" | "running" | "completed" | "error"
   toolBatch?: number
   duration?: number
+  /** 工具执行产生的 diff */
+  diff?: string
   /** 队列中等待发送的 user 消息 */
   queued?: boolean
   /** 附带的图片列表（base64 + mimeType），用于 multimodal 消息 */
@@ -50,6 +52,7 @@ type AddMessageInput = {
   toolStatus?: "pending" | "running" | "completed" | "error"
   toolBatch?: number
   duration?: number
+  diff?: string
   queued?: boolean
   images?: Message["images"]
 }
@@ -435,13 +438,14 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           toolStartTimes.set(id, Date.now())
           addMessage({ id, role: "tool", content: toolName, toolName, toolArgs: args, toolStatus: "running", toolBatch: batch })
         },
-        onToolResult: () => {
+        onToolResult: (result: any) => {
           setMessages((prev) => {
             const last = prev[prev.length - 1]
             if (last?.role === "tool") {
               const start = toolStartTimes.get(last.id) ?? 0
               const duration = start > 0 ? Date.now() - start : 0
-              return [...prev.slice(0, -1), { ...last, toolStatus: "completed", duration }]
+              const diff = result?.diff
+              return [...prev.slice(0, -1), { ...last, toolStatus: "completed", duration, diff }]
             }
             return prev
           })

@@ -7,7 +7,6 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { Memory } from '../memory/memory'
 import { SessionManager } from '../session/session'
-import { auditLogger } from '../audit/logger'
 import { GitIntegration } from '../integration/git'
 import { pluginManager } from '../integration/plugin'
 import { CheckpointManager, type SessionCheckpoint } from './checkpoint'
@@ -197,7 +196,6 @@ export class CoreLoop {
     } catch (e) {
       devLogger.debug('PLUGIN', 'session:start hook failed', e)
     }
-    auditLogger.logSessionStart(ctx.sessionId)
 
     try {
       // 直接执行，让 LLM 自己决定用什么工具、做什么
@@ -254,7 +252,6 @@ export class CoreLoop {
 
       // 记录会话结束
       const duration = Date.now() - startTime
-      auditLogger.logSessionEnd(ctx.sessionId, duration)
 
       // 构建并回调 perf trace
       const trace = timer.buildTrace(ctx.sessionId)

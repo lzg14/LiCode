@@ -10,8 +10,16 @@ import { join, dirname } from "path"
 /**
  * 加载项目配置文件（.licode.md / LICODE.md）
  */
+const projectConfigCache = new Map<string, string>()
+
 async function loadProjectConfig(cwd?: string): Promise<string> {
   const dir = cwd || process.cwd()
+  
+  // 检查缓存
+  if (projectConfigCache.has(dir)) {
+    return projectConfigCache.get(dir)!
+  }
+  
   const configFiles = ['.licode.md', 'LICODE.md', '.licode/LICODE.md']
   
   // 加载全局配置
@@ -66,10 +74,16 @@ async function loadProjectConfig(cwd?: string): Promise<string> {
   }
   
   // 合并：项目配置优先
+  let result: string
   if (projectConfig && globalConfig) {
-    return `## 全局规则\n\n${globalConfig}\n\n## 项目规则\n\n${projectConfig}`
+    result = `## 全局规则\n\n${globalConfig}\n\n## 项目规则\n\n${projectConfig}`
+  } else {
+    result = projectConfig || globalConfig
   }
-  return projectConfig || globalConfig
+  
+  // 缓存结果
+  projectConfigCache.set(dir, result)
+  return result
 }
 
 const SYSTEM_PROMPT = `你是一个名为 licode 的 AI 助手，专注于代码开发。
