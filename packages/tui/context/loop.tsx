@@ -58,7 +58,7 @@ type AddMessageInput = {
 }
 
 export interface LoopContext {
-  run: (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }>; presetPrompt?: string }) => Promise<void>
+  run: (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }> }) => Promise<void>
   abort: () => void
   phase: Accessor<Phase>
   isProcessing: Accessor<boolean>
@@ -69,13 +69,13 @@ export interface LoopContext {
   addMessage: (msg: AddMessageInput) => void
   updateMessage: (id: string, patch: Partial<Message>) => void
   clearMessages: () => void
+  clearSession: () => void
   toolCallExpanded: Accessor<boolean>
   toggleToolCallExpanded: () => void
   llmCallCount: Accessor<number>
   llmTokenUsage: Accessor<{ input: number; output: number; total: number }>
   compactSession: () => Promise<void>
-  runWorkflow: (name: string, args: any) => Promise<any>
-  listWorkflows: () => string[]
+  listSkills: () => string[]
   activeSkill: Accessor<string | null>
   setActiveSkill: (name: string | null) => void
   currentModel: Accessor<string>
@@ -188,41 +188,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   }
   initMCP()
 
-  // Preset Prompts（workflow 模板）
-  const [presetPrompts, setPresetPrompts] = createSignal<Record<string, string>>({})
-  const loadPresetPrompts = async () => {
-    try {
-      const { readFile } = await import("fs/promises")
-      const { join } = await import("path")
-      const { fileURLToPath } = await import("url")
-      const __filename = fileURLToPath(import.meta.url)
-      const __dirname = import.meta.dirname ?? __filename.replace(/[\\/][^\\/]+$/, '')
-      const builtinDir = join(__dirname, "..", "..", "workflow", "builtin")
-      const prompts = ["coding", "research", "review"]
-      const loaded: Record<string, string> = {}
-      for (const name of prompts) {
-        try {
-          const content = await readFile(join(builtinDir, `${name}.prompt.md`), "utf-8")
-          loaded[name] = content
-        } catch {}
-      }
-      setPresetPrompts(loaded)
-    } catch {}
-  }
-  loadPresetPrompts()
-
-  const runWorkflow = async (name: string, args: any) => {
-    // 如果有 preset prompt，返回 presetPrompt 让调用方处理
-    if (presetPrompts()[name]) {
-      return { success: true, presetPrompt: presetPrompts()[name] }
-    }
-    return { success: false, error: `未知的 workflow: ${name}` }
-  }
-
-  const listWorkflows = (): string[] => Object.keys(presetPrompts()).length > 0
-    ? Object.keys(presetPrompts())
-    : ["coding", "research", "review"]
-
   const setActiveSkill = async (name: string | null) => {
     if (!name) {
       setActiveSkillState(null)
@@ -230,37 +195,26 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       return
     }
     try {
-      const { readFile } = await import("fs/promises")
-      const { join } = await import("path")
-      const homes = process.env.HOME || process.env.USERPROFILE || ""
-      const paths = [
-        join(homes, ".licode", "skills", `${name}.skill.md`),
-        join(homes, ".licode", "skills", `${name}.skill.json`),
-        join(homes, ".licode", "skills", `${name}.md`),
-        join(homes, ".licode", "skills", "builtin", `${name}.skill.md`),
-        join(homes, ".licode", "skills", "builtin", `${name}.skill.json`),
-        join(process.cwd(), "skills", `${name}.skill.md`),
-        join(process.cwd(), "skills", `${name}.skill.json`),
-      ]
-      for (const p of paths) {
-        try {
-          const content = await readFile(p, "utf-8")
-          // 如果是 JSON 格式，提取 instructions 字段
-          if (p.endsWith('.json')) {
-            const data = JSON.parse(content)
-            setActiveSkillState(name)
-            setActiveSkillInstructions(data.instructions ?? content)
-          } else {
-            setActiveSkillState(name)
-            setActiveSkillInstructions(content)
-          }
-          return
-        } catch {}
+      const { findSkill, loadAllSkills } = await import("../../skills/loader")
+      const skill = findSkill(name, process.cwd())
+      if (skill) {
+        setActiveSkillState(name)
+        setActiveSkillInstructions(skill.instructions)
+      } else {
+        const available = loadAllSkills(process.cwd()).map(s => s.name).join(', ')
+        addMessage({ role: 'system', content: `未找到 skill: ${name}\n可用: ${available || '(无)'}` })
       }
-      setActiveSkillState(name)
-      setActiveSkillInstructions(`# ${name}\n\n技能文件未找到。已搜索: ${paths.join(", ")}`)
     } catch (e) {
       devLogger.debug("SKILL", "load failed", e)
+    }
+  }
+
+  const listSkills = (): string[] => {
+    try {
+      const { loadAllSkills } = require("../../skills/loader")
+      return loadAllSkills(process.cwd()).map((s: any) => s.name)
+    } catch {
+      return []
     }
   }
 
@@ -347,7 +301,18 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     setStreamingText("")
   }
 
-  const run = async (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }>; presetPrompt?: string }): Promise<void> => {
+  const clearSession = () => {
+    setMessages([])
+    setStreamingText("")
+    persistentSessionId = undefined
+    setLlmCallCount(0)
+    setLlmTokenUsage({ input: 0, output: 0, total: 0 })
+    setActiveSkillState(null)
+    setActiveSkillInstructions(null)
+    addMessage({ role: "system", content: "已开新会话" })
+  }
+
+  const run = async (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }> }): Promise<void> => {
     // 如果正在等待用户确认是否继续 tool call 迭代
     if (confirmResolve) {
       const shouldContinue = input.trim().toLowerCase() === "y"
@@ -405,7 +370,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         model: activeModel,
         activeSkill: activeSkill() ?? undefined,
         activeSkillInstructions: activeSkillInstructions() ?? undefined,
-        presetPrompt: opts?.presetPrompt ?? null,
         onPhaseChange: (p: Phase) => {
           setPhase(p)
         },
@@ -542,13 +506,13 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     addMessage,
     updateMessage,
     clearMessages,
+    clearSession,
     toolCallExpanded,
     toggleToolCallExpanded,
     llmCallCount,
     llmTokenUsage,
     compactSession,
-    runWorkflow,
-    listWorkflows,
+    listSkills,
     currentModel,
     currentProvider,
     switchModel,
