@@ -27,6 +27,8 @@ export function Home() {
   }
 
   const handleSubmit = async (text: string, images?: Array<{ base64: string; mimeType: string }>) => {
+    // 单独的 "/" 不发送（用户取消 slash 菜单后残留）
+    if (text.trim() === '/') return
     if (text.startsWith('/compact')) {
       await compactSession()
       return
@@ -368,40 +370,6 @@ export function Home() {
           </box>
         </Show>
 
-        <Show when={slashOpen()}>
-          <box
-            flexDirection="column"
-            position="absolute"
-            top={0}
-            left={0}
-            width="100%"
-            height="100%"
-            zIndex={5000}
-            alignItems="center"
-            justifyContent="center"
-          >
-            <box
-              flexDirection="column"
-              width={60}
-              paddingX={2}
-              paddingY={1}
-              backgroundColor={backgroundPanel()}
-              border={["top", "bottom", "left", "right"]}
-              borderColor={primary()}
-            >
-              <text fg={primary()}>命令 ({slashInput()})</text>
-              <box height={1} />
-              <For each={slashItems()}>
-                {(item, i) => (
-                  <text fg={i() === slashIdx() ? primary() : text()}>
-                    {`${i() === slashIdx() ? '▸ ' : '  '}${item.label}  ${item.desc}`}
-                  </text>
-                )}
-              </For>
-            </box>
-          </box>
-        </Show>
-
         <Show when={messages().length === 0 && !isProcessing()}>
           <box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
             <Logo />
@@ -424,6 +392,29 @@ export function Home() {
           >
             <MessageList />
           </scrollbox>
+        </Show>
+
+        <Show when={slashOpen()}>
+          <box
+            flexDirection="column"
+            width="100%"
+            paddingX={2}
+            paddingY={1}
+            backgroundColor={backgroundPanel()}
+            border={["top", "bottom", "left", "right"]}
+            borderColor={primary()}
+            flexShrink={0}
+          >
+            <text fg={primary()}>命令 ({slashInput()})</text>
+            <box height={1} />
+            <For each={slashItems()}>
+              {(item, i) => (
+                <text fg={i() === slashIdx() ? primary() : text()}>
+                  {`${i() === slashIdx() ? '▸ ' : '  '}${item.label}  ${item.desc}`}
+                </text>
+              )}
+            </For>
+          </box>
         </Show>
 
         <box flexShrink={0}>
