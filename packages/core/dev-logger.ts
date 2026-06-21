@@ -116,7 +116,7 @@ export class DevLogger {
 
   // 异常日志（详细）
   logException(context: string, error: unknown, extra?: unknown): void {
-    this.error('EXCEPTION', `Exception in ${context}`, { error, ...extra })
+    this.error('EXCEPTION', `Exception in ${context}`, { error, ...(extra && typeof extra === 'object' ? extra : extra != null ? { detail: extra } : {}) })
   }
 
   // Session 日志

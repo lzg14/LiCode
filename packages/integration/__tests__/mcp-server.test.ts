@@ -15,7 +15,7 @@ describe('MCPServerManager', () => {
       connect: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn().mockResolvedValue(undefined),
       health: vi.fn().mockResolvedValue({ healthy: true }),
-    }))
+    } as any))
     mgr = new MCPServerManager()
   })
 
@@ -35,7 +35,7 @@ describe('MCPServerManager', () => {
     vi.mocked(MCPIntegration).mockImplementation(() => ({
       connect: vi.fn().mockRejectedValue(new Error('Connection refused')),
       disconnect: vi.fn(), health: vi.fn(), name: 'mcp', enabled: false,
-    }))
+    } as any))
     await mgr.addServer({ id: 'f', command: 'n' })
     const s = mgr.getServerStatus('f')
     expect(s?.connected).toBe(false)
@@ -71,7 +71,7 @@ describe('MCPServerManager', () => {
     vi.mocked(MCPIntegration).mockImplementation(() => ({
       connect: vi.fn().mockRejectedValue(new Error('fail')),
       disconnect: vi.fn(), health: vi.fn(), name: 'mcp', enabled: false,
-    }))
+    } as any))
     await mgr.addServer({ id: 'dis', command: 'n' })
     expect(mgr.getConnectedServers()).toHaveLength(1)
   })
@@ -81,7 +81,7 @@ describe('MCPServerManager', () => {
     vi.mocked(MCPIntegration).mockImplementation(() => ({
       connect: vi.fn().mockResolvedValue(undefined),
       disconnect: dc, health: vi.fn(), name: 'mcp', enabled: false,
-    }))
+    } as any))
     await mgr.addServer({ id: 's', command: 'n' })
     await mgr.disconnectServer('s')
     expect(dc).toHaveBeenCalled()
@@ -96,7 +96,7 @@ describe('MCPServerManager', () => {
     const c = vi.fn().mockResolvedValue(undefined)
     vi.mocked(MCPIntegration).mockImplementation(() => ({
       connect: c, disconnect: vi.fn(), health: vi.fn(), name: 'mcp', enabled: false,
-    }))
+    } as any))
     await mgr.addServer({ id: 's', command: 'n' })
     c.mockClear()
     await mgr.connectServer('s')
@@ -108,7 +108,7 @@ describe('MCPServerManager', () => {
     vi.mocked(MCPIntegration).mockImplementation(() => ({
       connect: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn(), health: h, name: 'mcp', enabled: false,
-    }))
+    } as any))
     await mgr.addServer({ id: 's', command: 'n' })
     const s = await mgr.checkHealth('s')
     expect(s.healthy).toBe(true)
@@ -126,7 +126,7 @@ describe('MCPServerManager', () => {
     const dc = vi.fn().mockResolvedValue(undefined)
     vi.mocked(MCPIntegration).mockImplementation(() => ({
       connect: vi.fn(), disconnect: dc, health: vi.fn(), name: 'mcp', enabled: false,
-    }))
+    } as any))
     await mgr.addServer({ id: 'a', command: 'n' })
     await mgr.addServer({ id: 'b', command: 'n' })
     await mgr.shutdown()

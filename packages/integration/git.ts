@@ -43,10 +43,10 @@ export class GitIntegration extends BaseIntegration {
   async getStatus(): Promise<{ branch: string; ahead: number; behind: number; dirty: boolean }> {
     const status: StatusResult = await this.git.status()
     return {
-      branch: status.current,
+      branch: status.current ?? '',
       ahead: status.ahead,
       behind: status.behind,
-      dirty: status.is_clean() === false,
+      dirty: status.isClean() === false,
     }
   }
 

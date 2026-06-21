@@ -95,7 +95,7 @@ export class DatabaseIntegration extends BaseIntegration {
     if (!this.db) throw new Error('Database not connected')
 
     const stmt = this.db.prepare(sql)
-    const rows = params ? stmt.all(...params) as T[] : stmt.all() as T[]
+    const rows = params ? stmt.all(...(params as any[])) as T[] : stmt.all() as T[]
     return { rows, changes: 0 }
   }
 
@@ -103,7 +103,7 @@ export class DatabaseIntegration extends BaseIntegration {
     if (!this.db) throw new Error('Database not connected')
 
     const stmt = this.db.prepare(sql)
-    const result = params ? stmt.run(...params) : stmt.run()
+    const result = params ? stmt.run(...(params as any[])) : stmt.run()
     return {
       rows: [],
       changes: result.changes,

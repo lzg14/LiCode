@@ -1,4 +1,4 @@
-import { copy } from "./clipboard"
+import { copyToClipboard } from "./clipboard"
 
 type Toast = {
   show: (input: { message: string; variant: "info" | "success" | "warning" | "error" }) => void
@@ -14,7 +14,7 @@ export function doCopy(renderer: Renderer, toast: Toast, message: string): boole
   const text = renderer.getSelection()?.getSelectedText()
   if (!text) return false
 
-  copy(text)
+  copyToClipboard(text)
     .then(() => toast.show({ message, variant: "info" }))
     .catch(toast.error)
 
