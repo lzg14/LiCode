@@ -51,39 +51,7 @@ export function Sidebar() {
     >
       <box flexDirection="column" gap={1}>
         <text fg={primary()} >{sessionTitle()}</text>
-        <box flexDirection="row" gap={1}>
-          <text fg={textMuted()} >model</text>
-          <text fg={text()} >{currentModel()}</text>
-        </box>
-        <box flexDirection="row" gap={1}>
-          <text fg={textMuted()} >provider</text>
-          <text fg={text()} >{config.config().llm.provider}</text>
-        </box>
       </box>
-
-      <Show when={msgCount() > 0}>
-        <box flexDirection="column" gap={1} paddingTop={1}>
-          <text fg={primary()}>Stats</text>
-          <box paddingLeft={1} flexDirection="row" gap={1}>
-            <text fg={textMuted()}>messages</text>
-            <text fg={text()}>{msgCount()}</text>
-          </box>
-          <box paddingLeft={1} flexDirection="row" gap={1}>
-            <text fg={textMuted()}>user</text>
-            <text fg={text()}>{userCount()}</text>
-          </box>
-          <box paddingLeft={1} flexDirection="row" gap={1}>
-            <text fg={textMuted()}>assistant</text>
-            <text fg={text()}>{assistantCount()}</text>
-          </box>
-          <Show when={toolCallCount() > 0}>
-            <box paddingLeft={1} flexDirection="row" gap={1}>
-              <text fg={warning()}>tools</text>
-              <text fg={text()}>{toolCallCount()}</text>
-            </box>
-          </Show>
-        </box>
-      </Show>
 
       <Show when={msgCount() > 0 && llmCallCount() > 0}>
         <box flexDirection="column" gap={1} paddingTop={1}>
@@ -115,15 +83,39 @@ export function Sidebar() {
         </box>
       </Show>
 
-      <box flexDirection="column" gap={1} paddingTop={1}>
-        <text fg={primary()}>Progress</text>
-        <Show when={isProcessing()}>
+      <Show when={msgCount() > 0}>
+        <box flexDirection="column" gap={1} paddingTop={1}>
+          <text fg={primary()}>Stats</text>
+          <box paddingLeft={1} flexDirection="row" gap={1}>
+            <text fg={textMuted()}>messages</text>
+            <text fg={text()}>{msgCount()}</text>
+          </box>
+          <box paddingLeft={1} flexDirection="row" gap={1}>
+            <text fg={textMuted()}>user</text>
+            <text fg={text()}>{userCount()}</text>
+          </box>
+          <box paddingLeft={1} flexDirection="row" gap={1}>
+            <text fg={textMuted()}>assistant</text>
+            <text fg={text()}>{assistantCount()}</text>
+          </box>
+          <Show when={toolCallCount() > 0}>
+            <box paddingLeft={1} flexDirection="row" gap={1}>
+              <text fg={warning()}>tools</text>
+              <text fg={text()}>{toolCallCount()}</text>
+            </box>
+          </Show>
+        </box>
+      </Show>
+
+      <Show when={isProcessing()}>
+        <box flexDirection="column" gap={1} paddingTop={1}>
+          <text fg={primary()}>Progress</text>
           <box paddingLeft={1} flexDirection="row" gap={1}>
             <text fg={textMuted()}>phase</text>
             <text fg={primary()}>{phase()}</text>
           </box>
-        </Show>
-      </box>
+        </box>
+      </Show>
 
       <Show when={todos().length > 0}>
         <box flexDirection="column" gap={1} paddingTop={1}>
