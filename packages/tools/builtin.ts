@@ -77,7 +77,7 @@ export function registerBuiltinTools(): void {
           }
         } else {
           diff.push(`@@ -0,0 +1,${content.split('\n').length} @@`)
-          content.split('\n').forEach(line => diff.push(`+${line}`))
+          content.split('\n').forEach((line: string) => diff.push(`+${line}`))
         }
 
         return { success: true, output: `已写入 ${path}`, diff: diff.join('\n') }
@@ -764,7 +764,7 @@ export function registerBuiltinTools(): void {
     }),
     handler: async ({ items }) => {
       // 验证 id 唯一性
-      const ids = items.map(i => i.id)
+      const ids = items.map((i: any) => i.id)
       if (new Set(ids).size !== ids.length) {
         return { success: false, error: '存在重复的 todo id' }
       }
