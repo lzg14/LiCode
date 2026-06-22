@@ -4,7 +4,7 @@ import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
 import { glob } from 'glob'
 import { join, dirname, resolve, extname } from 'path'
-import { Database } from 'bun:sqlite'
+// import { Database } from 'bun:sqlite'  // moved to dynamic import
 import { z } from 'zod'
 import { globalToolRegistry } from './registry'
 import { getSecurityLayer } from '../security'
