@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal } from "solid-js"
+import { For, Show, Switch, Match, createMemo, createSignal } from "solid-js"
 import { useTheme } from "../context/theme"
 import { useLoop } from "../context/loop"
 import type { Message } from "../context/loop"
@@ -13,10 +13,47 @@ const MAX_VISIBLE_TOOLS = 3
 function stripSystemTags(content: string): string {
   return content
     .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "")
-    .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
-    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    // thinking 标签保留：交给 ThinkingView / deriveThinkingDisplay 处理
+    // （streaming 阶段展示过灰色 thinking，最终消息里也要保持一致）
     .replace(/\n{3,}/g, "\n\n")
     .trim()
+}
+
+/**
+ * pendingText 的响应式视图组件
+ * 单独抽出来是为了让 display 的计算在组件内部追踪响应式，
+ * 避免外层 IIFE 一次性求值、跨阶段切换时整棵 markdown 树重新挂载造成的"顿顿"视觉跳动。
+ */
+function PendingStreamView() {
+  const { pendingText } = useLoop()
+  const { textMuted } = useTheme()
+  const display = createMemo(() => deriveThinkingDisplay(pendingText(), false))
+  const d = () => display() as any
+
+  return (
+    <Switch>
+      <Match when={d().kind === "thinking-only"}>
+        <box marginBottom={1} paddingLeft={1}>
+          <text fg={textMuted()}>{d().text}</text>
+        </box>
+      </Match>
+      <Match when={d().kind === "has-rest"}>
+        <box flexDirection="column">
+          <Show when={d().thinking}>
+            <box marginBottom={1} paddingLeft={1}>
+              <text fg={textMuted()}>{d().thinking}</text>
+            </box>
+          </Show>
+          <MarkdownText content={d().rest} streaming={true} />
+        </box>
+      </Match>
+      <Match when={true}>
+        <box marginBottom={1}>
+          <MarkdownText content={pendingText()} streaming={true} />
+        </box>
+      </Match>
+    </Switch>
+  )
 }
 
 function MarkdownText(props: { content: string; streaming?: boolean }) {
@@ -200,31 +237,7 @@ export function MessageList() {
           }}
         </For>
         <Show when={pendingText()}>
-          {(() => {
-            const display = deriveThinkingDisplay(pendingText(), false)
-            if (display.kind === 'thinking-only') {
-              return (
-                <box marginBottom={1} paddingLeft={1}>
-                  <text fg={textMuted()}>{display.text}</text>
-                </box>
-              )
-            }
-            if (display.kind === 'has-rest' && display.thinking) {
-              return (
-                <box flexDirection="column">
-                  <box marginBottom={1} paddingLeft={1}>
-                    <text fg={textMuted()}>{display.thinking}</text>
-                  </box>
-                  <MarkdownText content={display.rest} streaming={true} />
-                </box>
-              )
-            }
-            return (
-              <box marginBottom={1}>
-                <MarkdownText content={pendingText()} streaming={true} />
-              </box>
-            )
-          })()}
+          <PendingStreamView />
         </Show>
       </Show>
 
