@@ -509,7 +509,12 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
           type: "tool-result" as const,
           toolCallId: tc.toolCallId,
           toolName: tc.toolName,
-          output: { type: "text", value: execResult.success ? (execResult.output ?? "") : `Error: ${execResult.error}` },
+          output: {
+            type: "text",
+            value: execResult.success
+              ? `OK: ${execResult.output ?? '(无输出)'}`
+              : `Error: ${execResult.error ?? '未知错误'}`,
+          },
         }
       }))
       const toolMsg = { role: "tool", content: toolResults }
