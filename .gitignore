@@ -18,3 +18,4 @@ Thumbs.db
 # User data
 memory/
 tsc-result*.txt
+test-results/
