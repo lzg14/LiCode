@@ -45,6 +45,12 @@ function formatDuration(ms: number): string {
   return `${m}m${s}s`
 }
 
+function beijingTime(ts: number): string {
+  const d = new Date(ts)
+  const cst = new Date(d.getTime() + 8 * 60 * 60 * 1000)
+  return cst.toISOString().slice(11, 19)
+}
+
 function MessageItem(props: { msg: Message }) {
   const { primary, text, textMuted, error, success, warning } = useTheme()
 
@@ -83,6 +89,7 @@ function MessageItem(props: { msg: Message }) {
         <Show when={props.msg.duration !== undefined}>
           <text fg={textMuted()}>{`  ${props.msg.duration}s`}</text>
         </Show>
+        <text fg={textMuted()}>{`  ${beijingTime(props.msg.timestamp)}`}</text>
       </box>
     )
   }
