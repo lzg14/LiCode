@@ -398,9 +398,13 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
 
       devLogger.info('STREAM', `stream completed: chunks=${chunkCount}, text=${streamedText.length}, tools=${streamedToolCalls.length}`)
 
+      // fullStream 可能不输出 tool-call chunks（provider 实现有关）
+      // 改从 streamText 结果的 toolCalls 属性获取（stream 结束后可 await）
+      const resolvedToolCalls = await streamResult.toolCalls
+
       const resolvedResult = {
         text: streamedText || undefined,
-        toolCalls: streamedToolCalls.length > 0 ? streamedToolCalls : undefined,
+        toolCalls: resolvedToolCalls && resolvedToolCalls.length > 0 ? resolvedToolCalls : undefined,
         usage: await streamResult.usage,
         finishReason: await streamResult.finishReason,
       }
