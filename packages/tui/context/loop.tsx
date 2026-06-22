@@ -1,4 +1,4 @@
-import { createContext, useContext, createSignal, createMemo, onMount, type JSX, type Accessor } from "solid-js"
+import { createContext, useContext, createSignal, createMemo, onMount, batch, type JSX, type Accessor } from "solid-js"
 import type { Phase } from "../../core/types"
 import type { CoreLoop } from "../../core/loop"
 import { createModel } from "../../llm/provider"
@@ -7,6 +7,7 @@ import { devLogger } from "../../core/dev-logger"
 import { readImageFile } from "../../tools/builtin"
 import { checkDangerousPattern } from "../../security"
 import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
+import { useToast } from "../ui/toast"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
 function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
@@ -91,6 +92,7 @@ export interface LoopContext {
 const Ctx = createContext<LoopContext>()
 
 export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; provider?: string; sessionId?: string; llmConfig?: { provider: string; model: string; apiKey?: string; baseUrl?: string } }) {
+  const toast = useToast()
   const [isProcessing, setIsProcessing] = createSignal(false)
   const [elapsed, setElapsed] = createSignal(0)
   const [streamingSegments, setStreamingSegments] = createSignal<Segment[]>([])
@@ -393,13 +395,15 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         },
         onStreamText: (delta: string) => {
           const { closed, pending } = streamAccumulator.push(delta)
-          if (closed.length > 0) {
-            // 批量更新，减少重渲染次数
-            setStreamingSegments(prev => [...prev, ...closed])
-          }
-          if (pending !== pendingText()) {
-            setPendingText(pending)
-          }
+          // 合并信号更新，减少重渲染次数
+          batch(() => {
+            if (closed.length > 0) {
+              setStreamingSegments(prev => [...prev, ...closed])
+            }
+            if (pending !== pendingText()) {
+              setPendingText(pending)
+            }
+          })
         },
         onIntermediateText: (text: string) => {
           // 中间轮一次性把当前段收尾，然后整个块作为新消息
@@ -439,6 +443,12 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         },
         onCompaction: (summary: string, originalCount: number, preservedCount: number) => {
           addMessage({ role: "system", content: `🗜️ 已压缩对话历史：${originalCount} 条 → 保留 ${preservedCount} 条\n\n摘要预览：\n${summary.slice(0, 500)}${summary.length > 500 ? '...' : ''}` })
+          const saved = originalCount - preservedCount
+          toast.show({
+            message: `已压缩 ${saved} 条历史，保留最近 ${preservedCount} 条`,
+            variant: "info",
+            duration: 5000,
+          })
         },
       }
 

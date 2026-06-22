@@ -20,39 +20,45 @@ function stripSystemTags(content: string): string {
 }
 
 /**
- * pendingText 的响应式视图组件
- * 单独抽出来是为了让 display 的计算在组件内部追踪响应式，
- * 避免外层 IIFE 一次性求值、跨阶段切换时整棵 markdown 树重新挂载造成的"顿顿"视觉跳动。
+ * PendingStreamView - 渲染未闭合的 streaming 内容
+ *
+ * 使用单一子树 + 条件 Show，避免 Switch 切分支时的 DOM 销毁/重建
+ * thinking 持续显示，正文逐步追加在下方，无视觉跳变。
  */
 function PendingStreamView() {
   const { pendingText } = useLoop()
   const { textMuted } = useTheme()
   const display = createMemo(() => deriveThinkingDisplay(pendingText(), false))
-  const d = () => display() as any
+
+  const thinking = createMemo(() => {
+    const d = display()
+    if (d.kind === 'thinking-only') return d.text
+    if (d.kind === 'has-rest') return d.thinking
+    return ''
+  })
+  const rest = createMemo(() => {
+    const d = display()
+    if (d.kind === 'has-rest') return d.rest
+    if (d.kind === 'no-thinking') return d.rest
+    return ''
+  })
 
   return (
-    <Switch>
-      <Match when={d().kind === "thinking-only"}>
+    <box flexDirection="column">
+      <Show when={thinking()}>
         <box marginBottom={1} paddingLeft={1}>
-          <text fg={textMuted()}>{d().text}</text>
+          <text fg={textMuted()}>{thinking()}</text>
         </box>
-      </Match>
-      <Match when={d().kind === "has-rest"}>
-        <box flexDirection="column">
-          <Show when={d().thinking}>
-            <box marginBottom={1} paddingLeft={1}>
-              <text fg={textMuted()}>{d().thinking}</text>
-            </box>
-          </Show>
-          <MarkdownText content={d().rest} streaming={true} />
-        </box>
-      </Match>
-      <Match when={true}>
+      </Show>
+      <Show when={rest()}>
+        <MarkdownText content={rest()} streaming={true} />
+      </Show>
+      <Show when={!thinking() && !rest() && pendingText()}>
         <box marginBottom={1}>
           <MarkdownText content={pendingText()} streaming={true} />
         </box>
-      </Match>
-    </Switch>
+      </Show>
+    </box>
   )
 }
 
