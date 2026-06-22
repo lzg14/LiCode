@@ -400,12 +400,13 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
 
       // fullStream 可能不输出 tool-call chunks（provider 实现有关）
       // 改从 streamText 结果的 toolCalls 属性获取（stream 结束后可 await）
-      const resolvedToolCalls = await streamResult.toolCalls
-      devLogger.debug('STREAM', `resolvedToolCalls: ${JSON.stringify(resolvedToolCalls?.map((tc: any) => ({ name: tc.toolName, input: tc.input }))}`)
+      const rawToolCalls = await streamResult.toolCalls
+      const resolvedToolCalls = (Array.isArray(rawToolCalls) ? rawToolCalls : []) as any[]
+      devLogger.debug('STREAM', 'resolvedToolCalls count:', resolvedToolCalls.length)
 
       const resolvedResult = {
         text: streamedText || undefined,
-        toolCalls: resolvedToolCalls && resolvedToolCalls.length > 0 ? resolvedToolCalls : undefined,
+        toolCalls: resolvedToolCalls.length > 0 ? resolvedToolCalls : undefined,
         usage: await streamResult.usage,
         finishReason: await streamResult.finishReason,
       }
