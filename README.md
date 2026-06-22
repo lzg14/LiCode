@@ -1,5 +1,8 @@
 # licode
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![CI](https://github.com/your-username/licode/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/licode/actions/workflows/ci.yml)
+
 **Terminal-native AI coding agent** — 参考 MiMo Code 架构，支持多 provider、持久化 session、工具调用、技能系统
 
 > 以前：有个想法 → 找人聊 → 没时间 → 算了
