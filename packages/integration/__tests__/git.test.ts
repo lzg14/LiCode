@@ -1,122 +1,204 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-vi.mock('child_process', () => ({ execSync: vi.fn() }))
-vi.mock('fs', () => ({ existsSync: vi.fn() }))
-
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { mkdtempSync, rmSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { execSync } from 'child_process'
-import { existsSync } from 'fs'
 import { GitIntegration } from '../git'
 
+/**
+ * Run a shell command in a working directory, swallowing stderr so test
+ * output stays clean. The git CLI on Windows prints harmless warnings
+ * (e.g. "hint: Using 'master' as the name for the initial branch") that
+ * would otherwise clutter the test report.
+ *
+ * Args containing whitespace are wrapped in double quotes so multi-word
+ * commit messages such as `git commit -m "add a"` survive shell parsing.
+ */
+function git(cwd: string, ...args: string[]): string {
+  const cmd = args
+    .map(a => (/\s/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a))
+    .join(' ')
+  return execSync(`git ${cmd}`, {
+    cwd,
+    stdio: 'pipe',
+    encoding: 'utf-8',
+  })
+}
+
 describe('GitIntegration', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  let repoPath: string
+  let g: GitIntegration
+
+  beforeEach(() => {
+    repoPath = mkdtempSync(join(tmpdir(), 'git-test-'))
+    // Initialize a real git repo so the integration has a .git folder
+    // to discover and a working status/log/diff pipeline to query.
+    git(repoPath, 'init', '-q')
+    git(repoPath, 'config', 'user.email', 'test@test.com')
+    git(repoPath, 'config', 'user.name', 'Test')
+    g = new GitIntegration(repoPath)
+  })
+
+  afterEach(() => {
+    if (existsSync(repoPath)) {
+      rmSync(repoPath, { recursive: true, force: true })
+    }
+  })
 
   it('connect 在 .git 存在时启用', async () => {
-    vi.mocked(existsSync).mockReturnValue(true)
-    const g = new GitIntegration('/r')
     await g.connect()
     expect(g.enabled).toBe(true)
   })
 
   it('connect 无 .git 时不启用', async () => {
-    vi.mocked(existsSync).mockReturnValue(false)
-    const g = new GitIntegration('/r')
-    await g.connect()
-    expect(g.enabled).toBe(false)
+    // A plain directory without `git init` has no .git folder.
+    const noGitDir = mkdtempSync(join(tmpdir(), 'no-git-'))
+    try {
+      const g2 = new GitIntegration(noGitDir)
+      await g2.connect()
+      expect(g2.enabled).toBe(false)
+    } finally {
+      rmSync(noGitDir, { recursive: true, force: true })
+    }
   })
 
   it('disconnect 设置 enabled=false', async () => {
-    const g = new GitIntegration('/r')
-    g.enabled = true
+    await g.connect()
+    expect(g.enabled).toBe(true)
     await g.disconnect()
     expect(g.enabled).toBe(false)
   })
 
   it('health 在 git 成功时 healthy', async () => {
-    vi.mocked(execSync).mockReturnValue('')
-    const g = new GitIntegration('/r')
-    g.enabled = true
-    expect((await g.health()).healthy).toBe(true)
+    await g.connect()
+    const h = await g.health()
+    expect(h.healthy).toBe(true)
   })
 
   it('health 在 git 失败时 unhealthy', async () => {
-    vi.mocked(execSync).mockImplementation(() => { throw new Error('err') })
-    const g = new GitIntegration('/r')
-    g.enabled = true
-    const h = await g.health()
-    expect(h.healthy).toBe(false)
-    expect(h.message).toBe('Git not available')
+    // Point at a path that exists but is not a git repo. simple-git's
+    // status() call will fail with "not a git repository", which
+    // health() maps to { healthy: false, message: 'Git not available' }.
+    const plainDir = mkdtempSync(join(tmpdir(), 'not-a-repo-'))
+    try {
+      const g2 = new GitIntegration(plainDir)
+      const h = await g2.health()
+      expect(h.healthy).toBe(false)
+      expect(h.message).toBe('Git not available')
+    } finally {
+      rmSync(plainDir, { recursive: true, force: true })
+    }
   })
 
-  it('getStatus 正确解析 git 输出', () => {
-    vi.mocked(execSync)
-      .mockReturnValueOnce('main').mockReturnValueOnce('5').mockReturnValueOnce('2').mockReturnValueOnce(' M f.ts\n')
-    expect(new GitIntegration('/r').getStatus()).toEqual({ branch: 'main', ahead: 5, behind: 2, dirty: true })
+  it('getStatus 正确解析 git 输出', async () => {
+    // Create a real file and commit it, then make a local change so the
+    // repo is dirty and the status call returns meaningful values.
+    writeFileSync(join(repoPath, 'a.txt'), 'hello')
+    git(repoPath, 'add', 'a.txt')
+    git(repoPath, 'commit', '-q', '-m', 'add a')
+    writeFileSync(join(repoPath, 'a.txt'), 'hello modified')
+
+    const s = await new GitIntegration(repoPath).getStatus()
+    expect(s.dirty).toBe(true)
+    expect(typeof s.branch).toBe('string')
   })
 
-  it('getStatus 无变更状态', () => {
-    vi.mocked(execSync)
-      .mockReturnValueOnce('f').mockReturnValueOnce('0').mockReturnValueOnce('0').mockReturnValueOnce('')
-    expect(new GitIntegration('/r').getStatus()).toEqual({ branch: 'f', ahead: 0, behind: 0, dirty: false })
+  it('getStatus 干净状态 dirty=false', async () => {
+    writeFileSync(join(repoPath, 'clean.txt'), 'content')
+    git(repoPath, 'add', 'clean.txt')
+    git(repoPath, 'commit', '-q', '-m', 'add clean')
+
+    const s = await new GitIntegration(repoPath).getStatus()
+    expect(s.dirty).toBe(false)
   })
 
-  it('getDiff 返回 diff 字符串', () => {
-    vi.mocked(execSync).mockReturnValue('diff --git a/f.ts b/f.ts')
-    expect(new GitIntegration('/r').getDiff()).toContain('diff --git')
+  it('getDiff 返回 diff 字符串', async () => {
+    writeFileSync(join(repoPath, 'f.txt'), 'v1')
+    git(repoPath, 'add', 'f.txt')
+    git(repoPath, 'commit', '-q', '-m', 'init')
+    writeFileSync(join(repoPath, 'f.txt'), 'v2')
+
+    const diff = await new GitIntegration(repoPath).getDiff()
+    expect(diff).toContain('diff --git')
   })
 
-  it('getDiff 传入 staged 使用 --cached', () => {
-    vi.mocked(execSync).mockReturnValue('')
-    new GitIntegration('/r').getDiff(true)
-    expect(execSync).toHaveBeenCalledWith('git diff --cached', expect.any(Object))
+  it('getDiff 传入 staged 使用 --cached', async () => {
+    writeFileSync(join(repoPath, 's.txt'), 'staged')
+    git(repoPath, 'add', 's.txt')
+
+    const diff = await new GitIntegration(repoPath).getDiff(true)
+    // Staged diff for an added file should reference the file path.
+    expect(diff).toContain('s.txt')
   })
 
   it('getLog 正确解析日志', async () => {
-    vi.mocked(execSync).mockReturnValue('abc|msg|A|d1\ndef|msg2|B|d2\n')
-    const log = await new GitIntegration('/r').getLog(2)
-    expect(log).toHaveLength(2)
-    expect(log[0].hash).toBe('abc')
-    expect(log[0].message).toBe('msg')
+    writeFileSync(join(repoPath, 'a.txt'), 'a')
+    git(repoPath, 'add', 'a.txt')
+    git(repoPath, 'commit', '-q', '-m', 'first')
+    writeFileSync(join(repoPath, 'b.txt'), 'b')
+    git(repoPath, 'add', 'b.txt')
+    git(repoPath, 'commit', '-q', '-m', 'second')
+
+    const log = await new GitIntegration(repoPath).getLog(5)
+    expect(log.length).toBeGreaterThanOrEqual(2)
+    expect(log[0].message).toBe('second')
+    expect(log[1].message).toBe('first')
+    expect(log[0].hash).toMatch(/^[0-9a-f]{7,40}$/)
   })
 
-  it('add 暂存文件', () => {
-    vi.mocked(execSync).mockReturnValue('')
-    new GitIntegration('/r').add(['a.ts', 'b.ts'])
-    expect(execSync).toHaveBeenCalledWith('git add a.ts b.ts', expect.any(Object))
+  it('add 暂存文件', async () => {
+    writeFileSync(join(repoPath, 'x.txt'), 'x')
+    writeFileSync(join(repoPath, 'y.txt'), 'y')
+    await new GitIntegration(repoPath).add(['x.txt', 'y.txt'])
+    // After add, both files should appear in the staged diff.
+    const diff = await new GitIntegration(repoPath).getDiff(true)
+    expect(diff).toContain('x.txt')
+    expect(diff).toContain('y.txt')
   })
 
-  it('commit 执行提交', () => {
-    vi.mocked(execSync).mockReturnValue('[main abc123] msg')
-    const r = new GitIntegration('/r').commit('my message')
-    expect(execSync).toHaveBeenCalledWith('git commit -m "my message"', expect.any(Object))
-    expect(r).toBe('[main abc123] msg')
+  it('commit 执行提交', async () => {
+    writeFileSync(join(repoPath, 'c.txt'), 'c')
+    git(repoPath, 'add', 'c.txt')
+    const r = await new GitIntegration(repoPath).commit('my message')
+    // simple-git returns the short commit SHA in `result.commit`.
+    expect(r).toMatch(/^[0-9a-f]{7,40}$/)
+    // And the log should now contain the new commit message.
+    const log = await new GitIntegration(repoPath).getLog(1)
+    expect(log[0].message).toBe('my message')
   })
 
-  it('getBranches 解析分支列表', () => {
-    vi.mocked(execSync).mockReturnValue('* main\n  dev\n')
-    expect(new GitIntegration('/r').getBranches()).toEqual(['main', 'dev'])
+  it('getBranches 解析分支列表', async () => {
+    // `git branch` returns no output for a repo with no commits, so make
+    // one commit first to materialise a local branch.
+    writeFileSync(join(repoPath, 'init.txt'), 'init')
+    git(repoPath, 'add', 'init.txt')
+    git(repoPath, 'commit', '-q', '-m', 'initial commit')
+
+    const branches = await new GitIntegration(repoPath).getBranches()
+    expect(branches.length).toBeGreaterThanOrEqual(1)
+    expect(branches[0]).toBeTruthy()
   })
 
   it('checkDangerousOperation 检测 push --force', () => {
-    const g = new GitIntegration('/r')
-    const r = g.checkDangerousOperation('git push --force origin main')
+    const r = new GitIntegration(repoPath).checkDangerousOperation('git push --force origin main')
     expect(r.safe).toBe(false)
     expect(r.reason).toContain('force push')
   })
 
   it('checkDangerousOperation 检测 reset --hard', () => {
-    expect(new GitIntegration('/r').checkDangerousOperation('git reset --hard HEAD').safe).toBe(false)
+    expect(new GitIntegration(repoPath).checkDangerousOperation('git reset --hard HEAD').safe).toBe(false)
   })
 
   it('checkDangerousOperation 检测 clean -f 和 branch -D', () => {
-    const g = new GitIntegration('/r')
-    expect(g.checkDangerousOperation('git clean -f').safe).toBe(false)
-    expect(g.checkDangerousOperation('git branch -D x').safe).toBe(false)
+    const g2 = new GitIntegration(repoPath)
+    expect(g2.checkDangerousOperation('git clean -f').safe).toBe(false)
+    expect(g2.checkDangerousOperation('git branch -D x').safe).toBe(false)
   })
 
   it('checkDangerousOperation 放行安全命令', () => {
-    const g = new GitIntegration('/r')
-    expect(g.checkDangerousOperation('git status').safe).toBe(true)
-    expect(g.checkDangerousOperation('git add .').safe).toBe(true)
-    expect(g.checkDangerousOperation('git commit -m "test"').safe).toBe(true)
+    const g2 = new GitIntegration(repoPath)
+    expect(g2.checkDangerousOperation('git status').safe).toBe(true)
+    expect(g2.checkDangerousOperation('git add .').safe).toBe(true)
+    expect(g2.checkDangerousOperation('git commit -m "test"').safe).toBe(true)
   })
 })
