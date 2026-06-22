@@ -12,7 +12,8 @@
     "test:coverage": "vitest --coverage",
     "test:watch": "vitest --watch",
     "cli": "bun run packages/cli/index.ts",
-    "dev": "bun run packages/cli/index.ts"
+    "dev": "bun run packages/cli/index.ts",
+    "logs": "bun run packages/cli/logs.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",
