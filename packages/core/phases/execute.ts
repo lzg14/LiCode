@@ -8,6 +8,31 @@ import { existsSync } from "fs"
 import { join, dirname } from "path"
 
 /**
+ * 从文本中提取 <tool_call> XML 标签作为工具调用
+ * streamText 可能不输出结构化的 tool-call chunk，需要从纯文本中解析
+ */
+function extractToolCallsFromText(text: string): any[] {
+  const toolCalls: any[] = []
+  const regex = /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/g
+  let match
+  while ((match = regex.exec(text)) !== null) {
+    try {
+      const json = JSON.parse(match[1])
+      if (json.name && json.input) {
+        toolCalls.push({
+          toolCallId: `tc-${Date.now()}-${toolCalls.length}`,
+          toolName: json.name,
+          input: json.input,
+        })
+      }
+    } catch (e) {
+      devLogger.debug('STREAM', `Failed to parse tool_call JSON: ${match[1].slice(0, 100)}`)
+    }
+  }
+  return toolCalls
+}
+
+/**
  * 加载项目配置文件（.licode.md / LICODE.md）
  */
 const projectConfigCache = new Map<string, string>()
@@ -407,11 +432,18 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
 
       devLogger.info('STREAM', `stream completed: chunks=${chunkCount}, text=${streamedText.length}, tools=${streamedToolCalls.length}`)
 
+      // 从 streamedText 中提取 <tool_call> XML 标签作为工具调用
+      const textToolCalls = extractToolCallsFromText(streamedText)
+      devLogger.debug('STREAM', `textToolCalls from XML tags: ${textToolCalls.length}`)
+
       // fullStream 可能不输出 tool-call chunks（provider 实现有关）
       // 改从 streamText 结果的 toolCalls 属性获取（stream 结束后可 await）
       const rawToolCalls = await streamResult.toolCalls
-      const resolvedToolCalls = (Array.isArray(rawToolCalls) ? rawToolCalls : []) as any[]
-      devLogger.debug('STREAM', 'resolvedToolCalls count:', resolvedToolCalls.length)
+      const streamToolCalls = (Array.isArray(rawToolCalls) ? rawToolCalls : []) as any[]
+      devLogger.debug('STREAM', `streamToolCalls count: ${streamToolCalls.length}`)
+
+      // 合并：优先用结构化的 streamToolCalls，补充 textToolCalls
+      const resolvedToolCalls = streamToolCalls.length > 0 ? streamToolCalls : textToolCalls
 
       const resolvedResult = {
         text: streamedText || undefined,
