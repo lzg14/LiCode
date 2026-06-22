@@ -300,14 +300,93 @@ export function registerBuiltinTools(): void {
     },
   })
 
+  // ========== Windows 系统 ==========
+
   globalToolRegistry.register({
-    name: 'datetime',
-    description: '获取当前日期时间。',
-    inputSchema: z.object({ format: z.string().optional() }),
-    handler: async ({ format }) => {
-      const now = new Date()
-      if (!format) return { success: true, output: now.toISOString() }
-      return { success: true, output: format.replace('YYYY', String(now.getFullYear())).replace('MM', String(now.getMonth() + 1).padStart(2, '0')).replace('DD', String(now.getDate()).padStart(2, '0')).replace('HH', String(now.getHours()).padStart(2, '0')).replace('mm', String(now.getMinutes()).padStart(2, '0')).replace('ss', String(now.getSeconds()).padStart(2, '0')) }
+    name: 'process_list',
+    description: '列出运行中的进程（Windows tasklist）。支持按名称过滤。',
+    inputSchema: z.object({
+      filter: z.string().optional().describe('进程名过滤（如 "node", "code"）'),
+      limit: z.number().optional().describe('最多显示行数，默认50'),
+    }),
+    handler: async ({ filter, limit }) => {
+      try {
+        const cmd = filter ? `tasklist /FI "IMAGENAME eq ${filter}*" /FO CSV /NH` : 'tasklist /FO CSV /NH'
+        const { stdout } = await execAsync(cmd, { timeout: 10000 })
+        const lines = stdout.trim().split('\n').filter(Boolean)
+        const result = limit ? lines.slice(0, limit) : lines.slice(0, 50)
+        return { success: true, output: result.join('\n') || '无匹配进程' }
+      } catch (e) { return { success: false, error: String(e) } }
+    },
+  })
+
+  globalToolRegistry.register({
+    name: 'kill_process',
+    description: '结束指定进程（Windows taskkill）。',
+    inputSchema: z.object({
+      pid: z.number().describe('进程 ID'),
+      force: z.boolean().optional().describe('强制结束，默认false'),
+    }),
+    handler: async ({ pid, force }) => {
+      try {
+        const flag = force ? '/F' : ''
+        const { stdout } = await execAsync(`taskkill ${flag} /PID ${pid}`, { timeout: 5000 })
+        return { success: true, output: stdout || `进程 ${pid} 已结束` }
+      } catch (e) { return { success: false, error: String(e) } }
+    },
+  })
+
+  globalToolRegistry.register({
+    name: 'open_explorer',
+    description: '在 Windows 资源管理器中打开指定路径。',
+    inputSchema: z.object({
+      path: z.string().describe('文件或目录路径'),
+      select: z.boolean().optional().describe('是否选中文件'),
+    }),
+    handler: async ({ path, select }) => {
+      try {
+        const absPath = resolve(path)
+        const cmd = select ? `explorer /select,"${absPath}"` : `explorer "${absPath}"`
+        await execAsync(cmd, { timeout: 3000 })
+        return { success: true, output: `已在资源管理器中打开: ${absPath}` }
+      } catch (e) { return { success: false, error: String(e) } }
+    },
+  })
+
+  globalToolRegistry.register({
+    name: 'open_url',
+    description: '在默认浏览器中打开 URL。',
+    inputSchema: z.object({
+      url: z.string().describe('URL 地址'),
+    }),
+    handler: async ({ url }) => {
+      try {
+        const cmd = process.platform === 'win32' ? `start "" "${url}"` : `open "${url}"`
+        await execAsync(cmd, { timeout: 3000 })
+        return { success: true, output: `已在浏览器中打开: ${url}` }
+      } catch (e) { return { success: false, error: String(e) } }
+    },
+  })
+
+  globalToolRegistry.register({
+    name: 'gh',
+    description: '执行 GitHub CLI (gh) 命令。自动在 git root 目录执行。用途：查看 PR/issue、创建 PR、查看 repo 信息等。',
+    inputSchema: z.object({
+      args: z.string().describe('gh 命令参数，如 "pr list --state open --limit 10"'),
+      timeout: z.number().optional().describe('超时秒数，默认30秒'),
+    }),
+    handler: async ({ args, timeout }, ctx) => {
+      try {
+        const { stdout, stderr } = await execAsync(`gh ${args}`, { cwd: ctx.cwd, timeout: (timeout ?? 30) * 1000 })
+        const output = stdout || stderr || '命令执行完成（无输出）'
+        return { success: true, output }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (msg.includes('not found')) {
+          return { success: false, error: 'gh.exe 未安装。请从 https://cli.github.com 安装 GitHub CLI。' }
+        }
+        return { success: false, error: msg }
+      }
     },
   })
 
