@@ -1,4 +1,4 @@
-import { generateText, streamText, tool, jsonSchema } from "ai"
+import { generateText, tool, jsonSchema } from "ai"
 import { z } from "zod"
 import { globalToolRegistry } from "../../tools/registry"
 import { devLogger } from "../dev-logger"
@@ -6,31 +6,6 @@ import type { Timer } from "../perf"
 import { readFile } from "fs/promises"
 import { existsSync } from "fs"
 import { join, dirname } from "path"
-
-/**
- * 从文本中提取 <tool_call> XML 标签作为工具调用
- * streamText 可能不输出结构化的 tool-call chunk，需要从纯文本中解析
- */
-function extractToolCallsFromText(text: string): any[] {
-  const toolCalls: any[] = []
-  const regex = /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/g
-  let match
-  while ((match = regex.exec(text)) !== null) {
-    try {
-      const json = JSON.parse(match[1])
-      if (json.name && json.input) {
-        toolCalls.push({
-          toolCallId: `tc-${Date.now()}-${toolCalls.length}`,
-          toolName: json.name,
-          input: json.input,
-        })
-      }
-    } catch (e) {
-      devLogger.debug('STREAM', `Failed to parse tool_call JSON: ${match[1].slice(0, 100)}`)
-    }
-  }
-  return toolCalls
-}
 
 /**
  * 加载项目配置文件（.licode.md / LICODE.md）
@@ -398,7 +373,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       if (activeSkillContent) {
         fullSystem += `\n\n## 当前激活技能: ${ctx.activeSkill ?? "?"}\n\n${activeSkillContent}\n\n请严格遵循上述技能的指令与规则。`
       }
-      const streamResult = streamText({
+      const result = await generateText({
         model: ctx.model,
         system: fullSystem,
         messages: msgs,
@@ -407,49 +382,11 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         abortSignal: ctx.signal,
       })
 
-      // 手动消费流，触发 onChunk 回调
-      let streamedText = ''
-      let streamedToolCalls: any[] = []
-      let chunkCount = 0
-      try {
-        for await (const chunk of streamResult.fullStream) {
-          chunkCount++
-          devLogger.debug('STREAM', `chunk ${chunkCount}: type=${chunk.type}`)
-          if (chunk.type === 'text-delta') {
-            streamedText += chunk.text
-            ctx.onStreamText?.(chunk.text)
-          } else if (chunk.type === 'tool-call') {
-            streamedToolCalls.push(chunk)
-          } else if (chunk.type === 'error') {
-            devLogger.error('STREAM', `error chunk: ${JSON.stringify(chunk)}`)
-          }
-        }
-      } catch (streamError: any) {
-        devLogger.error('STREAM', `stream consumption failed: ${streamError}`)
-        // 不要重新抛出 streaming 错误，让后续的 catch 块处理
-        // 这样不会导致 uncaughtException 触发 process.exit(1)
-      }
-
-      devLogger.info('STREAM', `stream completed: chunks=${chunkCount}, text=${streamedText.length}, tools=${streamedToolCalls.length}`)
-
-      // 从 streamedText 中提取 <tool_call> XML 标签作为工具调用
-      const textToolCalls = extractToolCallsFromText(streamedText)
-      devLogger.debug('STREAM', `textToolCalls from XML tags: ${textToolCalls.length}`)
-
-      // fullStream 可能不输出 tool-call chunks（provider 实现有关）
-      // 改从 streamText 结果的 toolCalls 属性获取（stream 结束后可 await）
-      const rawToolCalls = await streamResult.toolCalls
-      const streamToolCalls = (Array.isArray(rawToolCalls) ? rawToolCalls : []) as any[]
-      devLogger.debug('STREAM', `streamToolCalls count: ${streamToolCalls.length}`)
-
-      // 合并：优先用结构化的 streamToolCalls，补充 textToolCalls
-      const resolvedToolCalls = streamToolCalls.length > 0 ? streamToolCalls : textToolCalls
-
       const resolvedResult = {
-        text: streamedText || undefined,
-        toolCalls: resolvedToolCalls.length > 0 ? resolvedToolCalls : undefined,
-        usage: await streamResult.usage,
-        finishReason: await streamResult.finishReason,
+        text: result.text || undefined,
+        toolCalls: result.toolCalls,
+        usage: result.usage,
+        finishReason: result.finishReason,
       }
       const duration = Date.now() - startTime
       if (resolvedResult.usage) {
@@ -469,9 +406,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         toolCalls: resolvedResult.toolCalls?.map((tc: any) => ({ tool: tc.toolName, input: tc.input })),
       }, duration)
 
-      // 中间轮（有 tool calls）：文本通过 onIntermediateText 保存为 assistant 消息
-      // 最终轮：如果之前有工具调用，也用 onIntermediateText 保存（避免 streaming→message 重复）
-      //         如果无工具调用，用 onStreamText 显示（直接回复场景）
+      // 有 tool calls：文本通过 onIntermediateText 保存
       if (resolvedResult.text) {
         lastChunk = resolvedResult.text
         if (resolvedResult.toolCalls?.length) {
@@ -481,7 +416,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
           ctx.onIntermediateText?.(resolvedResult.text)
         } else {
           fullText = resolvedResult.text
-          // 注意：流式文本已经通过 onChunk 回调展示了，这里不再重复调 onStreamText
+          ctx.onStreamText?.(resolvedResult.text)
         }
       }
 
