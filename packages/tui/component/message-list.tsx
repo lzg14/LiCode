@@ -6,6 +6,7 @@ import { Spinner } from "./spinner"
 import { createMarkdownSyntaxStyle } from "../util/syntax-style"
 import { ThinkingView } from "./thinking-view"
 import { deriveThinkingDisplay } from "../util/thinking-display"
+import { CollapsibleText } from "./collapsible-text"
 
 const MAX_VISIBLE_TOOLS = 3
 
@@ -48,8 +49,6 @@ function MessageItem(props: { msg: Message }) {
   const { primary, text, textMuted, error, success, warning } = useTheme()
 
   if (props.msg.role === "user") {
-    const lineCount = props.msg.content.split('\n').length
-    const isLong = lineCount > 3 || props.msg.content.length > 200
     const hasImages = props.msg.images && props.msg.images.length > 0
     return (
       <box flexDirection="column" marginBottom={1}>
@@ -57,11 +56,7 @@ function MessageItem(props: { msg: Message }) {
           <text fg={props.msg.queued ? textMuted() : primary()}>
             {props.msg.queued ? "┃ [queued] " : "┃ "}
           </text>
-          <Show when={!isLong} fallback={
-            <text fg={textMuted()}>[pasted ~ {lineCount} lines]</text>
-          }>
-            <text fg={props.msg.queued ? textMuted() : text()}>{props.msg.content}</text>
-          </Show>
+          <CollapsibleText content={props.msg.content} maxLines={5} />
         </box>
         <Show when={hasImages}>
           <box flexDirection="row" paddingLeft={2}>
@@ -77,8 +72,13 @@ function MessageItem(props: { msg: Message }) {
   if (props.msg.role === "assistant") {
     const cleaned = stripSystemTags(props.msg.content)
     const display = deriveThinkingDisplay(cleaned, true)
+    const lineCount = props.msg.content.split('\n').length
+    const isLong = lineCount > 15
     return (
       <box flexDirection="column" marginBottom={1} flexShrink={0}>
+        <Show when={isLong}>
+          <text fg={textMuted()}>{`  (共 ${lineCount} 行)`}</text>
+        </Show>
         <ThinkingView display={display} streaming={false} />
         <Show when={props.msg.duration !== undefined}>
           <text fg={textMuted()}>{`  ${props.msg.duration}s`}</text>
@@ -107,11 +107,13 @@ function MessageItem(props: { msg: Message }) {
           </Show>
         </box>
         <Show when={toolArgs}>
-          <text fg={textMuted()}>{`    ${toolArgs}`}</text>
+          <box paddingLeft={1}>
+            <CollapsibleText content={toolArgs} maxLines={5} />
+          </box>
         </Show>
         <Show when={props.msg.diff}>
           <box flexDirection="column" paddingLeft={2} marginTop={0}>
-            <MarkdownText content={props.msg.diff!} />
+            <CollapsibleText content={props.msg.diff!} maxLines={10} />
           </box>
         </Show>
       </box>
@@ -141,16 +143,12 @@ function formatToolArgs(toolName: string, args: Record<string, unknown>): string
   if (toolName === "edit" && args.path) return args.path as string
   if (toolName === "glob" && args.pattern) return args.pattern as string
   if (toolName === "grep" && args.pattern) return args.pattern as string
-  if (toolName === "bash" && args.command) {
-    const c = String(args.command)
-    return c.length > 50 ? c.substring(0, 50) + "..." : c
-  }
+  if (toolName === "bash" && args.command) return String(args.command)
   if (toolName === "list_directory" && args.path) return args.path as string
   if (toolName === "websearch" && args.query) return args.query as string
   if (toolName === "webfetch" && args.url) return args.url as string
 
-  const json = JSON.stringify(args)
-  return json.length > 50 ? json.substring(0, 50) + "..." : json
+  return JSON.stringify(args)
 }
 
 export function MessageList() {
