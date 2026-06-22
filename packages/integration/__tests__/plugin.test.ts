@@ -34,7 +34,8 @@ describe('PluginManager', () => {
 
   it('register 依赖满足时成功', async () => {
     await pm.register(testPlugin('base'))
-    await expect(pm.register(testPlugin('ext', ['base']))).resolves.not.toThrow()
+    // bun:test 不支持 .resolves.not.toThrow()，直接 await 让异常自然抛出
+    await pm.register(testPlugin('ext', ['base']))
   })
 
   it('register 成功后 state=active', async () => {
@@ -68,7 +69,8 @@ describe('PluginManager', () => {
   })
 
   it('unregister 不存在的插件不报错', async () => {
-    await expect(pm.unregister('none')).resolves.not.toThrow()
+    // bun:test 不支持 .resolves.not.toThrow()，直接 await 让异常自然抛出
+    await pm.unregister('none')
   })
 
   it('shutdownAll 关闭所有插件', async () => {
