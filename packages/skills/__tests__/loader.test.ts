@@ -4,13 +4,16 @@ import { globalSkillRegistry } from '../registry'
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { randomUUID } from 'crypto'
 
 describe('SkillLoader', () => {
   let testDir: string
   let loader: SkillLoader
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `test-skills-${Date.now()}`)
+    // Use randomUUID (not Date.now()) to avoid collisions when tests run
+    // concurrently within the same millisecond.
+    testDir = join(tmpdir(), `test-skills-${randomUUID()}`)
     mkdirSync(testDir, { recursive: true })
     loader = new SkillLoader()
     // 清理所有已注册的技能
