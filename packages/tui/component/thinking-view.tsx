@@ -30,29 +30,34 @@ export function ThinkingView(props: {
 
   if (props.display.kind === 'thinking-only') {
     return (
-      <box
-        marginBottom={1}
-        flexDirection="column"
-        paddingLeft={1}
-        borderStyle="rounded"
-        borderColor={textMuted()}
-      >
-        <text fg={textMuted()}>💭 thinking...</text>
+      <box marginBottom={1} paddingLeft={1}>
+        <text fg={textMuted()}>{props.display.text || 'thinking...'}</text>
       </box>
     )
   }
 
-  const rest = props.display.kind === 'has-rest'
-    ? props.display.rest
-    : props.display.kind === 'no-thinking'
-      ? props.display.rest
-      : ''
+  if (props.display.kind === 'has-rest') {
+    // thinking + 正文：thinking 用灰色，正文用正常高亮
+    return (
+      <box flexDirection="column">
+        {props.display.thinking && (
+          <box marginBottom={1} paddingLeft={1}>
+            <text fg={textMuted()}>{props.display.thinking}</text>
+          </box>
+        )}
+        <MarkdownTextInline content={props.display.rest} streaming={props.streaming ?? false} />
+      </box>
+    )
+  }
 
-  if (!rest) return null
+  if (props.display.kind === 'no-thinking') {
+    if (!props.display.rest) return null
+    return (
+      <box marginBottom={1}>
+        <MarkdownTextInline content={props.display.rest} streaming={props.streaming ?? false} />
+      </box>
+    )
+  }
 
-  return (
-    <box marginBottom={1}>
-      <MarkdownTextInline content={rest} streaming={props.streaming ?? false} />
-    </box>
-  )
+  return null
 }

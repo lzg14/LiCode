@@ -10,7 +10,12 @@ import { deriveThinkingDisplay } from "../util/thinking-display"
 const MAX_VISIBLE_TOOLS = 3
 
 function stripSystemTags(content: string): string {
-  return content.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").replace(/\n{3,}/g, "\n\n").trim()
+  return content
+    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "")
+    .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
 }
 
 function MarkdownText(props: { content: string; streaming?: boolean }) {
@@ -149,7 +154,7 @@ function formatToolArgs(toolName: string, args: Record<string, unknown>): string
 }
 
 export function MessageList() {
-  const { messages, streamingText, isProcessing, toolCallExpanded, toggleToolCallExpanded } = useLoop()
+  const { messages, streamingSegments, pendingText, isProcessing, toolCallExpanded, toggleToolCallExpanded } = useLoop()
   const { text, textMuted, background } = useTheme()
 
   return (
@@ -175,14 +180,57 @@ export function MessageList() {
         }}
       </For>
 
-      <Show when={streamingText()}>
-        <ThinkingView
-          display={deriveThinkingDisplay(streamingText(), false)}
-          streaming={true}
-        />
+      <Show when={streamingSegments().length > 0 || pendingText()}>
+        <For each={streamingSegments()}>
+          {(seg) => {
+            if (seg.kind === 'thinking') {
+              return (
+                <box marginBottom={1} paddingLeft={1}>
+                  <text fg={textMuted()}>{seg.text}</text>
+                </box>
+              )
+            }
+            if (seg.kind === 'system-reminder') {
+              // system-reminder 是注入元数据，不展示
+              return null
+            }
+            return (
+              <box marginBottom={1}>
+                <MarkdownText content={seg.text} />
+              </box>
+            )
+          }}
+        </For>
+        <Show when={pendingText()}>
+          {(() => {
+            const display = deriveThinkingDisplay(pendingText(), false)
+            if (display.kind === 'thinking-only') {
+              return (
+                <box marginBottom={1} paddingLeft={1}>
+                  <text fg={textMuted()}>{display.text}</text>
+                </box>
+              )
+            }
+            if (display.kind === 'has-rest' && display.thinking) {
+              return (
+                <box flexDirection="column">
+                  <box marginBottom={1} paddingLeft={1}>
+                    <text fg={textMuted()}>{display.thinking}</text>
+                  </box>
+                  <MarkdownText content={display.rest} streaming={true} />
+                </box>
+              )
+            }
+            return (
+              <box marginBottom={1}>
+                <MarkdownText content={pendingText()} streaming={true} />
+              </box>
+            )
+          })()}
+        </Show>
       </Show>
 
-      <Show when={isProcessing() && !streamingText()}>
+      <Show when={isProcessing() && streamingSegments().length === 0 && !pendingText()}>
         <box marginBottom={1}>
           <Spinner>思考中...</Spinner>
         </box>

@@ -1,4 +1,4 @@
-import { generateText, tool, jsonSchema } from "ai"
+import { generateText, streamText, tool, jsonSchema } from "ai"
 import { z } from "zod"
 import { globalToolRegistry } from "../../tools/registry"
 import { devLogger } from "../dev-logger"
@@ -12,7 +12,7 @@ import { join, dirname } from "path"
  */
 const projectConfigCache = new Map<string, string>()
 
-async function loadProjectConfig(cwd?: string): Promise<string> {
+export async function loadProjectConfig(cwd?: string): Promise<string> {
   const dir = cwd || process.cwd()
   
   // 检查缓存
@@ -37,7 +37,9 @@ async function loadProjectConfig(cwd?: string): Promise<string> {
           devLogger.debug('PROJECT_CONFIG', `Loaded global ${p}`)
           break
         }
-      } catch {}
+      } catch (e) {
+        devLogger.debug('PROJECT_CONFIG', `Failed to load global ${p}`, e)
+      }
     }
   }
   
@@ -51,7 +53,9 @@ async function loadProjectConfig(cwd?: string): Promise<string> {
         devLogger.debug('PROJECT_CONFIG', `Loaded project ${fullPath}`)
         break
       }
-    } catch {}
+    } catch (e) {
+      devLogger.debug('PROJECT_CONFIG', `Failed to load ${fullPath}`, e)
+    }
   }
   
   // 向上查找项目配置
@@ -67,7 +71,9 @@ async function loadProjectConfig(cwd?: string): Promise<string> {
             devLogger.debug('PROJECT_CONFIG', `Loaded project ${fullPath}`)
             break
           }
-        } catch {}
+        } catch (e) {
+          devLogger.debug('PROJECT_CONFIG', `Failed to load ${fullPath}`, e)
+        }
       }
       if (projectConfig) break
     }
@@ -199,6 +205,49 @@ export interface ExecuteContext {
 
 const MAX_ITERATIONS = 100
 
+/**
+ * 找到合法的起始位置：确保 tool-call/tool-result 配对完整
+ * 当 history 被 slice 截断时，开头可能出现 orphan tool-result（对应的 assistant+tool-call 被截掉）
+ */
+export function findValidStart(msgs: Array<{ role: string; content: any[] }>): number {
+  const allToolCallIds = new Set<string>()
+  const allToolResultIds = new Set<string>()
+  for (const m of msgs) {
+    if (Array.isArray(m.content)) {
+      for (const p of m.content) {
+        if (p.type === 'tool-call') allToolCallIds.add(p.toolCallId)
+        if (p.type === 'tool-result') allToolResultIds.add(p.toolCallId)
+      }
+    }
+  }
+  for (const rid of allToolResultIds) {
+    if (!allToolCallIds.has(rid)) {
+      for (let i = 0; i < msgs.length; i++) {
+        if (msgs[i].role === 'user') {
+          const chunkCalls = new Set<string>()
+          const chunkResults = new Set<string>()
+          for (let j = i; j < msgs.length; j++) {
+            const m = msgs[j]
+            if (Array.isArray(m.content)) {
+              for (const p of m.content) {
+                if (p.type === 'tool-call') chunkCalls.add(p.toolCallId)
+                if (p.type === 'tool-result') chunkResults.add(p.toolCallId)
+              }
+            }
+          }
+          let hasOrphan = false
+          for (const rid of chunkResults) {
+            if (!chunkCalls.has(rid)) { hasOrphan = true; break }
+          }
+          if (!hasOrphan) return i
+        }
+      }
+      return 0
+    }
+  }
+  return 0
+}
+
 function zodToJsonSchema(schema: any): any {
   const raw: any = z.toJSONSchema(schema, { target: 'draft-7' })
   delete raw.$schema
@@ -248,51 +297,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
     history = sliced
   }
 
-  // 找到合法的起始位置：确保 tool-call/tool-result 配对完整
-  // 当 history 被 slice 截断时，开头可能出现 orphan tool-result（对应的 assistant+tool-call 被截掉）
-  function findValidStart(msgs: typeof history): number {
-    // 扫描整个 msgs，收集所有 tool-call ID 和 tool-result ID
-    const allToolCallIds = new Set<string>()
-    const allToolResultIds = new Set<string>()
-    for (const m of msgs) {
-      if (Array.isArray(m.content)) {
-        for (const p of m.content) {
-          if (p.type === 'tool-call') allToolCallIds.add(p.toolCallId)
-          if (p.type === 'tool-result') allToolResultIds.add(p.toolCallId)
-        }
-      }
-    }
-    // 无 orphan → 从头开始
-    for (const rid of allToolResultIds) {
-      if (!allToolCallIds.has(rid)) {
-        // 找到 orphan，从第一个 user 消息开始向后跳过 orphan 区域
-        for (let i = 0; i < msgs.length; i++) {
-          if (msgs[i].role === 'user') {
-            // 检查从 i 到末尾是否还有 orphan
-            const chunkCalls = new Set<string>()
-            const chunkResults = new Set<string>()
-            for (let j = i; j < msgs.length; j++) {
-              const m = msgs[j]
-              if (Array.isArray(m.content)) {
-                for (const p of m.content) {
-                  if (p.type === 'tool-call') chunkCalls.add(p.toolCallId)
-                  if (p.type === 'tool-result') chunkResults.add(p.toolCallId)
-                }
-              }
-            }
-            let hasOrphan = false
-            for (const rid of chunkResults) {
-              if (!chunkCalls.has(rid)) { hasOrphan = true; break }
-            }
-            if (!hasOrphan) return i
-          }
-        }
-        // 所有 user 起点都有 orphan → 保留全部（LLM 会报错但我们不丢消息）
-        return 0
-      }
-    }
-    return 0
-  }
+  // 找到合法的起始位置已提炼为独立函数 findValidStart
   const validStart = findValidStart(history)
   const validHistory = validStart > 0 ? history.slice(validStart) : history
   const lastInHistory = validHistory[validHistory.length - 1]
@@ -359,49 +364,81 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       if (activeSkillContent) {
         fullSystem += `\n\n## 当前激活技能: ${ctx.activeSkill ?? "?"}\n\n${activeSkillContent}\n\n请严格遵循上述技能的指令与规则。`
       }
-      const result = await generateText({
+      const streamResult = streamText({
         model: ctx.model,
         system: fullSystem,
         messages: msgs,
         tools,
         temperature: 0.7,
-        ...(ctx.signal ? { abortSignal: ctx.signal } : {}),
+        abortSignal: ctx.signal,
       })
+
+      // 手动消费流，触发 onChunk 回调
+      let streamedText = ''
+      let streamedToolCalls: any[] = []
+      let chunkCount = 0
+      try {
+        for await (const chunk of streamResult.fullStream) {
+          chunkCount++
+          devLogger.debug('STREAM', `chunk ${chunkCount}: type=${chunk.type}`)
+          if (chunk.type === 'text-delta') {
+            streamedText += chunk.text
+            ctx.onStreamText?.(chunk.text)
+          } else if (chunk.type === 'tool-call') {
+            streamedToolCalls.push(chunk)
+          } else if (chunk.type === 'error') {
+            devLogger.error('STREAM', `error chunk: ${JSON.stringify(chunk)}`)
+          }
+        }
+      } catch (streamError: any) {
+        devLogger.error('STREAM', `stream consumption failed: ${streamError}`)
+        // 不要重新抛出 streaming 错误，让后续的 catch 块处理
+        // 这样不会导致 uncaughtException 触发 process.exit(1)
+      }
+
+      devLogger.info('STREAM', `stream completed: chunks=${chunkCount}, text=${streamedText.length}, tools=${streamedToolCalls.length}`)
+
+      const resolvedResult = {
+        text: streamedText || undefined,
+        toolCalls: streamedToolCalls.length > 0 ? streamedToolCalls : undefined,
+        usage: await streamResult.usage,
+        finishReason: await streamResult.finishReason,
+      }
       const duration = Date.now() - startTime
-      if (result.usage) {
+      if (resolvedResult.usage) {
         ctx.onLLMResult?.({
-          inputTokens: result.usage.inputTokens ?? 0,
-          outputTokens: result.usage.outputTokens ?? 0,
-          totalTokens: (result.usage.inputTokens ?? 0) + (result.usage.outputTokens ?? 0),
+          inputTokens: resolvedResult.usage.inputTokens ?? 0,
+          outputTokens: resolvedResult.usage.outputTokens ?? 0,
+          totalTokens: (resolvedResult.usage.inputTokens ?? 0) + (resolvedResult.usage.outputTokens ?? 0),
         })
       }
       if (llmId) ctx.timer?.end(llmId, {
-        toolCalls: result.toolCalls?.length ?? 0,
-        finishReason: result.finishReason ?? 'unknown',
+        toolCalls: resolvedResult.toolCalls?.length ?? 0,
+        finishReason: resolvedResult.finishReason ?? 'unknown',
       })
       devLogger.logLLMResponse({
-        finishReason: result.finishReason,
-        textLength: result.text?.length ?? 0,
-        toolCalls: result.toolCalls?.map(tc => ({ tool: tc.toolName, input: tc.input })),
+        finishReason: resolvedResult.finishReason,
+        textLength: resolvedResult.text?.length ?? 0,
+        toolCalls: resolvedResult.toolCalls?.map((tc: any) => ({ tool: tc.toolName, input: tc.input })),
       }, duration)
 
       // 中间轮（有 tool calls）：文本通过 onIntermediateText 保存为 assistant 消息
       // 最终轮：如果之前有工具调用，也用 onIntermediateText 保存（避免 streaming→message 重复）
       //         如果无工具调用，用 onStreamText 显示（直接回复场景）
-      if (result.text) {
-        lastChunk = result.text
-        if (result.toolCalls?.length) {
+      if (resolvedResult.text) {
+        lastChunk = resolvedResult.text
+        if (resolvedResult.toolCalls?.length) {
           hasToolCalls = true
-          ctx.onIntermediateText?.(result.text)
+          ctx.onIntermediateText?.(resolvedResult.text)
         } else if (hasToolCalls) {
-          ctx.onIntermediateText?.(result.text)
+          ctx.onIntermediateText?.(resolvedResult.text)
         } else {
-          fullText = result.text
-          ctx.onStreamText?.(result.text)
+          fullText = resolvedResult.text
+          // 注意：流式文本已经通过 onChunk 回调展示了，这里不再重复调 onStreamText
         }
       }
 
-      if (!result.toolCalls?.length) {
+      if (!resolvedResult.toolCalls?.length) {
         // 持久化最终 assistant 文本回复
         if (ctx.sessionManager && ctx.sessionId && fullText) {
           try {
@@ -410,11 +447,11 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
               role: 'assistant',
               content: [{ type: 'text', text: fullText }],
               model: ctx.model.modelId,
-              tokenUsage: result.usage
+              tokenUsage: resolvedResult.usage
                 ? {
-                    input: result.usage.inputTokens ?? 0,
-                    output: result.usage.outputTokens ?? 0,
-                    reasoning: result.usage.outputTokenDetails?.reasoningTokens,
+                    input: resolvedResult.usage.inputTokens ?? 0,
+                    output: resolvedResult.usage.outputTokens ?? 0,
+                    reasoning: (resolvedResult.usage as any).outputTokenDetails?.reasoningTokens,
                   }
                 : undefined,
             })
@@ -429,8 +466,8 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
 
       // 有 tool calls：构建 assistant 消息 + 工具结果消息
       const assistantContent: any[] = []
-      if (result.text) assistantContent.push({ type: "text", text: result.text })
-      for (const tc of result.toolCalls) {
+      if (resolvedResult.text) assistantContent.push({ type: "text", text: resolvedResult.text })
+      for (const tc of resolvedResult.toolCalls) {
         assistantContent.push({ type: "tool-call", toolCallId: tc.toolCallId, toolName: tc.toolName, input: tc.input })
       }
       const assistantMsg = { role: "assistant", content: assistantContent }
@@ -450,9 +487,10 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         }
       }
 
+      // 执行工具
       toolBatch++
-      devLogger.info('PARALLEL', `Executing ${result.toolCalls.length} tool(s) in batch ${toolBatch}`)
-      const toolResults: any[] = await Promise.all(result.toolCalls.map(async (tc) => {
+      devLogger.info('PARALLEL', `Executing ${resolvedResult.toolCalls.length} tool(s) in batch ${toolBatch}`)
+      const toolResults: any[] = await Promise.all(resolvedResult.toolCalls.map(async (tc: any) => {
         devLogger.logToolCall(tc.toolName, tc.input)
         const tcInput = tc.input as Record<string, unknown>
         ctx.onToolCall?.(tc.toolName, tcInput, toolBatch)

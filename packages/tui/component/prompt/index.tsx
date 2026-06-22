@@ -12,6 +12,9 @@ export interface PromptProps {
   placeholder?: string
   onInputChange?: (text: string) => void
   popupOpen?: boolean
+  pendingSlashCmd?: string | null
+  onSlashCmdConsumed?: () => void
+  onSlashSubmit?: (cmd: string) => void
 }
 
 let focusFn: (() => void) | null = null
@@ -59,6 +62,15 @@ export function Prompt(props: PromptProps) {
     if (!input || input.isDestroyed) return
     const text = input.plainText.trim()
     const images = pendingImages()
+
+    // Tab 填入的 slash 命令 → 走 onSlashSubmit 路径直接执行
+    if (props.pendingSlashCmd && text === props.pendingSlashCmd && images.length === 0) {
+      props.onSlashCmdConsumed?.()
+      props.onSlashSubmit?.(props.pendingSlashCmd)
+      input.clear()
+      return
+    }
+
     if (!text && images.length === 0) return
     props.onSubmit(text, images.length > 0 ? images : undefined)
     if (text) history.add(text)

@@ -1,49 +1,54 @@
 # Slash 菜单 Tab 行为改进 实施计划
 
-**目标**：让 Tab 键把选中命令**填入输入框**、**光标在末尾**、**关闭菜单**、**确保输入框拿到焦点**让用户能按回车确认。如果按 Enter，**直接执行命令**而不是当作普通文本提交。
+**目标**：Tab 把选中命令**辅助填入**输入框（光标在末尾），**关掉 slash 框**，**标记命令来源**。用户按 **Enter 确认** → 走 `handleSlashSubmit` 路径**直接执行命令**，而不是把命令当普通文本发给 LLM。
 
 **日期**：2026-06-22
-**前置**：现状已摸清（`home.tsx:163-180` + `prompt/index.tsx:362-372`）
+**前置**：现状已摸清，根因明确
 
 ---
 
-## 现状问题
+## 根因（用户报告的"按回车没反应"真相）
 
-用户报告："输入 `/`，选一项，按 Tab — 应该把命令输入到输入框，光标在最后，slash 框消失。然后我按回车确认。**但现在按回车没反应**。"
-
-代码现状（`home.tsx:167-176`）：
+当前 `home.tsx:167-176`：
 
 ```ts
 else if (evt.name === "tab") {
   evt.preventDefault()
   const selected = items[slashIdx()]
   if (!selected) return
-  setPromptText(selected.label + " ")   // 填入 /help
-  setSlashOpen(false)                   // 关闭菜单
-  setSlashInput("")
-  setSlashIdx(0)
+  setPromptText(selected.label + " ")   // ← 填入文本
+  setSlashOpen(false)                   // ← 关闭菜单
+  // ❌ 问题：没标记"这是来自 slash 菜单的命令"
 }
 ```
 
-`setPromptText`（`prompt/index.tsx:41-46`）：
+Tab 之后：
+- 输入框文本变成 `/help `（末尾带空格）
+- 菜单关闭
+- 用户按 Enter
+- 触发 opentui 的 `{name: "return", action: "submit"}` → 调用 `prompt/index.tsx:58` 的 `handleSubmit`
+- `handleSubmit` 走 `props.onSubmit(text)` 把 `/help ` 当**普通文本**发给 LLM
+- `/help` 命令**没被执行**（既没开 help 面板，也没清空）
 
-```ts
-setTextFn = (text: string) => {
-  if (!input || input.isDestroyed) return
-  input.setText(text)
-  input.cursorOffset = text.length
-  input.focus()
-}
+这才是用户报告的"按回车没反应" — **回车发了文本给 LLM，不是没反应**。help 面板没开，clear 没清空，compress 没压缩，看起来"没反应"。
+
+---
+
+## 目标流程
+
 ```
-
-**预期**：填入 + 光标末尾 + 关闭菜单 + 输入框焦点。理论上都对。
-
-**实际可能的原因**：
-
-1. **`setSlashOpen(false)` 与 `input.focus()` 时序竞争**：菜单关闭触发 `Show` 销毁，可能 input 引用已经失效
-2. **`preventDefault` 没阻止 opentui 自己的 keyBindings 机制**：opentui 的 `{name: "tab"}` 内置可能走别的路径，但 Tab 通常不是内置键
-3. **`onContentChange` 没被触发**：`input.setText()` 不会触发 onContentChange（opentui 内部只对用户输入触发），导致 `slashInput` 状态不一致
-4. **光标位置被 `popupOpen` 变化重置**：`popupOpen` 变 false 后 prompt 重渲染可能重置 cursorOffset
+输入 /         → 菜单开
+↓
+选择 /help     → 高亮
+↓
+按 Tab         → 输入框显示 '/help '，光标末尾，菜单关
+                → 在 prompt 上标记 "pending slash command = '/help'"
+↓
+按 Enter       → 检测到 pending slash command
+                → 走 handleSlashSubmit 路径（不发给 LLM）
+                → 弹出帮助面板 / 清空 / 激活 skill / 触发命令
+                → 清空 prompt + 清掉标记
+```
 
 ---
 
@@ -53,104 +58,187 @@ setTextFn = (text: string) => {
 
 | # | 问题 | 位置 | 影响 |
 |---|---|---|---|
-| 1 | Tab 填入后光标可能没在末尾 | `home.tsx:172` + `prompt/index.tsx:44` | 用户看不到视觉确认 |
-| 2 | Tab 后焦点可能回到默认元素 | `prompt/index.tsx:45` 的 `input.focus()` 时机 | Enter 不被 prompt 接收 |
-| 3 | `setSlashOpen(false)` 后状态可能不一致 | `home.tsx:173-175` | `slashInput` 清空但 `input.plainText` 仍以 `/` 开头 → 菜单可能瞬间又被打开 |
+| 1 | Tab 填入后丢失"slash 命令"语义 | `home.tsx:172` | 回车把命令当文本发给 LLM |
+| 2 | prompt onSubmit 不识别 `/` 开头的命令 | `prompt/index.tsx:58-67` + `home.tsx` | 命令永远走 LLM 路径 |
+| 3 | 没标记 "pending slash command" 状态 | 整体 | Tab 填入和回车确认之间没有桥梁 |
 
 ### 🟡 中严重度
 
 | # | 问题 | 位置 | 影响 |
 |---|---|---|---|
-| 4 | Enter 在菜单里是"直接执行"（不走输入框） | `home.tsx:177` + `handleSlashSubmit` | 与 Tab 行为不一致 |
-| 5 | Tab 填入的是 `label + " "`（如 `/help `） | `home.tsx:172` | 用户如果想直接执行还得删空格 |
-| 6 | handleSlashSubmit 不更新 prompt 文本 | `home.tsx:99-122` | 命令执行后输入框没清干净 |
+| 4 | 菜单关闭时 `onInputChange` 可能瞬时再次开菜单 | `home.tsx:90-96` | Tab 后文本仍以 `/` 开头，会重新开菜单 |
+| 5 | 末尾空格导致提交后 LLM 收到 `/help ` | `home.tsx:172` | trim 不够，应该 trim 末尾空格 |
 
 ### 🟢 低严重度
 
-- skill 项的 Tab 行为没特殊处理：现在会填入 `/skill-name ` 让用户补参数
-- cmd 项（/clear、/compact）的 Tab 行为合理：填入让用户能看清再决定
+- skill 项当前 Tab 后填入 `/skill-name ` 同样问题
+- Enter 在菜单中**当前是直接执行**（不经过输入框），但 Tab 填入后 Enter 不再触发
 
 ---
 
 ## 步骤
 
-### Phase 1：诊断 + 验证假设
+### Phase 1：设计"pending slash command"机制
 
-- [ ] **Step 1：加临时 log 确认 Tab 流程**
-  - 在 `home.tsx:167` 加 `devLogger.debug('SLASH', 'tab pressed, selected:', selected.label)`
-  - 在 `setTextFn` 里加 log 确认执行
-  - 在 `setSlashOpen(false)` 后加 log 确认 `input.isDestroyed` 状态
-  - **verify**：手动跑 dev 模式，看日志
+- [ ] **Step 1：home.tsx 加状态**
+  ```ts
+  // 新增：标记 Tab 填入但还没回车确认的命令
+  const [pendingSlashCmd, setPendingSlashCmd] = createSignal<string | null>(null)
+  ```
+  - 文件：`packages/tui/routes/home.tsx`
+  - **verify**：`grep "pendingSlashCmd" packages/tui/routes/home.tsx` 有匹配
 
-- [ ] **Step 2：判断假设 1-3 哪个是真的**
-  - 测试：Tab 后立刻看 `input.cursorOffset` 是多少
-  - 测试：Tab 后立刻 `input.focus()` 后立刻看 `document.activeElement` 是什么
-  - **verify**：定位根因
+- [ ] **Step 2：Tab 处理改成 setPendingSlashCmd**
+  ```ts
+  // home.tsx Tab 处理
+  else if (evt.name === "tab") {
+    evt.preventDefault()
+    const selected = items[slashIdx()]
+    if (!selected) return
+    // trim 末尾空格，避免后面 LLM 收到 '/help '
+    setPromptText(selected.label)  // ← 不再加空格
+    setSlashOpen(false)
+    setSlashInput("")
+    setSlashIdx(0)
+    setPendingSlashCmd(selected.label)  // ← 新增：标记命令
+  }
+  ```
+  - 文件：`packages/tui/routes/home.tsx:167-176`
+  - **verify**：grep "setPendingSlashCmd" 找到调用
 
-### Phase 2：修 Tab 行为（按用户期望）
+### Phase 2：把 pendingSlashCmd 传到 prompt
 
-- [ ] **Step 3：调整 setTextFn 时序**
-  - 改用 `setTimeout(() => { ... }, 0)` 让 slashOpen=false 先完成渲染，再 focus
-  - 或者：把 `input.focus()` 移到 home.tsx Tab 处理里，调完 setSlashOpen 后立刻 focus
-  - **verify**：Tab 后光标在末尾，输入框有焦点
+- [ ] **Step 3：home.tsx 传给 prompt 组件**
+  ```tsx
+  <Prompt
+    ...
+    pendingSlashCmd={pendingSlashCmd()}
+    onSlashCmdConsumed={() => setPendingSlashCmd(null)}
+  />
+  ```
+  - 文件：`packages/tui/routes/home.tsx`（在 prompt 渲染处）
+  - **verify**：grep "pendingSlashCmd" 找到 prop
 
-- [ ] **Step 4：Tab 后确保状态一致**
-  - 调用 `props.onInputChange?.(text)` 显式同步 slashInput 状态
-  - `setSlashInput(text)` 也对应
-  - **verify**：Tab 后输入框保持打开状态，用户可继续输入
+- [ ] **Step 4：Prompt 接受这两个 prop**
+  - `packages/tui/component/prompt/index.tsx` 接口加：
+  ```ts
+  pendingSlashCmd?: string | null
+  onSlashCmdConsumed?: () => void
+  ```
+  - **verify**：grep "pendingSlashCmd" 在 prompt 里找到
 
-- [ ] **Step 5：测试 Enter 触发 submit**
-  - 手动测试：Tab → Enter → 命令应该被触发
-  - 如果是 `/help` 之类：可能要走 `handleSlashSubmit` 路径（直接执行）
-  - 如果是 `/skill foo` 之类：直接执行 skill 激活
-  - **verify**：Tab → Enter → 命令执行
+### Phase 3：Prompt submit 时检测 pendingSlashCmd
 
-### Phase 3：统一 Enter 和 Tab 的语义
+- [ ] **Step 5：handleSubmit 优先走 slash 路径**
+  ```ts
+  // prompt/index.tsx handleSubmit
+  const handleSubmit = () => {
+    if (!input || input.isDestroyed) return
+    const text = input.plainText.trim()
+    const images = pendingImages()
+    
+    // 新增：如果有 pending slash 命令，走 handleSlashSubmit
+    if (props.pendingSlashCmd && text === props.pendingSlashCmd && images.length === 0) {
+      props.onSlashCmdConsumed?.()
+      props.onSlashSubmit?.(props.pendingSlashCmd)  // 新增 prop
+      input.clear()
+      return
+    }
+    
+    if (!text && images.length === 0) return
+    props.onSubmit(text, images.length > 0 ? images : undefined)
+    if (text) history.add(text)
+    setPendingImages([])
+    input.clear()
+  }
+  ```
+  - 文件：`packages/tui/component/prompt/index.tsx:58-67`
+  - **verify**：grep "onSlashSubmit" 找到调用
 
-- [ ] **Step 6：决策 Enter 的行为**
-  - 选项 A：**Enter 直接执行命令**（保留现有行为，但要把 setSlashOpen 后焦点给回 prompt）
-  - 选项 B：**Enter 也走"填入输入框"路径**，让用户有机会加参数
-  - 推荐 A，因为 Tab 已经给了"填入"路径，Enter 给"直接执行"是合理的快捷操作
-  - **verify**：用户选哪个
+- [ ] **Step 6：home.tsx 传 onSlashSubmit 回调**
+  ```tsx
+  <Prompt
+    ...
+    onSlashSubmit={(cmd) => {
+      // 直接调 handleSlashSubmit 路径
+      setSlashIdx(0)  // 不重要，但保险
+      handleSlashSubmitByLabel(cmd)
+    }}
+  />
+  ```
+  - 新增 `handleSlashSubmitByLabel(label)` 函数：跟现有 `handleSlashSubmit()` 逻辑一致，但是用传入的 label 而不是 `slashItems()[slashIdx()]`
+  - 文件：`packages/tui/routes/home.tsx`
+  - **verify**：grep "handleSlashSubmitByLabel" 找到定义
 
-- [ ] **Step 7：调整 Enter 处理**
-  - 如果选 A：Enter 走 `handleSlashSubmit()` 路径（已存在）
-  - `handleSlashSubmit` 后焦点回到 prompt（但要等动画结束）
-  - **verify**：Enter 直接执行命令
+### Phase 4：清理 handleSlashSubmit 复用
 
-### Phase 4：边界情况
+- [ ] **Step 7：抽取 handleSlashSubmitByLabel**
+  ```ts
+  // home.tsx 提取复用函数
+  const handleSlashSubmitByLabel = (label: string) => {
+    if (label === '/clear') {
+      clearSession()
+    } else if (label === '/compact') {
+      compactSession()
+    } else if (label === '/help') {
+      setHelpOpen(true)
+    } else if (label.startsWith('/')) {
+      // skill 命令
+      const skillName = label.replace(/^\//, '')
+      setActiveSkill(skillName)
+      addMessage({ role: "system", content: `技能 "${skillName}" 已激活，可在侧栏查看指令` })
+    }
+  }
+  ```
+  - 旧 `handleSlashSubmit` 改成调用 `handleSlashSubmitByLabel(items[slashIdx()].label)`
+  - 文件：`packages/tui/routes/home.tsx`
+  - **verify**：grep "handleSlashSubmitByLabel" 找到
 
-- [ ] **Step 8：skill 命令的 Tab 行为**
-  - 比如 `/debug-system`，Tab 后输入框有 `/debug-system `
-  - 用户可能想加参数（如果有），也可能想直接激活
-  - 当前 skill 没有参数，Tab 填入后用户必须删空格再 Enter — 不友好
-  - 解决：skill 项 Tab 时**直接执行 handleSlashSubmit**，而不是填入
-  - cmd 项保持填入行为（用户可能要加额外上下文）
-  - **verify**：skill 走直接执行，cmd 走填入
+### Phase 5：处理 Tab 后菜单瞬间重开
 
-- [ ] **Step 9：Tab 在菜单关闭时的行为**
-  - 菜单未开时，Tab 走 prompt 的"插入 2 空格"路径（`prompt/index.tsx:362-367`）— 保留
-  - **verify**：菜单关时 Tab 仍然插空格
+- [ ] **Step 8：handleInputChange 区分 pendingSlashCmd**
+  ```ts
+  // home.tsx handleInputChange
+  const handleInputChange = (text: string) => {
+    if (props.pendingSlashCmd) {
+      // pending 状态下，输入框是命令 + 任意后缀，不开菜单
+      // 用户改文本就当作普通输入
+      // 简单的方案：直接关掉菜单（如果开了），等用户主动输入 / 时再开
+      setSlashOpen(false)
+      return
+    }
+    if (text.startsWith('/')) {
+      setSlashInput(text)
+      setSlashOpen(true)
+      setSlashIdx(0)
+    } else {
+      setSlashOpen(false)
+    }
+  }
+  ```
+  - 文件：`packages/tui/routes/home.tsx`
+  - **verify**：grep "pendingSlashCmd" 在 handleInputChange 找到
 
-### Phase 5：测试 + 文档
+### Phase 6：测试 + 文档
 
-- [ ] **Step 10：手动验证完整流程**
-  - 场景 1：输入 `/` → ↓选 `/help` → Tab → 输入框有 `/help ` + 光标末尾 + 菜单关 + Enter 触发
-  - 场景 2：输入 `/` → 直接 Enter → 触发第一条命令
-  - 场景 3：输入 `/de` → 只剩匹配的 → Tab → 填入 → 继续输入
-  - 场景 4：输入 `/` → Esc → 菜单关，文本还在
-  - **verify**：4 个场景都符合预期
+- [ ] **Step 9：手动验证完整流程**
+  - 场景 1：输入 `/` → ↓选 `/help` → Tab → 输入框显示 `/help`（无末尾空格）+ 光标末尾 + 菜单关 → Enter → 帮助面板打开
+  - 场景 2：输入 `/` → 直接 Enter → 帮助面板打开（现有行为）
+  - 场景 3：输入 `/de` → Tab → 输入框 `/debug-system` → Enter → skill 激活
+  - 场景 4：Tab 填入后，用户在末尾加字（如 `/help 帮我`）→ Enter → 走普通 onSubmit（不触发 slash）
+  - 场景 5：Tab 填入后，用户改第一个字符（`/Help`）→ Enter → 走普通 onSubmit
+  - **verify**：5 个场景都符合预期
 
-- [ ] **Step 11：CHANGELOG 更新**
+- [ ] **Step 10：CHANGELOG 更新**
   - Unreleased：
     ```
     ### 修复
-    - **Slash 菜单 Tab 行为**：Tab 把选中命令填入输入框后，光标在末尾、菜单关闭、输入框拿到焦点，用户能直接按 Enter 确认。修复之前焦点丢失导致 Enter 无响应的问题。
+    - **Slash 菜单 Tab 后回车确认**：Tab 把命令辅助填入输入框后，按回车现在能正确执行命令（之前回车把命令当普通文本发给 LLM）。新增 pendingSlashCmd 状态标记命令来源。
     ```
   - **verify**：CHANGELOG.md 同步
 
-- [ ] **Step 12：commit**
-  - 单一 commit：`fix: slash 菜单 Tab 行为 — 填入后光标在末尾 + 焦点正确`
+- [ ] **Step 11：commit**
+  - 单一 commit：`fix: slash 菜单 Tab 后回车确认执行命令`
   - **verify**：`git log --oneline -1` 显示
 
 ---
@@ -159,8 +247,8 @@ setTextFn = (text: string) => {
 
 | 文件 | 操作 |
 |---|---|
-| `packages/tui/routes/home.tsx` | 改：Tab 处理 + 状态同步 |
-| `packages/tui/component/prompt/index.tsx` | 改（可能）：`setTextFn` 调整 focus 时机 |
+| `packages/tui/routes/home.tsx` | 改：加 pendingSlashCmd 状态 + 重构 handleSlashSubmit |
+| `packages/tui/component/prompt/index.tsx` | 改：加 pendingSlashCmd / onSlashCmdConsumed / onSlashSubmit prop |
 | `CHANGELOG.md` | 改：Unreleased 加修复条目 |
 
 ---
@@ -169,22 +257,23 @@ setTextFn = (text: string) => {
 
 | 项 | 原因 |
 |---|---|
-| 不重构 slash 菜单的键盘处理 | 当前结构清晰，只是时序问题 |
-| 不改 Enter 行为（按选项 A） | Tab 给"填入"、Enter 给"直接执行"是合理的快捷分层 |
-| 不做 fuzzy search | 当前是 includes 过滤，够用 |
-| 不动 skill 系统 | skill Tab 行为单独处理，不改系统 |
+| 不改 Enter 在菜单里的行为 | 现有"Enter 直接执行"是合理的快捷路径 |
+| 不做 fuzzy search | 当前 includes 过滤够用 |
+| 不动 skill 系统 | skill 激活走 handleSlashSubmitByLabel 即可 |
+| 不改末尾空格为参数占位符 | 简洁性：去掉空格让用户清楚知道这就是命令 |
 
 ---
 
 ## 验收
 
 完成后：
-1. ✅ Tab 填入后光标**确定**在末尾（不只是设置 cursorOffset，还要验证 opentui 渲染时没重置）
-2. ✅ Tab 后输入框**有焦点**（能接收 Enter）
-3. ✅ Tab 后 Enter 触发 submit
-4. ✅ 状态一致：slashInput、slashOpen、input.plainText 三者同步
-5. ✅ Skill 项 Tab 直接执行
-6. ✅ 现有 200+ 测试无回归
+1. ✅ Tab 填入后按 Enter 执行命令（不再发给 LLM）
+2. ✅ Tab 后光标在末尾
+3. ✅ Tab 后菜单关闭
+4. ✅ 状态一致：pendingSlashCmd、slashInput、input.plainText 同步
+5. ✅ 用户修改命令文本后回车 → 走普通 onSubmit
+6. ✅ Skill 项 Tab 也能直接激活
+7. ✅ 现有 200+ 测试无回归
 
 ---
 
@@ -192,37 +281,38 @@ setTextFn = (text: string) => {
 
 | 风险 | 缓解 |
 |---|---|
-| `setSlashOpen(false)` 是异步的，setText 在它之前还是之后跑会不确定 | 把 setText 移到 setSlashOpen 之后，或用 setTimeout(0) |
-| `popupOpen` 变化触发 prompt 重渲染，cursorOffset 被重置 | 在 `createEffect` 里 watch `popupOpen`，变 false 后再设置 cursorOffset |
-| Tab 在不同 opentui 版本下行为不一致 | 退路：Tab 改用 `enter` 或 `space`（但用户期望是 Tab） |
-| 焦点丢失导致 Enter 触发其他全局快捷键 | 显式 focus + ensureFocus 在 setSlashOpen 之后调一次 |
+| pendingSlashCmd 状态和实际文本不一致 | Step 8 的 `handleInputChange` 检测到 pendingSlashCmd 时把菜单关掉，等用户主动删掉 / 改成别的 |
+| onSlashSubmit 调用时机问题 | 用 `text === props.pendingSlashCmd` 严格判断，避免误触发 |
+| Prompt 组件 prop 增加破坏现有调用 | grep Prompt 看看所有调用方，确保新 prop 都是可选的 |
+| 用户在 Tab 填入后改一个字符就 Enter | 严格判断 `text === props.pendingSlashCmd`，改了就当普通文本 |
 
 ---
 
 ## 决策点
 
-### 决策 1：Tab 后 Enter 行为？
+### 决策 1：Tab 填入末尾加不加空格？
 
-**选项 A**（推荐）：Enter 直接执行命令（与现状一致）
-- 优点：快捷，Tab/Enter 各自有明确分工
-- 缺点：与"Tab 填入"的语义略显冲突
+**选项 A**（推荐）：不加空格，`/help`
+- 优点：干净，回车直接确认；用户加参数时自己加空格
+- 缺点：跟 IDE 习惯略有不同
 
-**选项 B**：Enter 也填入，等用户手动回车（再回一次）
-- 优点：完全一致
-- 缺点：多一次按键
+**选项 B**：加空格，`/help `
+- 优点：暗示"可加参数"
+- 缺点：回车后 LLM 收到 `/help `（多余空格）
 
-**选 A**。理由：用户原话是"按回车确认"，A 直接满足。
+**选 A**。理由：用户原话是"辅助输入"，回车确认。空格会让回车判断复杂化。
 
-### 决策 2：skill 项 Tab 行为？
+### 决策 2：用户改了一个字符后还能 Tab 取消吗？
 
-**选项 A**（推荐）：skill 项 Tab 直接激活（不需要参数）
-**选项 B**：skill 项 Tab 也填入（保留扩展能力）
+**选不能**。简单点：用户改了就当普通输入，不再走 slash 路径。改回去也无效（避免循环）。
 
-**选 A**。当前 skill 不带参数，直接激活更符合用户预期。
+### 决策 3：菜单里按 Esc 之后状态？
 
-### 决策 3：是否做 `/de` → Tab 后的自动补全？
+Esc 现状：只关菜单，不清 pendingSlashCmd。Tab 之后按 Esc 也一样。
+- 推荐：Esc 时清掉 pendingSlashCmd（菜单关了就不需要这个标记了）
+- 备选：保持不变（pendingSlashCmd 不影响其他逻辑）
 
-**选不做**。当前 slashItems() 已经按 slashInput 过滤，用户已经能看到匹配项，Tab 选中的就是过滤后的第一项（slashIdx 默认 0）。如果用户想选非第一项，用 ↓ 调再 Tab。
+**选推荐**。理由：状态一致性。
 
 ---
 
@@ -230,11 +320,10 @@ setTextFn = (text: string) => {
 
 | 步骤 | 时间 |
 |---|---|
-| Phase 1（诊断） | 15 分钟 |
-| Phase 2（修 Tab） | 30 分钟 |
-| Phase 3（统一语义） | 15 分钟 |
-| Phase 4（边界） | 15 分钟 |
-| Phase 5（验证 + 文档 + commit） | 20 分钟 |
+| Phase 1-2（状态设计 + 传 prop） | 20 分钟 |
+| Phase 3-4（submit 路径 + 复用） | 30 分钟 |
+| Phase 5（菜单重开保护） | 15 分钟 |
+| Phase 6（验证 + 文档 + commit） | 25 分钟 |
 | **合计** | **约 1.5 小时** |
 
 ---

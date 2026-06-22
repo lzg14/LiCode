@@ -6,6 +6,7 @@ import { listModelsByProvider } from "../../llm/catalog"
 import { devLogger } from "../../core/dev-logger"
 import { readImageFile } from "../../tools/builtin"
 import { checkDangerousPattern } from "../../security"
+import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
 function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
@@ -63,7 +64,8 @@ export interface LoopContext {
   isProcessing: Accessor<boolean>
   pendingCount: Accessor<number>
   elapsed: Accessor<number>
-  streamingText: Accessor<string>
+  streamingSegments: Accessor<Segment[]>
+  pendingText: Accessor<string>
   messages: Accessor<Message[]>
   addMessage: (msg: AddMessageInput) => void
   updateMessage: (id: string, patch: Partial<Message>) => void
@@ -91,7 +93,8 @@ const Ctx = createContext<LoopContext>()
 export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; provider?: string; sessionId?: string; llmConfig?: { provider: string; model: string; apiKey?: string; baseUrl?: string } }) {
   const [isProcessing, setIsProcessing] = createSignal(false)
   const [elapsed, setElapsed] = createSignal(0)
-  const [streamingText, setStreamingText] = createSignal("")
+  const [streamingSegments, setStreamingSegments] = createSignal<Segment[]>([])
+  const [pendingText, setPendingText] = createSignal("")
   const [messages, setMessages] = createSignal<Message[]>([])
   const [toolCallExpanded, setToolCallExpanded] = createSignal(false)
   const toggleToolCallExpanded = () => setToolCallExpanded(prev => !prev)
@@ -218,9 +221,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     }
   }
 
-  const switchModel = (modelId: string) => {
+  const switchModel = async (modelId: string) => {
     const cfg = props.llmConfig
-    activeModel = createModel({
+    activeModel = await createModel({
       provider: cfg?.provider ?? currentProvider(),
       model: modelId,
       apiKey: cfg?.apiKey,
@@ -229,11 +232,11 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     setCurrentModel(modelId)
   }
 
-  const switchProvider = (providerId: string) => {
+  const switchProvider = async (providerId: string) => {
     const models = listModelsByProvider(providerId)
     if (models.length === 0) return
     const cfg = props.llmConfig
-    activeModel = createModel({
+    activeModel = await createModel({
       provider: providerId,
       model: models[0],
       apiKey: cfg?.apiKey,
@@ -254,6 +257,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
 
   // 持久化 session ID，跨轮对话复用同一个 session
   let persistentSessionId: string | undefined = props.sessionId
+  let streamAccumulator = createStreamAccumulator()
 
   onMount(() => {
     if (props.sessionId && props.loop) {
@@ -298,12 +302,14 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
 
   const clearMessages = () => {
     setMessages([])
-    setStreamingText("")
+    setStreamingSegments([])
+    setPendingText("")
   }
 
   const clearSession = () => {
     setMessages([])
-    setStreamingText("")
+    setStreamingSegments([])
+    setPendingText("")
     persistentSessionId = undefined
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
@@ -344,9 +350,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
     setIsProcessing(true)
-    setStreamingText("")
+    setStreamingSegments([])
+    setPendingText("")
+    streamAccumulator = createStreamAccumulator()
 
-    let streamingBuffer = ""
     const startTime = Date.now()
 
     const timer = setInterval(() => {
@@ -384,14 +391,22 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             total: usage.inputTokens + usage.outputTokens,
           })
         },
-        onStreamText: (text: string) => {
-          streamingBuffer += text
-          setStreamingText(streamingBuffer)
+        onStreamText: (delta: string) => {
+          const { closed, pending } = streamAccumulator.push(delta)
+          if (closed.length > 0) {
+            // 批量更新，减少重渲染次数
+            setStreamingSegments(prev => [...prev, ...closed])
+          }
+          if (pending !== pendingText()) {
+            setPendingText(pending)
+          }
         },
         onIntermediateText: (text: string) => {
+          // 中间轮一次性把当前段收尾，然后整个块作为新消息
+          streamAccumulator.reset()
+          setStreamingSegments([])
+          setPendingText("")
           addMessage({ role: "assistant", content: text })
-          streamingBuffer = ""
-          setStreamingText("")
         },
         onToolCall: (toolName: string, args: Record<string, unknown>, batch: number) => {
           toolCallIdCounter++
@@ -415,8 +430,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           return new Promise<boolean>((resolve) => {
             confirmResolve = resolve
             addMessage({ role: "system", content: "已达最大迭代次数。输入 y 继续，其他任意键停止。" })
-            setStreamingText("")
-            streamingBuffer = ""
+            setStreamingSegments([])
+            setPendingText("")
+            streamAccumulator.reset()
             // 临时解除 processing 以允许用户输入
             setIsProcessing(false)
           })
@@ -448,7 +464,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     } finally {
       abortController = null
       setIsProcessing(false)
-      setStreamingText("")
+      setStreamingSegments([])
+      setPendingText("")
       clearInterval(timer)
       setElapsed(0)
 
@@ -472,7 +489,14 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     try {
       const result = await props.loop.compactSession(persistentSessionId)
       if (result) {
-        addMessage({ role: "system", content: result.saved > 0 ? `压缩完成，节省 ${result.saved} 条消息` : result.summary })
+        if (result.summary) {
+          // 显示摘要内容
+          const tag = result.wasFallback ? '[规则提取]' : '[LLM 摘要]'
+          const preview = result.summary.length > 200 ? result.summary.slice(0, 200) + '...' : result.summary
+          addMessage({ role: "system", content: `🗜️ 已压缩 ${result.originalCount} 条 → 保留 ${result.preservedCount} 条\n\n${tag}\n${preview}` })
+        } else {
+          addMessage({ role: "system", content: result.saved > 0 ? `压缩完成，节省 ${result.saved} 条消息` : "无需压缩" })
+        }
       }
     } catch (e) {
       addMessage({ role: "system", content: `压缩失败: ${e instanceof Error ? e.message : String(e)}` })
@@ -495,7 +519,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     isProcessing,
     pendingCount,
     elapsed,
-    streamingText,
+    streamingSegments,
+    pendingText,
     messages,
     addMessage,
     updateMessage,

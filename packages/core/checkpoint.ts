@@ -5,6 +5,7 @@
 
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { devLogger } from './dev-logger'
 
 export interface SessionCheckpoint {
   sessionId: string
@@ -113,8 +114,8 @@ export class CheckpointManager {
     const sessionDir = path.join(this.storagePath, sessionId)
     try {
       await fs.rm(sessionDir, { recursive: true, force: true })
-    } catch {
-      // 忽略删除错误
+    } catch (e) {
+      devLogger.debug('CHECKPOINT', 'session dir delete failed', e)
     }
   }
 
@@ -131,8 +132,7 @@ export class CheckpointManager {
 
       await fs.writeFile(filepath, JSON.stringify(checkpoint, null, 2), 'utf-8')
     } catch (error) {
-      // 文件操作失败不应阻断主流程
-      console.error('Failed to persist checkpoint:', error)
+      devLogger.error('CHECKPOINT', 'Failed to persist checkpoint:', error)
     }
   }
 
@@ -153,14 +153,14 @@ export class CheckpointManager {
         try {
           const content = await fs.readFile(path.join(sessionDir, file), 'utf-8')
           checkpoints.push(JSON.parse(content))
-        } catch {
-          // 跳过损坏的文件
+        } catch (e) {
+          devLogger.debug('CHECKPOINT', `skip corrupted checkpoint file ${file}`, e)
         }
       }
 
       return checkpoints
     } catch (e) {
-      console.warn(`[Checkpoint] loadCheckpoints failed for ${sessionId}:`, e)
+      devLogger.debug('CHECKPOINT', `loadCheckpoints failed for ${sessionId}`, e)
       return []
     }
   }
@@ -180,8 +180,8 @@ export class CheckpointManager {
       )
       try {
         await fs.rm(filepath, { force: true })
-      } catch {
-        // 忽略删除错误
+      } catch (e) {
+        devLogger.debug('CHECKPOINT', `cleanup file delete failed: ${filepath}`, e)
       }
     }
   }

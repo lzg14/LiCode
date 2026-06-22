@@ -1,5 +1,5 @@
-import { z } from 'zod'
 import { ConfigSchema, type Config } from './schema'
+import { formatConfigError } from './format-error'
 
 /**
  * 配置验证器 - 验证配置文件并处理错误
@@ -56,6 +56,16 @@ export class ConfigValidator {
       throw new Error(`配置验证失败:\n${errorMessages}`)
     }
     return result.config!
+  }
+
+  validateWithFormatMessage(data: unknown): Config {
+    const schema = ConfigSchema as any
+    const parseResult = schema.safeParse(data)
+    if (!parseResult.success) {
+      const msg = formatConfigError(parseResult.error)
+      throw new Error(`配置错误:\n${msg}\n\n参考: licode.config.json.example`)
+    }
+    return parseResult.data
   }
 
   /**
