@@ -1,7 +1,25 @@
 # licode 开发路线图
 
+> ⚠️ **本文档部分已过期（2026-07-22 状态更新）**
+>
+> "已完成"区描述的是 **2026-06-20 当天状态**，现已远超：
+> - Core Loop：七阶段已删除（2026-06-21 `refactor: 清理死代码`），现为单 EXECUTE 阶段
+> - Tools：27→**34 个**（新增 Excel / image / database / windows 工具）
+> - LLM：3→**4 个** provider（+MiniMax）
+> - Session：30/100 条压缩阈值（不是 200 条/100K token）
+>
+> "半成品"区**全部已完成**：
+> - ✅ Plan Review 阶段已删除（随七阶段一起砍）
+> - ✅ Security 接线：`packages/tools/registry.ts` 的 `preExecuteHook`
+> - ✅ 并发队列：loop.tsx 串行
+> - ✅ TUI 首次启动闪烁：app.tsx 已有 setTimeout 兜底
+>
+> **阶段一~五大部分完成**，剩余真实差距见 [`production-gaps-2026-q3.md`](./production-gaps-2026-q3.md)。
+
+---
+
 **版本**: v0.2.0
-**日期**: 2026-06-20
+**日期**: 2026-06-20（2026-07-22 标记部分过期）
 
 ---
 

@@ -1,7 +1,23 @@
+> ⚠️ **本文档已过期（2026-07-22 归档）**
+>
+> 评估日期为 2026-07-15，一个月内已完成 12/17 项建议：
+> - `bun` 加入白名单（whitelist.ts 第 4 行）
+> - 安全配置联动（`packages/security/merge.ts` + `mergeSecurityConfig`）
+> - LLM 错误恢复（`packages/llm/retry-strategy.ts`）
+> - Provider fallback 链（`PROVIDER_PRIORITY`）
+> - 配置错误友好化（`packages/config/format-error.ts`）
+> - 核心路径测试覆盖（execute-helpers / loop-helpers / execute-e2e）
+>
+> **最新评估请看** [`docs/plans/production-gaps-2026-q3.md`](../plans/production-gaps-2026-q3.md)
+>
+> 当前总体评分从 6.5/10 提升到 7.5/10。剩余差距：CI/CD、LICENSE、tools/llm/tui 组件测试覆盖、memory scope 修复、extended thinking 保留等。
+
+---
+
 # licode 生产可用性评估报告
 
-**日期**：2026-07-15
-**评估范围**：基于当前代码（v0.2.0）全面审视各模块成熟度
+**日期**：2026-07-15（已归档）
+**评估范围**：基于当时代码（v0.2.0）全面审视各模块成熟度
 **核心问题**：离生产可用还有多少差距？
 
 ---

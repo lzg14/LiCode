@@ -20,47 +20,6 @@ function stripSystemTags(content: string): string {
 }
 
 /**
- * PendingStreamView - 渲染未闭合的 streaming 内容
- *
- * 使用单一子树 + 条件 Show，避免 Switch 切分支时的 DOM 销毁/重建
- * thinking 持续显示，正文逐步追加在下方，无视觉跳变。
- */
-function PendingStreamView() {
-  const { pendingText } = useLoop()
-  const { textMuted } = useTheme()
-  const display = createMemo(() => deriveThinkingDisplay(pendingText(), false))
-
-  const thinking = createMemo(() => {
-    const d = display()
-    if (d.kind === 'thinking-only') return d.text
-    if (d.kind === 'has-rest') return d.thinking
-    return ''
-  })
-  const rest = createMemo(() => {
-    const d = display()
-    if (d.kind === 'has-rest') return d.rest
-    if (d.kind === 'no-thinking') return d.rest
-    return ''
-  })
-
-  return (
-    <box flexDirection="column">
-      <Show when={thinking()}>
-        <box marginBottom={1} paddingLeft={1}>
-          <text fg={textMuted()}>{thinking()}</text>
-        </box>
-      </Show>
-      <Show when={rest()}>
-        <MarkdownText content={rest()} streaming={true} />
-      </Show>
-      <Show when={!thinking() && !rest() && pendingText()}>
-        <box marginBottom={1}>
-          <MarkdownText content={pendingText()} streaming={true} />
-        </box>
-      </Show>
-    </box>
-  )
-}
 
 function MarkdownText(props: { content: string; streaming?: boolean }) {
   const { primary, warning, success, info, text, textMuted, background, border } = useTheme()
@@ -195,7 +154,7 @@ function formatToolArgs(toolName: string, args: Record<string, unknown>): string
 }
 
 export function MessageList() {
-  const { messages, streamingSegments, pendingText, isProcessing, toolCallExpanded, toggleToolCallExpanded } = useLoop()
+  const { messages, isProcessing, toolCallExpanded, toggleToolCallExpanded } = useLoop()
   const { text, textMuted, background } = useTheme()
 
   return (
@@ -220,34 +179,7 @@ export function MessageList() {
           return <MessageItem msg={msg} />
         }}
       </For>
-
-      <Show when={streamingSegments().length > 0 || pendingText()}>
-        <For each={streamingSegments()}>
-          {(seg) => {
-            if (seg.kind === 'thinking') {
-              return (
-                <box marginBottom={1} paddingLeft={1}>
-                  <text fg={textMuted()}>{seg.text}</text>
-                </box>
-              )
-            }
-            if (seg.kind === 'system-reminder') {
-              // system-reminder 是注入元数据，不展示
-              return null
-            }
-            return (
-              <box marginBottom={1}>
-                <MarkdownText content={seg.text} />
-              </box>
-            )
-          }}
-        </For>
-        <Show when={pendingText()}>
-          <PendingStreamView />
-        </Show>
-      </Show>
-
-      <Show when={isProcessing() && streamingSegments().length === 0 && !pendingText()}>
+      <Show when={isProcessing() && messages().length === 0}>
         <box marginBottom={1}>
           <Spinner>思考中...</Spinner>
         </box>

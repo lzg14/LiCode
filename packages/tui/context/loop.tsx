@@ -1,4 +1,4 @@
-import { createContext, useContext, createSignal, createMemo, onMount, batch, type JSX, type Accessor } from "solid-js"
+import { createContext, useContext, createSignal, createMemo, onMount, type JSX, type Accessor } from "solid-js"
 import type { Phase } from "../../core/types"
 import type { CoreLoop } from "../../core/loop"
 import { createModel } from "../../llm/provider"
@@ -6,7 +6,6 @@ import { listModelsByProvider } from "../../llm/catalog"
 import { devLogger } from "../../core/dev-logger"
 import { readImageFile } from "../../tools/builtin"
 import { checkDangerousPattern } from "../../security"
-import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
 import { useToast } from "../ui/toast"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
@@ -65,8 +64,6 @@ export interface LoopContext {
   isProcessing: Accessor<boolean>
   pendingCount: Accessor<number>
   elapsed: Accessor<number>
-  streamingSegments: Accessor<Segment[]>
-  pendingText: Accessor<string>
   messages: Accessor<Message[]>
   addMessage: (msg: AddMessageInput) => void
   updateMessage: (id: string, patch: Partial<Message>) => void
@@ -95,8 +92,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const toast = useToast()
   const [isProcessing, setIsProcessing] = createSignal(false)
   const [elapsed, setElapsed] = createSignal(0)
-  const [streamingSegments, setStreamingSegments] = createSignal<Segment[]>([])
-  const [pendingText, setPendingText] = createSignal("")
   const [messages, setMessages] = createSignal<Message[]>([])
   const [toolCallExpanded, setToolCallExpanded] = createSignal(false)
   const toggleToolCallExpanded = () => setToolCallExpanded(prev => !prev)
@@ -259,7 +254,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
 
   // 持久化 session ID，跨轮对话复用同一个 session
   let persistentSessionId: string | undefined = props.sessionId
-  let streamAccumulator = createStreamAccumulator()
 
   onMount(() => {
     if (props.sessionId && props.loop) {
@@ -304,14 +298,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
 
   const clearMessages = () => {
     setMessages([])
-    setStreamingSegments([])
-    setPendingText("")
   }
 
   const clearSession = () => {
     setMessages([])
-    setStreamingSegments([])
-    setPendingText("")
     persistentSessionId = undefined
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
@@ -352,10 +342,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
     setIsProcessing(true)
-    setStreamingSegments([])
-    setPendingText("")
-    streamAccumulator = createStreamAccumulator()
-
     const startTime = Date.now()
 
     const timer = setInterval(() => {
@@ -393,23 +379,12 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             total: usage.inputTokens + usage.outputTokens,
           })
         },
-        onStreamText: (delta: string) => {
-          const { closed, pending } = streamAccumulator.push(delta)
-          // 合并信号更新，减少重渲染次数
-          batch(() => {
-            if (closed.length > 0) {
-              setStreamingSegments(prev => [...prev, ...closed])
-            }
-            if (pending !== pendingText()) {
-              setPendingText(pending)
-            }
-          })
+        onStreamText: (text: string) => {
+          // generateText 模式：直接添加消息，不需要流式累积
+          addMessage({ role: "assistant", content: text })
         },
         onIntermediateText: (text: string) => {
-          // 中间轮一次性把当前段收尾，然后整个块作为新消息
-          streamAccumulator.reset()
-          setStreamingSegments([])
-          setPendingText("")
+          // 中间轮文本直接添加为 assistant 消息
           addMessage({ role: "assistant", content: text })
         },
         onToolCall: (toolName: string, args: Record<string, unknown>, batch: number) => {
@@ -434,9 +409,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           return new Promise<boolean>((resolve) => {
             confirmResolve = resolve
             addMessage({ role: "system", content: "已达最大迭代次数。输入 y 继续，其他任意键停止。" })
-            setStreamingSegments([])
-            setPendingText("")
-            streamAccumulator.reset()
             // 临时解除 processing 以允许用户输入
             setIsProcessing(false)
           })
@@ -474,8 +446,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     } finally {
       abortController = null
       setIsProcessing(false)
-      setStreamingSegments([])
-      setPendingText("")
       clearInterval(timer)
       setElapsed(0)
 
@@ -529,8 +499,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     isProcessing,
     pendingCount,
     elapsed,
-    streamingSegments,
-    pendingText,
     messages,
     addMessage,
     updateMessage,
