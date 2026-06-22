@@ -292,6 +292,29 @@ export function registerBuiltinTools(): void {
   })
 
   globalToolRegistry.register({
+    name: 'datetime',
+    description: '获取当前日期时间。支持简单格式化（YYYY/MM/DD/HH/mm/ss）。',
+    inputSchema: z.object({
+      format: z.string().optional().describe('格式化字符串'),
+    }),
+    handler: async ({ format }) => {
+      const now = new Date()
+      if (!format) return { success: true, output: now.toISOString() }
+      const tokens: Record<string, string> = {
+        YYYY: String(now.getFullYear()),
+        MM: String(now.getMonth() + 1).padStart(2, '0'),
+        DD: String(now.getDate()).padStart(2, '0'),
+        HH: String(now.getHours()).padStart(2, '0'),
+        mm: String(now.getMinutes()).padStart(2, '0'),
+        ss: String(now.getSeconds()).padStart(2, '0'),
+      }
+      let out = format
+      for (const [k, v] of Object.entries(tokens)) out = out.replace(new RegExp(k, 'g'), v)
+      return { success: true, output: out }
+    },
+  })
+
+  globalToolRegistry.register({
     name: 'system_info',
     description: '获取系统信息。',
     inputSchema: z.object({}),
