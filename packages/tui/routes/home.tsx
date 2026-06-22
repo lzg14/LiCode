@@ -62,6 +62,7 @@ export function Home() {
   const [slashInput, setSlashInput] = createSignal("")
   const [slashIdx, setSlashIdx] = createSignal(0)
   const [availableSkills, setAvailableSkills] = createSignal<Array<{ name: string; description: string }>>([])
+  const [pendingSlashCmd, setPendingSlashCmd] = createSignal<string | null>(null)
 
   const scanSkills = async () => {
     // 用新的 skill loader，直接消费 Claude Code `~/.claude/skills/`
@@ -87,6 +88,10 @@ export function Home() {
   })
 
   const handleInputChange = (text: string) => {
+    if (pendingSlashCmd()) {
+      setPendingSlashCmd(null)
+      setSlashOpen(false)
+    }
     if (text.startsWith('/')) {
       setSlashInput(text)
       setSlashOpen(true)
@@ -96,28 +101,25 @@ export function Home() {
     }
   }
 
+  const handleSlashSubmitByLabel = (label: string) => {
+    if (label === '/clear') {
+      clearSession()
+    } else if (label === '/compact') {
+      compactSession()
+    } else if (label === '/help') {
+      setHelpOpen(true)
+    } else if (label.startsWith('/')) {
+      const skillName = label.replace(/^\//, '')
+      setActiveSkill(skillName)
+      addMessage({ role: "system", content: `技能 "${skillName}" 已激活，可在侧栏查看指令` })
+    }
+  }
+
   const handleSlashSubmit = () => {
     const items = slashItems()
     const selected = items[slashIdx()]
     if (!selected) return
-    if (selected.type === 'cmd') {
-      if (selected.label === '/clear') {
-        clearSession()
-      } else if (selected.label === '/compact') {
-        compactSession()
-      } else if (selected.label === '/help') {
-        setSlashOpen(false)
-        setHelpOpen(true)
-        return
-      }
-    } else if (selected.type === 'skill') {
-      const skillName = selected.label.replace(/^\//, '')
-      setSlashOpen(false)
-      setSlashInput('')
-      setActiveSkill(skillName)
-      addMessage({ role: "system", content: `技能 "${skillName}" 已激活，可在侧栏查看指令` })
-      return
-    }
+    handleSlashSubmitByLabel(selected.label)
     setSlashOpen(false)
   }
 
@@ -168,14 +170,14 @@ export function Home() {
         evt.preventDefault()
         const selected = items[slashIdx()]
         if (!selected) return
-        // 把完整命令填入输入框（带空格便于继续输入参数），菜单关闭
-        setPromptText(selected.label + " ")
+        setPromptText(selected.label)
         setSlashOpen(false)
         setSlashInput("")
         setSlashIdx(0)
+        setPendingSlashCmd(selected.label)
       }
       else if (evt.name === "return") { evt.preventDefault(); handleSlashSubmit() }
-      else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false) }
+      else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false); setPendingSlashCmd(null) }
       return
     }
   })
@@ -270,7 +272,10 @@ export function Home() {
 
         <box flexShrink={0}>
           <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange}
-            popupOpen={modelPickerOpen() || slashOpen() || helpOpen()} />
+            popupOpen={modelPickerOpen() || slashOpen() || helpOpen()}
+            pendingSlashCmd={pendingSlashCmd()}
+            onSlashCmdConsumed={() => setPendingSlashCmd(null)}
+            onSlashSubmit={(cmd) => handleSlashSubmitByLabel(cmd)} />
           <StatusBar />
         </box>
       </box>

@@ -1,6 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { PROVIDER_PRIORITY } from "./catalog"
+import { classifyError, getRetryStrategy, formatRetryMessage, waitAndRetry } from "./retry-strategy"
 
 export interface ModelConfig {
   provider: string
@@ -40,18 +41,30 @@ function createModelForProvider(provider: string, config: ModelConfig) {
   return createOpenAI({ apiKey, baseURL: config.baseUrl }).chat(config.model)
 }
 
-export function createModel(config: ModelConfig) {
+export async function createModel(config: ModelConfig) {
   const primaryProvider = config.provider.toLowerCase()
   const providers = [primaryProvider, ...PROVIDER_PRIORITY.filter(p => p !== primaryProvider)]
-  
+
   for (const provider of providers) {
-    try {
-      return createModelForProvider(provider, { ...config, provider })
-    } catch (error) {
-      console.warn(`Provider ${provider} failed, trying next...`)
-      continue
+    const maxRetries = 3
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return createModelForProvider(provider, { ...config, provider })
+      } catch (error) {
+        const category = classifyError(error)
+        const strategy = getRetryStrategy(category)
+        const message = formatRetryMessage(category, error, attempt)
+
+        if (!strategy.shouldRetry(attempt)) {
+          console.warn(`Provider ${provider} 失败: ${message}`)
+          break
+        }
+
+        console.warn(`Provider ${provider} 第 ${attempt + 1} 次重试: ${message}`)
+        await waitAndRetry(category, attempt, error)
+      }
     }
   }
-  
+
   throw new Error(`All providers failed for model ${config.model}`)
 }

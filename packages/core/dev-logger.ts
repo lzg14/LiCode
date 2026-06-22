@@ -176,7 +176,10 @@ export const devLogger = new DevLogger(LogLevel.DEBUG)
 export function setupGlobalErrorHandlers(logger: DevLogger): void {
   process.on('uncaughtException', (error: Error) => {
     logger.logException('uncaughtException', error)
-    process.exit(1)
+    // 只在致命错误时退出，streaming 错误不应该导致进程退出
+    if (error.message?.includes('FATAL') || error.message?.includes('ENOENT')) {
+      process.exit(1)
+    }
   })
 
   process.on('unhandledRejection', (reason: unknown) => {

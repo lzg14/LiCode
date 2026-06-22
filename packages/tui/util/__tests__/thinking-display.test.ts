@@ -105,7 +105,7 @@ describe('deriveThinkingDisplay', () => {
     expect(r.kind).toBe('has-rest')
     if (r.kind === 'has-rest') {
       expect(r.thinking).toBe('mid')
-      expect(r.rest).toBe('beforeafter')
+      expect(r.rest).toBe('before after')
     }
   })
 })

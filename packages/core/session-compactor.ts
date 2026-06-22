@@ -1,14 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'fs'
-import { join, dirname } from 'path'
+import { join } from 'path'
 
 /**
  * Session 历史压缩器
  * 当对话过长时将旧消息压缩为摘要，减少传给 LLM 的上下文量。
  *
  * 核心策略：
- * 1. 规则提取（同步，无 API 调用）—— 提取意图、工具调用、结论
- * 2. LLM 精炼（异步，有 API 调用）—— 将骨架润色为连贯摘要
- * 3. 降级：LLM 不可用时只用规则提取
+ * 1. LLM 总结（主动调用，同步等待）—— 生成连贯摘要
+ * 2. 降级：LLM 不可用时用规则提取生成摘要
  *
  * 完整历史保留在 SQLite 中不删，摘要写入 Markdown 文件。
  */
@@ -38,6 +37,8 @@ export interface CompactionResult {
   summaryPath: string
   preservedCount: number
   originalCount: number
+  /** 是否为降级摘要（LLM 不可用时） */
+  wasFallback?: boolean
 }
 
 const DEFAULT_CONFIG: CompactionConfig = {
@@ -74,8 +75,8 @@ export class SessionCompactor {
   }
 
   /**
-   * 执行压缩（同步：规则提取 + 降级摘要立即返回）
-   * 异步：LLM 精炼在后台执行，完成后写入文件
+   * 执行压缩
+   * 优先使用 LLM 生成连贯摘要，失败时降级为规则提取
    */
   async compact(
     messages: any[],
@@ -90,33 +91,48 @@ export class SessionCompactor {
     const toCompact = total > preserveRecent ? messages.slice(0, total - preserveRecent) : []
     const preserved = total > preserveRecent ? messages.slice(total - preserveRecent) : messages
 
-    // 1. 规则提取（同步，立即返回）
-    const extraction = this.extractRules(toCompact)
-    const summaryBody = this.buildFallbackSummary(extraction)
+    if (toCompact.length === 0) {
+      return {
+        summary: '',
+        summaryPath: '',
+        preservedCount: preserved.length,
+        originalCount: total,
+      }
+    }
 
-    // 2. 构建完整摘要（带元数据头）
+    // 1. 优先尝试 LLM 生成摘要
+    let summaryBody: string
+    let wasFallback = false
+
+    if (llm) {
+      try {
+        summaryBody = await this.summarizeWithLLM(toCompact, llm)
+      } catch (e) {
+        // LLM 失败，降级为规则提取
+        console.warn(`LLM summarization failed, falling back to rules: ${e}`)
+        const extraction = this.extractRules(toCompact)
+        summaryBody = this.buildFallbackSummary(extraction)
+        wasFallback = true
+      }
+    } else {
+      // 无 LLM，直接规则提取
+      const extraction = this.extractRules(toCompact)
+      summaryBody = this.buildFallbackSummary(extraction)
+      wasFallback = true
+    }
+
+    // 2. 构建完整摘要
     const summary = this.buildSummaryDocument(summaryBody, total, preserved.length)
 
-    // 3. 写入文件（立即写降级摘要，后续 LLM 精炼会追加）
-    this.saveSummary(sessionId, summary)
-
-    // 4. LLM 精炼（异步，不阻塞）
-    if (llm && toCompact.length > 0) {
-      this.refineWithLLM(extraction, llm)
-        .then((refinedBody) => {
-          const refinedSummary = this.buildSummaryDocument(refinedBody, total, preserved.length)
-          this.saveSummary(sessionId, refinedSummary)
-        })
-        .catch(() => {
-          // 降级摘要已经写入，不需要处理
-        })
-    }
+    // 3. 保存
+    const summaryPath = this.saveSummary(sessionId, summary)
 
     return {
       summary: summaryBody,
-      summaryPath: '',
+      summaryPath,
       preservedCount: preserved.length,
       originalCount: total,
+      wasFallback,
     }
   }
 
@@ -161,7 +177,96 @@ export class SessionCompactor {
     return existsSync(join(dir, 'summary-v1.md'))
   }
 
-  // ─── 规则提取 ─────────────────────────────────────────
+  // ─── LLM 总结 ─────────────────────────────────────────
+
+  private async summarizeWithLLM(
+    messages: any[],
+    llm: { complete: (req: any) => Promise<any> },
+  ): Promise<string> {
+    const conversationText = this.formatMessagesForSummary(messages)
+
+    const prompt = `你是一个对话摘要助手。请根据以下对话记录，写一段 3-5 句的连贯摘要，说明：
+1）做了什么任务
+2）有什么技术决策
+3）项目当前状态
+
+直接输出摘要正文，不要前缀说明。
+
+## 对话记录
+${conversationText}`
+
+    const response = await llm.complete({
+      model: '',
+      messages: [
+        { role: 'system', content: '你是对话摘要助手，直接输出摘要正文，不要其他内容。' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.3,
+      maxTokens: 600,
+    })
+
+    return response.content ?? ''
+  }
+
+  private formatMessagesForSummary(messages: any[]): string {
+    const parts: string[] = []
+
+    for (const msg of messages) {
+      const role = msg.role ?? 'unknown'
+      const content = msg.content ?? []
+
+      if (role === 'user') {
+        for (const part of content) {
+          if (part.type === 'text' && part.text) {
+            const trimmed = part.text.trim().slice(0, 200)
+            if (trimmed) parts.push(`[用户]: ${trimmed}`)
+          }
+        }
+      } else if (role === 'assistant') {
+        for (const part of content) {
+          if (part.type === 'text' && part.text) {
+            const trimmed = part.text.trim().slice(0, 300)
+            if (trimmed) parts.push(`[助手]: ${trimmed}`)
+          }
+          if (part.type === 'tool-call' && part.toolName) {
+            const input = part.input ?? {}
+            const desc = this.summarizeToolCall(part.toolName, input)
+            if (desc) parts.push(`[工具调用]: ${desc}`)
+          }
+        }
+      } else if (role === 'tool') {
+        for (const part of content) {
+          if (part.type === 'tool-result') {
+            const output = String(part.output ?? '').slice(0, 100)
+            if (output) parts.push(`[工具结果]: ${output}`)
+          }
+        }
+      }
+    }
+
+    return parts.slice(0, 50).join('\n') // 限制 50 行，避免 prompt 过长
+  }
+
+  private summarizeToolCall(toolName: string, input: any): string {
+    switch (toolName) {
+      case 'read':
+        return `读取 ${input.path ?? ''}`
+      case 'write':
+        return `写入 ${input.path ?? ''}`
+      case 'edit':
+        return `编辑 ${input.path ?? ''}`
+      case 'bash':
+        return `执行 ${String(input.command ?? '').slice(0, 60)}`
+      case 'grep':
+        return `搜索 ${input.pattern ?? ''}`
+      case 'glob':
+        return `查找 ${input.pattern ?? ''}`
+      default:
+        return `${toolName}`
+    }
+  }
+
+  // ─── 规则提取（降级方案）─────────────────────────────────
 
   private extractRules(messages: any[]): ExtractionResult {
     const userIntents: string[] = []
@@ -174,7 +279,6 @@ export class SessionCompactor {
       const content = msg.content ?? []
 
       if (role === 'user') {
-        // 取用户消息的前 80 字作为意图
         for (const part of content) {
           if (part.type === 'text' && part.text) {
             const trimmed = part.text.trim().slice(0, 80)
@@ -185,22 +289,17 @@ export class SessionCompactor {
 
       if (role === 'assistant' || role === 'tool') {
         for (const part of content) {
-          // 工具调用 → 提取文件名
           if (part.type === 'tool-call' && part.toolName) {
-            if (['read', 'write', 'edit', 'delete', 'move', 'copy', 'glob', 'grep', 'codesearch', 'bash'].includes(part.toolName)) {
+            if (['read', 'write', 'edit', 'bash', 'grep', 'glob'].includes(part.toolName)) {
               const input = part.input ?? {}
-              const path = input.path ?? input.file ?? input.pattern ?? ''
-              if (path) {
-                const str = String(path)
-                if (!fileOps.includes(str)) fileOps.push(str)
-              }
+              const path = input.path ?? input.pattern ?? ''
+              if (path && !fileOps.includes(String(path))) fileOps.push(String(path))
               if (part.toolName === 'bash') {
                 const cmd = String(input.command ?? '').slice(0, 60)
                 if (cmd && !commands.includes(cmd)) commands.push(cmd)
               }
             }
           }
-          // assistant 文本 → 取最后一段作为结论
           if (part.type === 'text' && part.text) {
             const text = part.text.trim()
             if (text.length > 20) {
@@ -216,63 +315,26 @@ export class SessionCompactor {
     return { userIntents, fileOps, commands, conclusions }
   }
 
-  // ─── LLM 精炼 ─────────────────────────────────────────
-
-  private async refineWithLLM(
-    extraction: ExtractionResult,
-    llm: { complete: (req: any) => Promise<any> },
-  ): Promise<string> {
-    const prompt = `请将以下对话记录整理为一段简洁连贯的摘要，保留技术决策和项目上下文。
-
-## 用户意图
-${extraction.userIntents.map(s => `- ${s}`).join('\n')}
-
-## 涉及的文件
-${extraction.fileOps.map(s => `- ${s}`).join('\n') || '(无)'}
-
-## 执行的命令
-${extraction.commands.map(s => `- ${s}`).join('\n') || '(无)'}
-
-## 关键结论
-${extraction.conclusions.map(s => `- ${s}`).join('\n') || '(无)'}
-
-请输出 2-4 段话，介绍这段时间做了什么、有什么技术决策、项目当前状态。不要用列表格式，用连贯的段落。`
-
-    const response = await llm.complete({
-      model: '',
-      messages: [
-        { role: 'system', content: '你是一个对话摘要助手，只输出摘要正文，不要其他内容。' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.3,
-      maxTokens: 800,
-    })
-
-    return response.content ?? this.buildFallbackSummary(extraction)
-  }
-
-  // ─── 降级摘要 ─────────────────────────────────────────
-
   private buildFallbackSummary(extraction: ExtractionResult): string {
     const parts: string[] = []
 
     if (extraction.userIntents.length > 0) {
-      parts.push(`## 对话纪要\n\n${extraction.userIntents.slice(0, 10).map(s => `- ${s}`).join('\n')}`)
+      parts.push(`用户进行了以下操作：${extraction.userIntents.slice(0, 5).join('；')}`)
     }
 
     if (extraction.fileOps.length > 0) {
-      parts.push(`## 涉及文件\n\n${extraction.fileOps.slice(0, 15).map(s => `- ${s}`).join('\n')}`)
+      parts.push(`涉及文件：${extraction.fileOps.slice(0, 5).join('、')}`)
     }
 
     if (extraction.commands.length > 0) {
-      parts.push(`## 执行命令\n\n${extraction.commands.slice(0, 10).map(s => `- ${s}`).join('\n')}`)
+      parts.push(`执行命令：${extraction.commands.slice(0, 3).join('；')}`)
     }
 
     if (extraction.conclusions.length > 0) {
-      parts.push(`## 关键结论\n\n${extraction.conclusions.slice(0, 8).map(s => `- ${s}`).join('\n')}`)
+      parts.push(`关键结论：${extraction.conclusions.slice(0, 3).join('；')}`)
     }
 
-    return parts.join('\n\n') || '(暂无摘要内容)'
+    return parts.join('\n') || '暂无摘要内容'
   }
 
   // ─── 持久化 ─────────────────────────────────────────
@@ -320,9 +382,8 @@ ${extraction.conclusions.map(s => `- ${s}`).join('\n') || '(无)'}
   }
 
   private extractSummaryBody(content: string): string {
-    // 去掉元数据头（## 对话摘要 和 --- 之间的内容取后半段）
     const lines = content.split('\n')
-    const bodyStart = lines.findIndex(l => l.startsWith('## 对话') || l.startsWith('## 关键'))
+    const bodyStart = lines.findIndex(l => l.startsWith('## 对话') || l.startsWith('## 关键') || l.startsWith('用户') || l.startsWith('涉及'))
     if (bodyStart < 0) return content
     return lines.slice(bodyStart).join('\n').trim()
   }

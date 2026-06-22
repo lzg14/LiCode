@@ -103,7 +103,7 @@ export async function tui(config: any) {
   setSecurityLayer(securityLayer)
   devLogger.info('APP', `SecurityLayer created: ${securityConfig.commandWhitelist.length} commands allowed`)
 
-  const model = createModel(config.llm)
+  const model = await createModel(config.llm)
   const loop = new CoreLoop(config, undefined)
 
   // 自动加载最近的 session，实现跨启动连续性

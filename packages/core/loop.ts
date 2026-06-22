@@ -86,7 +86,7 @@ export class CoreLoop {
     // 初始化 Git 集成
     if (config.cwd) {
       this.git = new GitIntegration(config.cwd)
-      this.git.connect().catch(() => {})
+      this.git.connect().catch((e) => { devLogger.debug('GIT', 'connect failed', e) })
     }
   }
 
@@ -139,13 +139,13 @@ export class CoreLoop {
   /**
    * 手动触发 session 压缩（供 /compact 命令调用）
    */
-  async compactSession(sessionId: string): Promise<{ summary: string; saved: number } | null> {
+  async compactSession(sessionId: string): Promise<{ summary: string; saved: number; originalCount: number; preservedCount: number; wasFallback?: boolean } | null> {
     const session = this.sessionManager.getSession(sessionId)
     if (!session) return null
 
     const history = this.sessionManager.getMessagesAsModelMessages(sessionId)
     if (!this.sessionCompactor.shouldCompact(history, sessionId)) {
-      return { summary: '消息数未达压缩阈值，无需压缩', saved: 0 }
+      return { summary: '消息数未达压缩阈值，无需压缩', saved: 0, originalCount: 0, preservedCount: 0 }
     }
 
     const llmProvider = this.llm
@@ -153,6 +153,9 @@ export class CoreLoop {
     return {
       summary: result.summary,
       saved: result.originalCount - result.preservedCount,
+      originalCount: result.originalCount,
+      preservedCount: result.preservedCount,
+      wasFallback: result.wasFallback,
     }
   }
 
@@ -162,7 +165,7 @@ export class CoreLoop {
 
     // 如果外部没有传入 llm，使用构造时注入的
     const effectiveLlm = ctx.llm ?? this.llm
-    const model = ctx.model ?? (this.llm ? createModel({ provider: this.config.llm.provider, model: this.config.llm.model, apiKey: this.config.llm.apiKey, baseUrl: this.config.llm.baseUrl }) : undefined)
+    const model = ctx.model ?? (this.llm ? await createModel({ provider: this.config.llm.provider, model: this.config.llm.model, apiKey: this.config.llm.apiKey, baseUrl: this.config.llm.baseUrl }) : undefined)
     ctx = { ...ctx, llm: effectiveLlm, model, memory: this.memory }
 
     // 复用已有 session（跨轮对话），或创建新 session
