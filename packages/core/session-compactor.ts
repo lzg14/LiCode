@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'fs'
 import { join } from 'path'
+import { devLogger } from './dev-logger'
 
 /**
  * Session 历史压缩器
@@ -109,7 +110,7 @@ export class SessionCompactor {
         summaryBody = await this.summarizeWithLLM(toCompact, llm)
       } catch (e) {
         // LLM 失败，降级为规则提取
-        console.warn(`LLM summarization failed, falling back to rules: ${e}`)
+        devLogger.warn('COMPACTOR', `LLM summarization failed, falling back to rules: ${e}`)
         const extraction = this.extractRules(toCompact)
         summaryBody = this.buildFallbackSummary(extraction)
         wasFallback = true
