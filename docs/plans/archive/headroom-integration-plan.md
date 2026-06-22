@@ -2,7 +2,13 @@
 
 > 作者：MiMoCode
 > 日期：2026-06-21
-> 状态：待评审
+> 状态：⏸️ **待评审 / 暂不实施**（2026-07-22 归档）
+>
+> **归档原因**：复杂度高（Python 子进程 + 6 个压缩算法，15-20 天工作量），需 token 消耗痛点的实际反馈再启动。
+>
+> **当前压缩方案已够用**：`session-compactor.ts` + LLM 总结 + truncate.ts。
+>
+> **如要重新启动本计划**：移除本 banner，参考 [`docs/plans/production-gaps-2026-q3.md`](../production-gaps-2026-q3.md) 中 P3 远期项。
 
 ---
 

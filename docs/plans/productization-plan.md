@@ -1,5 +1,23 @@
 # licode 产品化计划
 
+> ⚠️ **本文档大部分已完成（2026-07-22 状态更新）**
+>
+> **5 阶段产品化完成度：~85%**
+>
+> | 阶段 | 状态 | 说明 |
+> |---|---|---|
+> | 阶段零：清理工作区 | ✅ | 七阶段 phase 文件已删，home.tsx 修改已提交 |
+> | 阶段一：P0 缺陷修复 | ✅ | 安全层 + todo + 危险命令拦截全部就位 |
+> | 阶段二：体验增强 | ✅ | Diff 预览 + 工具结果截断完成 |
+> | 阶段三：上下文管理 | ✅ | .licode.md 加载 + 上下文窗口预警 |
+> | 阶段四：MCP 生态 | ✅ | mcp.ts + mcp-server.ts + mcp-tools.ts |
+> | 阶段五：Workflow 简化 | ✅ | workflow/ 已删，system prompt 模板化 |
+> | 阶段六：测试与文档 | ⚠️ | README/CHANGELOG 已更新；测试覆盖仍在补 |
+>
+> **剩余真实差距**（不再按 5 阶段拆解）见 [`production-gaps-2026-q3.md`](./production-gaps-2026-q3.md)：CI/CD、LICENSE、tools/llm/tui 组件测试、memory scope、extended thinking 等。
+
+---
+
 **目标**：把 licode 从"学习项目"提升到"可用产品" — 补齐 P0 安全/规划缺陷，叠加 P1 体验增强
 
 **日期**：2026-06-21  

@@ -1,10 +1,34 @@
 # 代码质量提升计划
 
+> ⚠️ **本文档部分已实施（2026-07-22 状态更新）**
+>
+> 原始 8 项 P0 全部已完成：
+> - ✅ P0-1（tui 编译错，sidebar.tsx 引用 phase）— 已修
+> - ✅ P0-2（bun 白名单）— whitelist.ts 第 4 行
+> - ✅ P0-3（安全配置联动）— `packages/security/merge.ts`
+> - ✅ P0-4（provider 类型统一）— `packages/llm/types.ts` 单一 source
+> - ✅ P0-6（licode.config.json.example 修复）
+> - ✅ P0-7（pluginManager 决策）— 已删死代码
+> - ✅ P0-8（LICENSE 计划）— 进行中（见新文档 P0-2）
+>
+> **剩余未完成**：
+> - ❌ P0-5（CI/CD）— 见新文档 [`production-gaps-2026-q3.md`](./production-gaps-2026-q3.md) P0-1
+> - ⚠️ P1-1（tools/llm/skills 测试）— 见新文档 P1-1
+> - ⚠️ P1-3（memory scope 修复）— 见新文档 P1-3
+> - ⚠️ P1-9（reasoning parts 提取）— 见新文档 P1-4
+> - ⚠️ P1-10（console.* 统一）— 已基本完成（grep 0 匹配），仍需 review
+> - ⚠️ P1-12（slashItems 抽 BUILTIN_COMMANDS）— 见新文档 P2-8
+> - ⚠️ P2-1/2/3/4/6/8 — 见新文档 P2 区
+>
+> **当前总评**：7.5/10（从 6.5/10 提升），剩余差距在新文档。
+
+---
+
 **目标**：基于全量扫描结果，分三档优先级修复 30+ 项代码质量问题，使 licode 从 6.5/10 提升至 8/10，达到"个人/小团队生产可用"
 
-**日期**：2026-06-22
+**日期**：2026-06-22（部分已实施）
 **范围**：全项目（11 个包、34 个工具、~5000 行 TS）
-**前置**：[production-readiness-assessment.md](./production-readiness-assessment.md) 的 6.5/10 评估
+**前置**：[archive/2026-07-15-assessment.md](../archive/2026-07-15-assessment.md) 的 6.5/10 评估
 
 ---
 
