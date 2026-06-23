@@ -41,15 +41,17 @@ docs/
 
 ### 模块设计（`modules/`）
 
-| 文档 | 内容 |
-|------|------|
-| [config.md](./modules/config.md) | 配置层级、环境变量、外部导入、验证器 |
-| [integration.md](./modules/integration.md) | Git / MCP / Plugin 集成层 |
-| [memory.md](./modules/memory.md) | 三层记忆系统 |
-| [security.md](./modules/security.md) | 命令白名单、路径校验、危险命令拦截 |
-| [skills.md](./modules/skills.md) | Skills 加载器、registry、hot-reload |
-| [tools.md](./modules/tools.md) | 工具分类、注册表、preExecuteHook |
-| [tui.md](./modules/tui.md) | TUI 模块组成、职责、组件树 |
+| 文档 | 版本 | 日期 | 内容 |
+|------|------|------|------|
+| [config.md](./modules/config.md) | v1.1.0 | 2026-06-17 | 配置层级、环境变量、外部导入、验证器 |
+| [integration.md](./modules/integration.md) | v1.0.0 | 2026-06-17 | Git / MCP / Plugin 集成层 |
+| [memory.md](./modules/memory.md) | v1.1.0 | 2026-06-17 | 三层记忆系统 |
+| [security.md](./modules/security.md) | v1.0.0 | 2026-06-17 | 命令白名单、路径校验、危险命令拦截 |
+| [skills.md](./modules/skills.md) | v1.0.0 | 2026-06-17 | Skills 加载器、registry、hot-reload |
+| [tools.md](./modules/tools.md) | v1.0.0 | 2026-06-17 | 工具分类、注册表、preExecuteHook |
+| [tui.md](./modules/tui.md) | — | 2026-07-22 | TUI 模块组成、职责、组件树 |
+
+> 注：版本/日期是模块设计快照。`tui.md` 因近期重构已刷新；其余 6 个模块为稳定设计，实现细节变更可能未及时同步。
 
 ### 实施计划（`plans/`）
 

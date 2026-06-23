@@ -149,5 +149,5 @@ MessageList 渲染
 ## 7. 相关文档
 
 - [tui-render-optimization.md](../plans/tui-render-optimization.md) — 性能改造计划
-- [20260617-tui-review.md](../20260617-tui-review.md) — TUI 现状 review
+- [20260617-tui-review.md](../archive/20260617-tui-review.md) — TUI 现状 review（2026-06-17 旧版）
 - [streaming-chunked-display.md](../plans/streaming-chunked-display.md) — 流式输出改造
