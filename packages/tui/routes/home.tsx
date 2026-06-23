@@ -263,6 +263,8 @@ export function Home() {
           <scrollbox
             flexGrow={1}
             scrollY={true}
+            stickyScroll={true}
+            stickyStart="bottom"
             viewportOptions={{
               paddingRight: 1,
             }}
