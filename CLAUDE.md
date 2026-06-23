@@ -39,7 +39,7 @@
 D:\ProjectFile\licode\
 ├── packages/              # 业务模块（monorepo 但无 workspace 工具）
 │   ├── core/              # Core Loop（已简化为单 EXECUTE 阶段）
-│   ├── tools/             # 34 个内置工具
+│   ├── tools/             # 38 个内置工具
 │   ├── session/           # SQLite 持久化 + 历史压缩
 │   ├── tui/               # SolidJS 终端 UI
 │   ├── config/            # 多层级配置

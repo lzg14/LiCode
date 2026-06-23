@@ -1,12 +1,8 @@
-const SENSITIVE_PATHS = [
-  '~',
-  '/home',
-  '/Users',
-  '/etc',
-  'C:\\Users',
-  '/.ssh',
-  '/.aws',
-  '/.config',
+const SENSITIVE_DIRS = [
+  '.ssh',
+  '.aws',
+  '.config',
+  '.gnupg',
 ]
 
 export interface SensitiveWarning {
@@ -15,8 +11,9 @@ export interface SensitiveWarning {
 }
 
 export function checkSensitivePath(cwd: string): SensitiveWarning | null {
-  for (const sensitive of SENSITIVE_PATHS) {
-    if (cwd.includes(sensitive)) {
+  const sep = cwd.includes('\\') ? '\\' : '/'
+  for (const dir of SENSITIVE_DIRS) {
+    if (cwd.includes(`${sep}${dir}${sep}`) || cwd.endsWith(`${sep}${dir}`)) {
       return {
         path: cwd,
         reason: '包含敏感目录，可能泄露用户隐私信息',

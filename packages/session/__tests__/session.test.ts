@@ -9,6 +9,7 @@ import { checkpointPath, memoryPath, metaDir, ensureDir } from '../checkpoint-pa
 import { buildSessionContext, buildRecallReminder, buildContextInheritance } from '../prompt'
 import { searchMemory, getRecentMemoryEntries } from '../memory'
 import { computeBoundary } from '../checkpoint'
+import { Database } from 'bun:sqlite'
 
 const TEST_DB = join(tmpdir(), `licode-session-test-${Date.now()}.db`)
 const TEST_DATA_DIR = join(tmpdir(), `licode-session-data-${Date.now()}`)
@@ -229,7 +230,6 @@ describe('AI SDK message persistence', () => {
 describe('Schema migration', () => {
   it('should migrate old schema with missing columns', () => {
     const oldDbPath = join(tmpdir(), `licode-migration-test-${Date.now()}.db`)
-    const Database = require('bun:sqlite').Database
 
     // 模拟旧 schema（缺少 context_from 等列）
     const oldDb = new Database(oldDbPath)

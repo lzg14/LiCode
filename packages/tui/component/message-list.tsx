@@ -19,8 +19,6 @@ function stripSystemTags(content: string): string {
     .trim()
 }
 
-/**
-
 function MarkdownText(props: { content: string; streaming?: boolean }) {
   const { primary, warning, success, info, text, textMuted, background, border } = useTheme()
   const syntaxStyle = createMemo(() => createMarkdownSyntaxStyle({

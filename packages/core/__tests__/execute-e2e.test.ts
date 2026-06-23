@@ -10,11 +10,11 @@ import '../../tools/builtin'
 
 const TEST_DIR = join(tmpdir(), `licode-e2e-test-${Date.now()}`)
 
-// Mock streamText 来模拟 LLM
+// Mock generateText 来模拟 LLM
 // 必须在 import execute 之前，vitest 会 hoist 到文件顶部
-const mockStreamText = vi.fn()
+const mockGenerateText = vi.hoisted(() => vi.fn())
 vi.mock('ai', () => ({
-  streamText: mockStreamText,
+  generateText: mockGenerateText,
   tool: (def: any) => def,
   jsonSchema: (schema: any) => schema,
 }))
@@ -33,12 +33,11 @@ afterAll(() => {
 
 describe('execute E2E', () => {
   it('LLM 返回纯文本 — 直接输出', async () => {
-    mockStreamText.mockReturnValueOnce({
-      fullStream: (async function* () {
-        yield { type: 'text-delta', text: '直接回复' }
-      })(),
-      usage: Promise.resolve({ inputTokens: 10, outputTokens: 5, totalTokens: 15 }),
-      finishReason: Promise.resolve('stop'),
+    mockGenerateText.mockReturnValueOnce({
+      text: '直接回复',
+      toolCalls: [],
+      usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      finishReason: 'stop',
     })
 
     const ctx: ExecuteContext = {
@@ -61,26 +60,18 @@ describe('execute E2E', () => {
   })
 
   it('LLM 返回 tool-call → 执行工具 → 继续 → 最终返回文本', async () => {
-    // 第一次调用：tool-call (read)
-    // 第二次调用：纯文本
-    const fullStream1 = (async function* () {
-      yield { type: 'text-delta', text: 'I will read the file' }
-      yield { type: 'tool-call', toolCallId: 'tc1', toolName: 'read', input: { path: join(TEST_DIR, 'test.txt') } }
-    })()
-    const fullStream2 = (async function* () {
-      yield { type: 'text-delta', text: 'Here is the file content: mock file content' }
-    })()
-
-    mockStreamText
+    mockGenerateText
       .mockReturnValueOnce({
-        fullStream: fullStream1,
-        usage: Promise.resolve({ inputTokens: 50, outputTokens: 20, totalTokens: 70 }),
-        finishReason: Promise.resolve('tool-calls'),
+        text: 'I will read the file',
+        toolCalls: [{ toolName: 'read', input: { path: join(TEST_DIR, 'test.txt') }, toolCallId: 'tc1' }],
+        usage: { inputTokens: 50, outputTokens: 20, totalTokens: 70 },
+        finishReason: 'tool-calls',
       })
       .mockReturnValueOnce({
-        fullStream: fullStream2,
-        usage: Promise.resolve({ inputTokens: 30, outputTokens: 10, totalTokens: 40 }),
-        finishReason: Promise.resolve('stop'),
+        text: 'Here is the file content: mock file content',
+        toolCalls: [],
+        usage: { inputTokens: 30, outputTokens: 10, totalTokens: 40 },
+        finishReason: 'stop',
       })
 
     const ctx: ExecuteContext = {
