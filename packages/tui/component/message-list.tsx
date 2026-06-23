@@ -167,12 +167,12 @@ function MessageItem(props: { msg: Message }) {
         </box>
         <Show when={toolArgs}>
           <box paddingLeft={1}>
-            <CollapsibleText content={toolArgs} maxLines={5} />
+            <CollapsibleText content={toolArgs} maxLines={5} fg={textMuted()} />
           </box>
         </Show>
         <Show when={props.msg.diff}>
           <box flexDirection="column" paddingLeft={2} marginTop={0}>
-            <CollapsibleText content={props.msg.diff!} maxLines={10} />
+            <CollapsibleText content={props.msg.diff!} maxLines={10} fg={textMuted()} />
           </box>
         </Show>
       </box>
@@ -313,7 +313,7 @@ export function MessageList() {
             return (
               <box flexDirection="column" marginBottom={1} paddingLeft={1}>
                 <text fg={textMuted()}>┄ 思考过程 ┄</text>
-                <CollapsibleText content={seg.text} maxLines={5} />
+                <CollapsibleText content={seg.text} maxLines={5} fg={textMuted()} />
               </box>
             )
           }
