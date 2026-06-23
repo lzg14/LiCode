@@ -12,8 +12,8 @@ import { HelpPanel } from "../component/help-panel"
 import { loadAllSkills } from "../../skills/loader"
 
 export function Home() {
-  const { isProcessing, messages, run, compactSession, clearSession, currentModel, currentProvider, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler } = useLoop()
-  const { background, backgroundPanel, primary, text, textMuted } = useTheme()
+  const { isProcessing, messages, run, compactSession, clearSession, currentModel, currentProvider, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults } = useLoop()
+  const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)
 
@@ -270,6 +270,20 @@ export function Home() {
           >
             <MessageList />
           </scrollbox>
+        </Show>
+
+        {/* VERIFY 阶段状态 */}
+        <Show when={currentPhase() === 'VERIFY'}>
+          <box flexDirection="column" marginBottom={1}>
+            <text fg={textMuted()}>🔍 验证交付物...</text>
+            <For each={verifyResults()}>
+              {(r) => (
+                <text fg={r.passed ? success() : error()}>
+                  {r.passed ? '✓' : '✗'} {r.message}
+                </text>
+              )}
+            </For>
+          </box>
         </Show>
 
         <Show when={slashOpen()}>
