@@ -56,11 +56,11 @@ export async function createModel(config: ModelConfig) {
         const message = formatRetryMessage(category, error, attempt)
 
         if (!strategy.shouldRetry(attempt)) {
-          console.warn(`Provider ${provider} 失败: ${message}`)
+          process.stderr.write(`[provider] ${provider} 失败: ${message}\n`)
           break
         }
 
-        console.warn(`Provider ${provider} 第 ${attempt + 1} 次重试: ${message}`)
+        process.stderr.write(`[provider] ${provider} 第 ${attempt + 1} 次重试: ${message}\n`)
         await waitAndRetry(category, attempt, error)
       }
     }

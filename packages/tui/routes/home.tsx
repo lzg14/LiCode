@@ -4,7 +4,7 @@ import { useTheme } from "../context/theme"
 import { useLoop } from "../context/loop"
 import { sidebarVisible, setSidebarVisible, modelPickerOpen, setModelPickerOpen } from "../context/shortcuts"
 import { Logo } from "../component/logo"
-import { MessageList } from "../component/message-list"
+import { MessageList, QueueMessages } from "../component/message-list"
 import { Prompt, setPromptText } from "../component/prompt"
 import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
@@ -12,8 +12,8 @@ import { HelpPanel } from "../component/help-panel"
 import { loadAllSkills } from "../../skills/loader"
 
 export function Home() {
-  const { isProcessing, messages, run, compactSession, clearSession, currentModel, currentProvider, switchModel, getAvailableModels, addMessage, setActiveSkill } = useLoop()
-  const { background, backgroundPanel, primary, text, textMuted } = useTheme()
+  const { isProcessing, messages, run, compactSession, clearSession, currentModel, currentProvider, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults } = useLoop()
+  const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)
 
@@ -54,6 +54,31 @@ export function Home() {
       addMessage({ role: "system", content: `技能 "${arg}" 已激活，可在侧栏查看指令` })
       return
     }
+    if (text.startsWith('/loop')) {
+      const arg = text.slice(5).trim()
+      if (!arg || arg === 'list') {
+        listLoops()
+        return
+      }
+      if (arg === 'stop' || arg === 'off' || arg === 'cancel') {
+        stopLoops()
+        return
+      }
+      const parts = arg.split(/\s+/)
+      const firstPart = parts[0]
+      const maybeInterval = scheduler.parseInterval(firstPart)
+      if (maybeInterval) {
+        const prompt = parts.slice(1).join(' ')
+        if (!prompt) {
+          addMessage({ role: "system", content: "用法: /loop <interval> <prompt>\n示例: /loop 5m check deploy status" })
+          return
+        }
+        addLoop(firstPart, prompt)
+      } else {
+        addLoop('5m', arg)
+      }
+      return
+    }
     await run(text, { clipboardImages: images })
   }
 
@@ -78,6 +103,7 @@ export function Home() {
       { type: 'cmd', label: '/clear', desc: '开新会话（清空当前对话）' },
       { type: 'cmd', label: '/compact', desc: '压缩对话历史' },
       { type: 'cmd', label: '/help', desc: '查看所有快捷键' },
+      { type: 'cmd', label: '/loop', desc: '定时重复执行 prompt' },
     ]
     for (const s of availableSkills()) {
       items.push({ type: 'skill', label: `/${s.name}`, desc: truncate(s.description) })
@@ -139,6 +165,14 @@ export function Home() {
         return
       }
       return
+    }
+    // Esc 停止所有循环
+    if (evt.name === "escape" && !modelPickerOpen() && !slashOpen()) {
+      if (scheduler.hasTasks()) {
+        evt.preventDefault()
+        stopLoops()
+        return
+      }
     }
     if (evt.ctrl && evt.name === "b") {
       evt.preventDefault()
@@ -231,11 +265,29 @@ export function Home() {
             scrollY={true}
             stickyScroll={true}
             stickyStart="bottom"
-            viewportOptions={{ paddingRight: 0 }}
-            verticalScrollbarOptions={{ visible: false }}
+            overflow="scroll"
+            viewportOptions={{ paddingRight: 1 }}
+            verticalScrollbarOptions={{ visible: true }}
           >
             <MessageList />
           </scrollbox>
+        </Show>
+
+        {/* 队列消息：始终固定在底部，不随滚动条滚动 */}
+        <QueueMessages />
+
+        {/* VERIFY 阶段状态 */}
+        <Show when={currentPhase() === 'VERIFY'}>
+          <box flexDirection="column" marginBottom={1}>
+            <text fg={textMuted()}>🔍 验证交付物...</text>
+            <For each={verifyResults()}>
+              {(r) => (
+                <text fg={r.passed ? success() : error()}>
+                  {r.passed ? '✓' : '✗'} {r.message}
+                </text>
+              )}
+            </For>
+          </box>
         </Show>
 
         <Show when={slashOpen()}>

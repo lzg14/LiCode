@@ -57,7 +57,7 @@ export function registerBuiltinTools(): void {
           if (existsSync(path)) {
             oldContent = await readFile(path, 'utf-8')
           }
-        } catch {}
+        } catch { /* 文件不存在时说明是新建，无需读旧内容 */ }
 
         await mkdir(dirname(path), { recursive: true })
         await writeFile(path, content, 'utf-8')
@@ -323,6 +323,27 @@ export function registerBuiltinTools(): void {
     },
   })
 
+  globalToolRegistry.register({
+    name: 'datetime',
+    description: '获取当前日期时间。支持自定义格式。',
+    inputSchema: z.object({ format: z.string().optional() }),
+    handler: async ({ format }) => {
+      if (format) {
+        const d = new Date()
+        const pad = (n: number) => String(n).padStart(2, '0')
+        const result = format
+          .replace('YYYY', String(d.getFullYear()))
+          .replace('MM', pad(d.getMonth() + 1))
+          .replace('DD', pad(d.getDate()))
+          .replace('HH', pad(d.getHours()))
+          .replace('mm', pad(d.getMinutes()))
+          .replace('ss', pad(d.getSeconds()))
+        return { success: true, output: result }
+      }
+      return { success: true, output: new Date().toISOString() }
+    },
+  })
+
   // ========== Windows 系统 ==========
 
   globalToolRegistry.register({
@@ -516,7 +537,7 @@ export function registerBuiltinTools(): void {
           let href = rawHref
           const bingRedirect = href.match(/^https?:\/\/cn\.bing\.com\/link\?url=([^&]+)/)
           if (bingRedirect) {
-            try { href = decodeURIComponent(bingRedirect[1]) } catch {}
+            try { href = decodeURIComponent(bingRedirect[1]) } catch { /* URL 解码失败，使用原始 href */ }
           }
           if (title && href && /^https?:\/\//i.test(href)) {
             results.push(`[${title}](${href})`)
@@ -727,7 +748,7 @@ export function registerBuiltinTools(): void {
           }
           await writeFile(absPath, content, 'utf-8')
           return { success: true, output: 'JSON 补丁应用成功' }
-        } catch {}
+        } catch { /* 不是有效的 JSON Patch，继续尝试其他格式 */ }
         return { success: false, error: '补丁格式不支持。请使用 unified diff (git diff 输出) 或 JSON Patch 格式。' }
       } catch (e) {
         return { success: false, error: `补丁应用失败: ${e instanceof Error ? e.message : String(e)}` }
@@ -906,15 +927,15 @@ export async function readClipboardImage(): Promise<{ data: string; mime: string
   if (platform === 'win32') {
     const script = `Add-Type -AssemblyName System.Windows.Forms; $img = [System.Windows.Forms.Clipboard]::GetImage(); if ($img) { $ms = New-Object System.IO.MemoryStream; $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); [System.Convert]::ToBase64String($ms.ToArray()) }`
     try {
-      const { stdout } = await promisify(exec)(
-        `powershell.exe -NonInteractive -NoProfile -command "${script}"`,
-        { timeout: 5000, maxBuffer: 10 * 1024 * 1024 }
-      )
-      const trimmed = stdout.trim()
-      if (trimmed && trimmed.length > 0) {
-        return { data: trimmed, mime: 'image/png' }
-      }
-    } catch {}
+        const { stdout } = await promisify(exec)(
+          `powershell.exe -NonInteractive -NoProfile -command "${script}"`,
+          { timeout: 5000, maxBuffer: 10 * 1024 * 1024 }
+        )
+        const trimmed = stdout.trim()
+        if (trimmed && trimmed.length > 0) {
+          return { data: trimmed, mime: 'image/png' }
+        }
+      } catch { /* 剪贴板可能不是图片 */ }
   }
 
   if (platform === 'darwin') {
@@ -926,8 +947,8 @@ export async function readClipboardImage(): Promise<{ data: string; mime: string
       )
       const buffer = readFileSync(tmpfile)
       return { data: buffer.toString('base64'), mime: 'image/png' }
-    } catch {} finally {
-      try { require('fs').unlinkSync(tmpfile) } catch {}
+    } catch { /* macOS 剪贴板无图片 */ } finally {
+      try { require('fs').unlinkSync(tmpfile) } catch { /* 临时文件清理 */ }
     }
   }
 
@@ -937,7 +958,7 @@ export async function readClipboardImage(): Promise<{ data: string; mime: string
       if (stdout.length > 0) {
         return { data: Buffer.from(stdout).toString('base64'), mime: 'image/png' }
       }
-    } catch {}
+    } catch { /* xclip 可能未安装或剪贴板无图片 */ }
   }
 
   return undefined
