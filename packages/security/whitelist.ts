@@ -10,7 +10,7 @@ const BASE_WHITELIST = [
 ]
 
 const PLATFORM_WHITELIST: Record<string, string[]> = {
-  win32: ['powershell', 'pwsh', 'cmd', 'where', 'tasklist'],
+  win32: ['powershell', 'pwsh', 'cmd', 'where', 'tasklist', 'findstr', 'sort', 'more', 'systeminfo', 'ipconfig', 'netstat', 'taskkill'],
   darwin: ['open', 'pbcopy', 'pbpaste'],
   linux: ['xdg-open', 'xclip'],
 }
