@@ -1,3 +1,9 @@
+> ⚠️ **本文档已完成（2026-06-21）**
+>
+> 补 `packages/security/__tests__/factory.test.ts` 关键模式（合并 / PowerShell 黑白名单 / 配置联动）。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # Security 测试覆盖补全计划
 
 **目标**：补全 `packages/security/__tests__/factory.test.ts` 的关键漏洞，特别是**追加模式合并逻辑**（最复杂也最关键的改动没测）。

@@ -1,3 +1,9 @@
+> ⚠️ **本文档已完成（2026-06-21）**
+>
+> 输入框完整快捷键（光标移动、选择、剪贴板、删除等），对标 VS Code / readline / Claude Code TUI。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # Prompt 输入框快捷键计划
 
 **目标**：在 `packages/tui/component/prompt/index.tsx` 增加完整的输入框编辑快捷键（光标移动、选择、剪切/复制/粘贴、删除等），对齐主流编辑器（VS Code、readline、Claude Code TUI）。

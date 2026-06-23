@@ -1,3 +1,9 @@
+> ⚠️ **本文档已完成（2026-06-21）**
+>
+> licode 直接消费 `~/.claude/skills/` 下的 SKILL.md，对齐 Claude Code 生态（commit `7357b00`）。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # Claude Code Skills 集成计划
 
 **目标**：licode 直接消费 `~/.claude/skills/` 下的 SKILL.md 文件，删除硬编码的 coding/research/review workflow 模板，对齐 Claude Code 生态。

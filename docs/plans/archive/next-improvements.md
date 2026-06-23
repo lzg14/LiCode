@@ -1,3 +1,9 @@
+> ⚠️ **本文档已过期（2026-06-22 启动 / 2026-07-22 被取代）**
+>
+> 已被 [`production-gaps-2026-q3.md`](../production-gaps-2026-q3.md) 取代。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # 下一阶段改进计划
 
 **目标**：在当前 sprint（streaming + slash-tab）完成后，进入下一阶段改进，**优先填 P0 测试覆盖**，再做 P1 体验/健壮性改进，P2 视情况。

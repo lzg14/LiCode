@@ -1,3 +1,9 @@
+> ⚠️ **本文档已完成（2026-06）**
+>
+> 修复 LLM 工具调用循环中 streaming 中间文本与最终回复重复的 bug。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # 修复：LLM 工具调用循环中中间文本与最终回复重复
 
 ## 原因

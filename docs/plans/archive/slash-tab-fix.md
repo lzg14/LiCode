@@ -1,3 +1,9 @@
+> ⚠️ **本文档已完成（2026-06-22）**
+>
+> Tab 把选中命令填入输入框，Enter 走 `handleSlashSubmit` 直接执行（而非当作文本发 LLM）。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # Slash 菜单 Tab 行为改进 实施计划
 
 **目标**：Tab 把选中命令**辅助填入**输入框（光标在末尾），**关掉 slash 框**，**标记命令来源**。用户按 **Enter 确认** → 走 `handleSlashSubmit` 路径**直接执行命令**，而不是把命令当普通文本发给 LLM。

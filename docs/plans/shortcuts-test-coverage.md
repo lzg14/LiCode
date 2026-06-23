@@ -1,3 +1,13 @@
+> ⚠️ **本计划未实施（自 2026-06-21 以来未推进）**
+>
+> 计划内容：在 `packages/tui/component/prompt/shortcuts.ts` 抽出 `createShortcutHandler(deps)` 纯函数，覆盖 25+ 个快捷键的行为测试。
+>
+> 实施前请确认：
+> - `packages/tui/component/prompt/index.tsx` 的当前 handler 结构是否与计划假设一致
+> - 是否需要重新评估测试策略（Vitest + fake `input` mock）
+
+---
+
 # 快捷键测试覆盖补全计划
 
 **目标**：把 `shortcuts.test.ts` 从"测导出"升级到"测行为"，覆盖 25+ 个快捷键的真正逻辑。

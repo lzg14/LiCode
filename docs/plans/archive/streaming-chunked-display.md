@@ -1,3 +1,9 @@
+> ⚠️ **本文档已完成（2026-06-22）**
+>
+> 实现 thinking / 系统提示分块渐进展示（每收到一段闭合的 `<thinking>` / `<system-reminder>` 立即推送）。结果已合入主分支。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # 流式输出分块展示 实施计划
 
 **目标**：让 LLM 思考时间和回复内容**渐进式展示**，每收到一段闭合的 `<thinking>` / `<system-reminder>` 立刻推送，剩余未闭合的 chunk 暂时当正文显示。等下一段闭合后再次推送。
