@@ -11,7 +11,7 @@ import { GitIntegration } from '../integration/git'
 import { pluginManager } from '../integration/plugin'
 import { CheckpointManager, type SessionCheckpoint } from './checkpoint'
 import { Projector } from './projector'
-import { ContextCompactor } from './compaction'
+
 import { SessionCompactor } from './session-compactor'
 import { Timer, type PerfTrace } from './perf'
 import { verifyDeliverables, type VerifyResult } from './verify'
@@ -71,7 +71,6 @@ export class CoreLoop {
   private git?: GitIntegration
   private checkpointManager: CheckpointManager
   private projector: Projector
-  private compactor: ContextCompactor
   private sessionCompactor: SessionCompactor
 
   constructor(private config: Config, private llm?: LLMProvider) {
@@ -81,7 +80,6 @@ export class CoreLoop {
     this.sessionManager = new SessionManager(memoryPath)
     this.checkpointManager = new CheckpointManager(config.cwd)
     this.projector = new Projector()
-    this.compactor = new ContextCompactor()
     this.sessionCompactor = new SessionCompactor({ dataDir: join(homedir(), '.licode') })
 
     // 初始化 Git 集成
@@ -243,12 +241,7 @@ export class CoreLoop {
       }
       ctx = { ...ctx, ...result! }
 
-      // 检查是否需要压缩上下文
-      if (ctx.streamBuffer && ctx.streamBuffer.length > 10000) {
-        const compactId = timer.start('phase.compact')
-        ctx = await this.compactContext(ctx)
-        timer.end(compactId)
-      }
+
 
       // 记录 AI 回复
       if (ctx.aiResponse) {
@@ -305,19 +298,6 @@ export class CoreLoop {
 
     // 返回 AI 回复，如果没有则返回用户输入
     return { text: projected || (ctx.aiResponse ?? ctx.userInput), sessionId: ctx.sessionId }
-  }
-
-  private async compactContext(ctx: LoopContext): Promise<LoopContext> {
-    const messages = ctx.streamBuffer ? [{ content: ctx.streamBuffer }] : []
-    const result = await this.compactor.compact(messages, 4000)
-    
-    // 清空缓冲并保存压缩后的摘要
-    ctx.streamBuffer = ''
-    if (result.summary) {
-      ctx.streamBuffer = result.summary
-    }
-    
-    return ctx
   }
 
   private async executePhase(phase: Phase, ctx: LoopContext, timer: Timer): Promise<Partial<LoopContext>> {
