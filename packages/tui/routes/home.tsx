@@ -263,11 +263,9 @@ export function Home() {
           <scrollbox
             flexGrow={1}
             scrollY={true}
-            stickyScroll={true}
-            stickyStart="bottom"
-            overflow="scroll"
-            viewportOptions={{ paddingRight: 1 }}
-            verticalScrollbarOptions={{ visible: true }}
+            viewportOptions={{
+              paddingRight: 1,
+            }}
           >
             <MessageList />
           </scrollbox>
