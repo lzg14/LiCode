@@ -1,4 +1,4 @@
-import type { Phase, Config } from './types'
+import type { Phase, Config, Plan } from './types'
 import type { LLMProvider } from '../llm/types'
 import { createModel } from '../llm/provider'
 import { execute } from './phases/execute'
@@ -45,7 +45,7 @@ export interface LoopContext {
   risks?: string[]
   pendingQuestions?: string[]
   antiCriteria?: string[]
-  plan?: { steps: string[]; deliverables?: { path?: string; glob?: string; check: string; value?: string }[] }
+  plan?: Plan
   pendingReview?: { status: string; issues: string[] }
   reviewResult?: { approved: boolean; issues: string[]; status: string }
   intermediateResults?: unknown[]
@@ -367,7 +367,7 @@ export class CoreLoop {
     // VERIFY 阶段：检查交付物
     if (ctx.plan?.deliverables && ctx.plan.deliverables.length > 0) {
       ctx.onPhaseChange?.('VERIFY')
-      const verifyResults = await verifyDeliverables(ctx.plan.deliverables as any, ctx.cwd)
+      const verifyResults = await verifyDeliverables(ctx.plan.deliverables ?? [], ctx.cwd)
       const allPassed = verifyResults.every(r => r.passed)
 
       verifyResults.forEach(r => {

@@ -112,10 +112,11 @@ function checkHasNoError(path: string, cwd: string): VerifyResult {
     return { passed: false, message: `文件不存在: ${path}` }
   }
   try {
-    execSync(`npx tsc --noEmit --skipLibCheck "${fullPath}"`, {
+    // tsc --noEmit 是项目级检查，对整个项目跑一次
+    execSync(`npx tsc --noEmit --skipLibCheck`, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 30000,
+      timeout: 60000,
     })
     return { passed: true }
   } catch (err: any) {
