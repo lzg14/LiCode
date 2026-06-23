@@ -12,6 +12,10 @@ import { focusInput } from "./component/prompt"
 import { generateText } from "ai"
 import type { LLMProvider } from "../llm/types"
 
+/** 保存终端尺寸，用于 Ctrl+L 刷新 */
+let savedWidth = 80
+let savedHeight = 24
+
 /** 获取终端尺寸，优先从 stdout 获取，fallback 到 stdin */
 function getTerminalSize(): { width: number; height: number } {
   const tty = process.stdout as any
@@ -67,17 +71,26 @@ function App() {
 
   onMount(() => {
     const { width: w, height: h } = getTerminalSize()
-    
+    savedWidth = w
+    savedHeight = h
+
     // 检测 TTY 状态
     const isTTY = process.stdout.isTTY || process.stdin?.isTTY
     if (!isTTY) {
       devLogger.warn('APP', 'Terminal TTY not detected. Scroll may not work. Try running in a real terminal (not IDE/remote shell).')
     }
-    
+
     renderer.emit?.("resize", w, h)
   })
 
   useKeyboard((evt) => {
+    if (evt.ctrl && evt.name === "l") {
+      // Ctrl+L: 刷新界面（发射当前尺寸的 resize 事件触发重绘）
+      savedWidth = getTerminalSize().width
+      savedHeight = getTerminalSize().height
+      renderer.emit?.("resize", savedWidth, savedHeight)
+      return
+    }
     if (evt.ctrl && evt.name === "d") {
       evt.preventDefault()
       process.exit(0)
