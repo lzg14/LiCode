@@ -4,7 +4,7 @@ import { useTheme } from "../context/theme"
 import { useLoop } from "../context/loop"
 import { sidebarVisible, setSidebarVisible, modelPickerOpen, setModelPickerOpen } from "../context/shortcuts"
 import { Logo } from "../component/logo"
-import { MessageList } from "../component/message-list"
+import { MessageList, QueueMessages } from "../component/message-list"
 import { Prompt, setPromptText } from "../component/prompt"
 import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
@@ -265,12 +265,16 @@ export function Home() {
             scrollY={true}
             stickyScroll={true}
             stickyStart="bottom"
-            viewportOptions={{ paddingRight: 0 }}
-            verticalScrollbarOptions={{ visible: false }}
+            overflow="scroll"
+            viewportOptions={{ paddingRight: 1 }}
+            verticalScrollbarOptions={{ visible: true }}
           >
             <MessageList />
           </scrollbox>
         </Show>
+
+        {/* 队列消息：始终固定在底部，不随滚动条滚动 */}
+        <QueueMessages />
 
         {/* VERIFY 阶段状态 */}
         <Show when={currentPhase() === 'VERIFY'}>

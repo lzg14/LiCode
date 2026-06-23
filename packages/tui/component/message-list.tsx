@@ -151,6 +151,29 @@ function formatToolArgs(toolName: string, args: Record<string, unknown>): string
   return JSON.stringify(args)
 }
 
+export function QueueMessages() {
+  const { messages } = useLoop()
+  const { primary, textMuted, warning } = useTheme()
+  const queuedMsgs = createMemo(() => messages().filter(m => m.queued && m.role === 'user'))
+
+  return (
+    <Show when={queuedMsgs().length > 0}>
+      <box flexDirection="column" paddingX={1} flexShrink={0}>
+        <For each={queuedMsgs()}>
+          {(msg) => (
+            <box flexDirection="column" marginBottom={0}>
+              <box flexDirection="row">
+                <text fg={textMuted()}>┃ [queued] </text>
+                <text fg={textMuted()}>{msg.content}</text>
+              </box>
+            </box>
+          )}
+        </For>
+      </box>
+    </Show>
+  )
+}
+
 export function MessageList() {
   const { messages, isProcessing, toolCallExpanded, toggleToolCallExpanded } = useLoop()
   const { text, textMuted, background } = useTheme()
@@ -159,6 +182,7 @@ export function MessageList() {
     <box flexDirection="column" flexGrow={1} paddingX={1}>
       <For each={messages()}>
         {(msg, idx) => {
+          if (msg.queued) return null
           const allMsgs = messages()
           if (msg.role === "tool") {
             const batchId = msg.toolBatch ?? 0
