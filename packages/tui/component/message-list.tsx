@@ -11,12 +11,21 @@ import { CollapsibleText } from "./collapsible-text"
 const MAX_VISIBLE_TOOLS = 3
 
 function stripSystemTags(content: string): string {
-  return content
-    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "")
-    // thinking 标签保留：交给 ThinkingView / deriveThinkingDisplay 处理
-    // （streaming 阶段展示过灰色 thinking，最终消息里也要保持一致）
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
+  // 暂存 thinking 标签（交给 ThinkingView / deriveThinkingDisplay 处理）
+  const preserved: string[] = []
+  let processed = content
+    .replace(/<(thinking|think)>[\s\S]*?<\/(thinking|think)>/g, (m) => {
+      preserved.push(m)
+      return `\x00THINK${preserved.length - 1}\x00`
+    })
+
+  // 剥离所有剩余 HTML/XML 标签（<tool_call>、<mimimax:tool_call> 等）
+  processed = processed.replace(/<[^>]*>/g, "")
+
+  // 恢复 thinking 标签
+  processed = processed.replace(/\x00THINK(\d+)\x00/g, (_, i) => preserved[+i] ?? "")
+
+  return processed.replace(/\n{3,}/g, "\n\n").trim()
 }
 
 function MarkdownText(props: { content: string; streaming?: boolean }) {
@@ -176,39 +185,52 @@ export function QueueMessages() {
 
 export function MessageList() {
   const { messages, isProcessing, toolCallExpanded, toggleToolCallExpanded } = useLoop()
-  const { text, textMuted, background } = useTheme()
+  const { text, textMuted, background, border } = useTheme()
 
   return (
-    <box flexDirection="column" flexGrow={1} paddingX={1}>
-      <For each={messages()}>
-        {(msg, idx) => {
-          if (msg.queued) return null
-          const allMsgs = messages()
-          if (msg.role === "tool") {
-            const batchId = msg.toolBatch ?? 0
-            const prevMsg = idx() > 0 ? allMsgs[idx() - 1] : null
-            const isFirstInBatch = !prevMsg || prevMsg.role !== "tool" || prevMsg.toolBatch !== batchId
-            const isLastInBatch = idx() + 1 >= allMsgs.length || allMsgs[idx() + 1].role !== "tool" || allMsgs[idx() + 1].toolBatch !== batchId
+    <scrollbox
+      flexGrow={1}
+      stickyScroll={true}
+      stickyStart="bottom"
+      verticalScrollbarOptions={{
+        visible: true,
+        trackOptions: {
+          backgroundColor: background(),
+          foregroundColor: border(),
+        },
+      }}
+    >
+      <box flexDirection="column" paddingX={1}>
+        <For each={messages()}>
+          {(msg, idx) => {
+            if (msg.queued) return null
+            const allMsgs = messages()
+            if (msg.role === "tool") {
+              const batchId = msg.toolBatch ?? 0
+              const prevMsg = idx() > 0 ? allMsgs[idx() - 1] : null
+              const isFirstInBatch = !prevMsg || prevMsg.role !== "tool" || prevMsg.toolBatch !== batchId
+              const isLastInBatch = idx() + 1 >= allMsgs.length || allMsgs[idx() + 1].role !== "tool" || allMsgs[idx() + 1].toolBatch !== batchId
 
-            if (isFirstInBatch && batchId > 1) {
-              return (
-                <box marginTop={0}>
-                  <MessageItem msg={msg} />
-                </box>
-              )
+              if (isFirstInBatch && batchId > 1) {
+                return (
+                  <box marginTop={0}>
+                    <MessageItem msg={msg} />
+                  </box>
+                )
+              }
             }
-          }
-          return <MessageItem msg={msg} />
-        }}
-      </For>
-      <Show when={isProcessing() && messages().length === 0}>
-        <box marginBottom={1}>
-          <Spinner>思考中...</Spinner>
-        </box>
-      </Show>
+            return <MessageItem msg={msg} />
+          }}
+        </For>
+        <Show when={isProcessing() && messages().length === 0}>
+          <box marginBottom={1}>
+            <Spinner>思考中...</Spinner>
+          </box>
+        </Show>
 
-      <box height={1} />
-    </box>
+        <box height={1} />
+      </box>
+    </scrollbox>
   )
 }
 
