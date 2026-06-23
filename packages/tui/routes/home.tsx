@@ -166,6 +166,14 @@ export function Home() {
       }
       return
     }
+    // Esc 停止所有循环
+    if (evt.name === "escape" && !modelPickerOpen() && !slashOpen()) {
+      if (scheduler.hasTasks()) {
+        evt.preventDefault()
+        stopLoops()
+        return
+      }
+    }
     if (evt.ctrl && evt.name === "b") {
       evt.preventDefault()
       setSidebarVisible(prev => !prev)
