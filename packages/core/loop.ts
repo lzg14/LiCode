@@ -114,6 +114,15 @@ export class CoreLoop {
   }
 
   /**
+   * 返回原始 AI SDK ModelMessage 格式的 session 消息,
+   * 包含完整的 tool-call / tool-result parts。
+   * TUI 用它重建 tool 消息高亮显示。
+   */
+  getSessionModelMessages(sessionId: string): Array<{ role: string; content: any[] }> {
+    return this.sessionManager.getMessagesAsModelMessages(sessionId)
+  }
+
+  /**
    * 搜索 session 历史消息（关键词匹配，返回带轮次序号的摘要）
    */
   searchSessionMessages(sessionId: string, query: string, limit = 8): Array<{ turn: number; role: string; snippet: string }> {

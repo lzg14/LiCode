@@ -191,52 +191,39 @@ export function QueueMessages() {
 
 export function MessageList() {
   const { messages, isProcessing, toolCallExpanded, toggleToolCallExpanded } = useLoop()
-  const { text, textMuted, background, border } = useTheme()
+  const { text, textMuted } = useTheme()
 
   return (
-    <scrollbox
-      flexGrow={1}
-      stickyScroll={true}
-      stickyStart="bottom"
-      verticalScrollbarOptions={{
-        visible: true,
-        trackOptions: {
-          backgroundColor: background(),
-          foregroundColor: border(),
-        },
-      }}
-    >
-      <box flexDirection="column" paddingX={1}>
-        <For each={messages()}>
-          {(msg, idx) => {
-            if (msg.queued) return null
-            const allMsgs = messages()
-            if (msg.role === "tool") {
-              const batchId = msg.toolBatch ?? 0
-              const prevMsg = idx() > 0 ? allMsgs[idx() - 1] : null
-              const isFirstInBatch = !prevMsg || prevMsg.role !== "tool" || prevMsg.toolBatch !== batchId
-              const isLastInBatch = idx() + 1 >= allMsgs.length || allMsgs[idx() + 1].role !== "tool" || allMsgs[idx() + 1].toolBatch !== batchId
+    <box flexDirection="column" paddingX={1}>
+      <For each={messages()}>
+        {(msg, idx) => {
+          if (msg.queued) return null
+          const allMsgs = messages()
+          if (msg.role === "tool") {
+            const batchId = msg.toolBatch ?? 0
+            const prevMsg = idx() > 0 ? allMsgs[idx() - 1] : null
+            const isFirstInBatch = !prevMsg || prevMsg.role !== "tool" || prevMsg.toolBatch !== batchId
+            const isLastInBatch = idx() + 1 >= allMsgs.length || allMsgs[idx() + 1].role !== "tool" || allMsgs[idx() + 1].toolBatch !== batchId
 
-              if (isFirstInBatch && batchId > 1) {
-                return (
-                  <box marginTop={0}>
-                    <MessageItem msg={msg} />
-                  </box>
-                )
-              }
+            if (isFirstInBatch && batchId > 1) {
+              return (
+                <box marginTop={0}>
+                  <MessageItem msg={msg} />
+                </box>
+              )
             }
-            return <MessageItem msg={msg} />
-          }}
-        </For>
-        <Show when={isProcessing() && messages().length === 0}>
-          <box marginBottom={1}>
-            <Spinner>思考中...</Spinner>
-          </box>
-        </Show>
+          }
+          return <MessageItem msg={msg} />
+        }}
+      </For>
+      <Show when={isProcessing() && messages().length === 0}>
+        <box marginBottom={1}>
+          <Spinner>思考中...</Spinner>
+        </box>
+      </Show>
 
-        <box height={1} />
-      </box>
-    </scrollbox>
+      <box height={1} />
+    </box>
   )
 }
 
