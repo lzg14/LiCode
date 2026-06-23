@@ -17,6 +17,7 @@ export interface Segment {
 export interface AccResult {
   closed: Segment[]
   pending: string
+  mode: 'text' | 'in-thinking' | 'in-system-reminder'
 }
 
 export interface StreamAccumulator {
@@ -137,7 +138,7 @@ export function createStreamAccumulator(): StreamAccumulator {
       }
     }
 
-    return { closed, pending: buffer }
+    return { closed, pending: buffer, mode }
   }
 
   function reset() {
