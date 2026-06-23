@@ -3,7 +3,7 @@
 **目标**：列出所有 `catch` 块，标注其当前可见性策略，作为未来 review 的参考
 
 **日期**：2026-06-17（更新）
-**对应 plan**：[production-gaps-2026-q3.md P0-3](./plans/production-gaps-2026-q3.md)、[code-quality-improvement.md](./plans/code-quality-improvement.md)
+**对应 plan**：[production-gaps-2026-q3.md P0-3](./plans/production-gaps-2026-q3.md)、[code-quality-improvement.md](./plans/archive/code-quality-improvement.md)
 **结论**：所有生产 catch 均已合理分级；文档与实际一致
 
 ---

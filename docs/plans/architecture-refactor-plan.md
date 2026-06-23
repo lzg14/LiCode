@@ -780,7 +780,7 @@ bun test apps/tui/
 
 ### B. 相关文档
 
-- [PAI 架构文档](../reference/pai-architecture.md)
+- ~~[PAI 架构文档](../reference/pai-architecture.md)~~ — 已移除（v0.3.0 重构后该外部参考失效）
 - [licode 当前架构](.)
 - [Skill 系统设计](../modules/skills.md)
 

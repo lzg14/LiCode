@@ -19,7 +19,7 @@
 **前置**：
 - 当前 `loop.tsx` 走 `generateText` 一次性 addMessage，未来切到 `streamText` 后问题会立刻暴露
 - opentui `useElementBounds` / `<scrollbox stickyScroll>` 可用
-- [docs/plans/streaming-chunked-display.md](./streaming-chunked-display.md) 解决了"分块展示"但**没解决"重渲染范围"**
+- [docs/plans/streaming-chunked-display.md](./archive/streaming-chunked-display.md) 解决了"分块展示"但**没解决"重渲染范围"**
 
 ---
 
@@ -438,6 +438,6 @@ export interface StreamStore {
 
 ## 相关文档
 
-- [docs/plans/streaming-chunked-display.md](./streaming-chunked-display.md) — 流式分块展示（互补，不重叠）
-- [docs/20260617-tui-review.md](../20260617-tui-review.md) — TUI 现状 review
-- [docs/modules/audit.md](../modules/audit.md) — 模块审计（可能含相关条目）
+- [docs/plans/streaming-chunked-display.md](./archive/streaming-chunked-display.md) — 流式分块展示（互补，不重叠）
+- [docs/20260617-tui-review.md](../archive/20260617-tui-review.md) — TUI 现状 review（2026-06-17 旧版）
+- [docs/modules/audit.md](../archive/audit-module.md) — 模块审计（已合并到 tools/ 和 security/）
