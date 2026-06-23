@@ -22,7 +22,8 @@ docs/
     ├── integration.md       # 集成层
     ├── security.md          # 安全层
     ├── audit.md             # 审计层
-    └── config.md            # 配置层
+    ├── config.md            # 配置层
+    └── tui.md               # TUI 模块
 ```
 
 ---
