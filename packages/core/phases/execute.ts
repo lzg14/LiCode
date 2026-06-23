@@ -525,9 +525,14 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         const tcInput = tc.input as Record<string, unknown>
         ctx.onToolCall?.(tc.toolName, tcInput, toolBatch)
         const toolId = ctx.timer?.start(`tool.${tc.toolName}`)
-        const execResult = await globalToolRegistry.execute(tc.toolName, tcInput, { cwd: ctx.cwd })
+        let execResult: any
+        try {
+          execResult = await globalToolRegistry.execute(tc.toolName, tcInput, { cwd: ctx.cwd })
+        } catch (toolError: any) {
+          execResult = { success: false, error: `工具执行异常: ${toolError?.message ?? toolError}` }
+        }
         devLogger.logToolCall(tc.toolName, tc.input, execResult)
-        if (toolId) ctx.timer?.end(toolId, { success: execResult.success })
+        if (toolId) ctx.timer?.end(toolId, { success: execResult?.success ?? false })
         ctx.onToolResult?.(execResult)
         return {
           type: "tool-result" as const,
@@ -535,9 +540,9 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
           toolName: tc.toolName,
           output: {
             type: "text",
-            value: execResult.success
+            value: execResult?.success
               ? `OK: ${execResult.output ?? '(无输出)'}`
-              : `Error: ${execResult.error ?? '未知错误'}`,
+              : `Error: ${execResult?.error ?? '未知错误'}`,
           },
         }
       }))
