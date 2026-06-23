@@ -89,6 +89,8 @@ export interface LoopContext {
   stopLoops: () => void
   listLoops: () => void
   scheduler: Scheduler
+  currentPhase: Accessor<string>
+  verifyResults: Accessor<Array<{ passed: boolean; message?: string }>>
 }
 
 const Ctx = createContext<LoopContext>()
@@ -106,6 +108,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const [currentProvider, setCurrentProvider] = createSignal(props.provider ?? "deepseek")
   const [activeSkill, setActiveSkillState] = createSignal<string | null>(null)
   const [activeSkillInstructions, setActiveSkillInstructions] = createSignal<string | null>(null)
+  // VERIFY 阶段状态
+  const [currentPhase, setCurrentPhase] = createSignal<string>("EXECUTE")
+  const [verifyResults, setVerifyResults] = createSignal<Array<{ passed: boolean; message?: string }>>([])
 
   const [pendingCount, setPendingCount] = createSignal(0)
   const inputQueue: { id: string; text: string }[] = []
@@ -347,6 +352,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
     setIsProcessing(true)
+    setCurrentPhase('EXECUTE')
+    setVerifyResults([])
     const startTime = Date.now()
 
     const timer = setInterval(() => {
@@ -369,9 +376,18 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         model: activeModel,
         activeSkill: activeSkill() ?? undefined,
         activeSkillInstructions: activeSkillInstructions() ?? undefined,
-        onPhaseChange: undefined,
+        onPhaseChange: (phase: string) => {
+          setCurrentPhase(phase)
+        },
         onPhaseLog: (text: string) => {
           devLogger.info('PHASE', text.trimEnd())
+          // 解析 VERIFY 结果
+          if (text.startsWith('✓') || text.startsWith('✗')) {
+            setVerifyResults(prev => [...prev, {
+              passed: text.startsWith('✓'),
+              message: text.slice(2).trim()
+            }])
+          }
         },
         onLLMCall: () => {
           setLlmCallCount(prev => prev + 1)
@@ -567,6 +583,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     stopLoops,
     listLoops,
     scheduler,
+    currentPhase,
+    verifyResults,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }
