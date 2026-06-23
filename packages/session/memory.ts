@@ -52,7 +52,7 @@ function collectFiles(dir: string, maxDepth = 3): string[] {
             results.push(fullPath)
           }
         }
-      } catch {}
+      } catch { /* 无权限读取该文件，跳过 */ }
     }
   }
 
@@ -98,7 +98,7 @@ export function searchMemory(input: {
         if (score > 0) {
           scored.push({ path: filePath, content, score })
         }
-      } catch {}
+      } catch { /* 文件读取失败，跳过 */ }
     }
   }
 
@@ -123,7 +123,7 @@ export function getRecentMemoryEntries(dataDir: string, limit = 5): MemoryEntry[
         } else if (stat.isFile() && extname(fullPath) === '.md') {
           recent.push({ path: fullPath, mtime: stat.mtime })
         }
-      } catch {}
+      } catch { /* 无权限读取该文件，跳过 */ }
     }
   }
 

@@ -290,6 +290,10 @@ ${conversationText}`
 
       if (role === 'assistant' || role === 'tool') {
         for (const part of content) {
+          if (part.type === 'reasoning' && part.text) {
+            const text = part.text.trim().slice(0, 150)
+            if (text && !conclusions.includes(text)) conclusions.push(`[思考] ${text}`)
+          }
           if (part.type === 'tool-call' && part.toolName) {
             if (['read', 'write', 'edit', 'bash', 'grep', 'glob'].includes(part.toolName)) {
               const input = part.input ?? {}
