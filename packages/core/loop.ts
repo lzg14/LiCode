@@ -14,6 +14,7 @@ import { Projector } from './projector'
 import { ContextCompactor } from './compaction'
 import { SessionCompactor } from './session-compactor'
 import { Timer, type PerfTrace } from './perf'
+import { verifyDeliverables, type VerifyResult } from './verify'
 
 
 export interface LoopContext {
@@ -44,7 +45,7 @@ export interface LoopContext {
   risks?: string[]
   pendingQuestions?: string[]
   antiCriteria?: string[]
-  plan?: { steps: string[] }
+  plan?: { steps: string[]; deliverables?: { path?: string; glob?: string; check: string; value?: string }[] }
   pendingReview?: { status: string; issues: string[] }
   reviewResult?: { approved: boolean; issues: string[]; status: string }
   intermediateResults?: unknown[]
@@ -362,6 +363,28 @@ export class CoreLoop {
       signal: ctx.signal,
       timer,
     })
+
+    // VERIFY 阶段：检查交付物
+    if (ctx.plan?.deliverables && ctx.plan.deliverables.length > 0) {
+      ctx.onPhaseChange?.('VERIFY')
+      const verifyResults = await verifyDeliverables(ctx.plan.deliverables as any, ctx.cwd)
+      const allPassed = verifyResults.every(r => r.passed)
+
+      verifyResults.forEach(r => {
+        ctx.onPhaseLog?.(r.passed ? `✓ ${r.message ?? '通过'}` : `✗ ${r.message ?? '失败'}`)
+      })
+
+      if (!allPassed) {
+        const failed = verifyResults.filter(r => !r.passed)
+        return {
+          aiResponse: aiResponse || '交付物验证未通过',
+          pendingReview: {
+            status: 'verify_failed',
+            issues: failed.map(f => f.message || '未知错误')
+          }
+        }
+      }
+    }
 
     return { aiResponse, deliverable: ctx.intermediateResults }
   }
