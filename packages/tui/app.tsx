@@ -78,11 +78,6 @@ function App() {
   })
 
   useKeyboard((evt) => {
-    if (evt.ctrl && evt.name === "l") {
-      evt.preventDefault()
-      loop.clearMessages()
-      return
-    }
     if (evt.ctrl && evt.name === "d") {
       evt.preventDefault()
       process.exit(0)
