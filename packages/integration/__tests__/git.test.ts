@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { SimpleGit, StatusResult, LogResult } from 'simple-git'
+import type { SimpleGit, StatusResult, LogResult, BranchSummary } from 'simple-git'
 
 const mockSimpleGit = vi.hoisted(() => {
   const mockInstance = {
@@ -49,7 +49,7 @@ describe('GitIntegration', () => {
   })
 
   it('health 在 git 成功时 healthy', async () => {
-    vi.mocked(mockInstance.status).mockResolvedValue(undefined)
+    vi.mocked(mockInstance.status).mockResolvedValue({} as StatusResult)
     const g = new GitIntegration('/r')
     g.enabled = true
     expect((await g.health()).healthy).toBe(true)
@@ -111,14 +111,14 @@ describe('GitIntegration', () => {
   })
 
   it('commit 执行提交', async () => {
-    vi.mocked(mockInstance.commit).mockResolvedValue({ commit: '[main abc123] msg' })
+    vi.mocked(mockInstance.commit).mockResolvedValue({ commit: 'abc123', author: { name: 'test', email: 'test@test.com' }, branch: 'main', root: false, summary: { changes: 1, insertions: 1, deletions: 0 } })
     const r = await new GitIntegration('/r').commit('my message')
     expect(mockInstance.commit).toHaveBeenCalledWith('my message')
-    expect(r).toBe('[main abc123] msg')
+    expect(r).toBe('abc123')
   })
 
   it('getBranches 解析分支列表', async () => {
-    vi.mocked(mockInstance.branchLocal).mockResolvedValue({ all: ['main', 'dev'] })
+    vi.mocked(mockInstance.branchLocal).mockResolvedValue({ all: ['main', 'dev'], current: 'main', detached: false, branches: {} } as BranchSummary)
     const result = await new GitIntegration('/r').getBranches()
     expect(result).toEqual(['main', 'dev'])
   })

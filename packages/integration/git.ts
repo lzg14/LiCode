@@ -10,7 +10,7 @@ import { BaseIntegration, type HealthStatus } from './types'
 export class GitIntegration extends BaseIntegration {
   name = 'git'
   private repoPath: string
-  private git: SimpleGit
+  private git?: SimpleGit
 
   constructor(repoPath: string) {
     super()
