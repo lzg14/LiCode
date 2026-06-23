@@ -463,8 +463,8 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         } else if (hasToolCalls) {
           ctx.onIntermediateText?.(resolvedResult.text)
         } else {
+          // streaming 已经通过 onStreamText 发送了 delta，这里不再重复发送
           fullText = resolvedResult.text
-          ctx.onStreamText?.(resolvedResult.text)
         }
       }
 
