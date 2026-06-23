@@ -173,7 +173,46 @@ const SYSTEM_PROMPT = `你是一个名为 licode 的 AI 助手，专注于代码
 正例（批量，高效）：
 1. 同时搜索 a、搜索 b、搜索 c → 一次拿到全部结果
 
-判断独立性的标准：如果两个工具调用的输入互不依赖，就可以声明在同一轮。`
+判断独立性的标准：如果两个工具调用的输入互不依赖，就可以声明在同一轮。
+
+## 交付物声明（Deliverables）
+
+对于涉及文件创建或修改的任务，请在执行前列出你要交付的内容：
+
+Deliverables:
+- path: src/foo.ts
+  check: file_exists
+- path: src/foo.ts
+  check: contains_pattern
+  value: "function calculate"
+- path: src/foo.ts
+  check: has_export
+  value: "calculate"
+
+check 类型说明：
+- file_exists: 文件已创建
+- contains_pattern: 文件包含指定内容（用 value 指定模式）
+- has_export: 文件 export 了指定名称
+- has_no_import: 文件不包含指定 import（用于确认旧代码已清理）
+- has_no_error: 文件无 TypeScript 编译错误
+
+示例：
+用户：帮我创建一个 user.ts，包含 getUser 函数
+你：
+Plan:
+1. 创建 src/user.ts
+2. 实现 getUser 函数
+3. 导出 getUser
+
+Deliverables:
+- path: src/user.ts
+  check: file_exists
+- path: src/user.ts
+  check: contains_pattern
+  value: "function getUser"
+- path: src/user.ts
+  check: has_export
+  value: "getUser"`
 
 export interface ExecuteContext {
   model: any
