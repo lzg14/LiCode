@@ -9,6 +9,29 @@ import { createSecurityLayer, setSecurityLayer } from "../security"
 import { devLogger, setupGlobalErrorHandlers } from "../core/dev-logger"
 import { doCopy } from "./util/selection"
 import { focusInput } from "./component/prompt"
+import { generateText } from "ai"
+import type { LLMProvider } from "../llm/types"
+
+/** 获取终端尺寸，优先从 stdout 获取，fallback 到 stdin */
+function getTerminalSize(): { width: number; height: number } {
+  const tty = process.stdout as any
+  const stdinTty = process.stdin as any
+  const stdoutCols: number = tty?.columns
+  const stdoutRows: number = tty?.rows
+  const stdinCols: number = stdinTty?.columns
+  const stdinRows: number = stdinTty?.rows
+
+  // 优先使用 stdout 的尺寸
+  if (stdoutCols && stdoutRows) {
+    return { width: stdoutCols, height: stdoutRows }
+  }
+  // fallback 到 stdin（某些环境下 stdin 是 TTY）
+  if (stdinCols && stdinRows) {
+    return { width: stdinCols, height: stdinRows }
+  }
+  // 最后 fallback 到默认值
+  return { width: 80, height: 24 }
+}
 
 import { ThemeProvider } from "./context/theme"
 import { RouteProvider, useRoute } from "./context/route"
@@ -43,8 +66,14 @@ function App() {
   const toast = useToast()
 
   onMount(() => {
-    const w = process.stdout.columns || 80
-    const h = process.stdout.rows || 24
+    const { width: w, height: h } = getTerminalSize()
+    
+    // 检测 TTY 状态
+    const isTTY = process.stdout.isTTY || process.stdin?.isTTY
+    if (!isTTY) {
+      devLogger.warn('APP', 'Terminal TTY not detected. Scroll may not work. Try running in a real terminal (not IDE/remote shell).')
+    }
+    
     renderer.emit?.("resize", w, h)
   })
 
@@ -104,7 +133,21 @@ export async function tui(config: any) {
   devLogger.info('APP', `SecurityLayer created: ${securityConfig.commandWhitelist.length} commands allowed`)
 
   const model = await createModel(config.llm)
-  const loop = new CoreLoop(config, undefined)
+  const llmProvider: LLMProvider = {
+    name: 'compact',
+    async complete(req) {
+      const systemMsg = req.messages.find((m: any) => m.role === 'system')
+      const chatMsgs = req.messages.filter((m: any) => m.role !== 'system')
+      const result = await generateText({
+        model,
+        system: systemMsg ? (typeof systemMsg.content === 'string' ? systemMsg.content : '') : undefined,
+        messages: chatMsgs as any,
+        temperature: req.temperature ?? 0.3,
+      })
+      return { content: result.text }
+    },
+  }
+  const loop = new CoreLoop(config, llmProvider)
 
   // 自动加载最近的 session，实现跨启动连续性
   const lastSessionId = loop.getLastSessionId(process.cwd())
@@ -114,12 +157,18 @@ export async function tui(config: any) {
     targetFps: 60,
     exitOnCtrlC: false,
     useKittyKeyboard: {},
-    enableMouseMovement: false,
+    enableMouseMovement: true,
     useMouse: true,
     autoFocus: true,
   }
 
   const renderer = await createCliRenderer(rendererConfig)
+
+  // 确保鼠标模式已启用（触摸板滚动需要）
+  const r = renderer as any
+  if (r.enableMouse) {
+    r.enableMouse()
+  }
 
   try {
     await render(() => {
