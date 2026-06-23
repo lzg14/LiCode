@@ -268,17 +268,53 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   onMount(() => {
     if (props.sessionId && props.loop) {
       try {
-        const history = props.loop.getSessionMessages(props.sessionId)
-        if (history.length > 0) {
-          setMessages(history
-            .filter(m => m.role === 'user' || m.role === 'assistant')
-            .map((m, i) => ({
-              id: `hist_${i}`,
-              role: m.role as "user" | "assistant",
-              content: m.content,
-              timestamp: Date.now() - (history.length - i) * 1000,
-            }))
-          )
+        const modelMsgs = props.loop.getSessionModelMessages(props.sessionId)
+        if (modelMsgs.length === 0) return
+
+        const restored: Message[] = []
+        let idx = 0
+        let toolBatch = 0
+
+        for (const raw of modelMsgs) {
+          if (raw.role === 'user' || raw.role === 'assistant') {
+            let text = ''
+            if (Array.isArray(raw.content)) {
+              for (const part of raw.content) {
+                if (part.type === 'text') text += part.text
+              }
+            } else if (typeof raw.content === 'string') {
+              text = raw.content
+            }
+            if (!text.trim()) continue
+
+            restored.push({
+              id: `hist_${idx++}`,
+              role: raw.role as 'user' | 'assistant',
+              content: text,
+              timestamp: Date.now(),
+            })
+
+            if (raw.role === 'assistant' && Array.isArray(raw.content)) {
+              const toolCalls = raw.content.filter(p => p.type === 'tool-call')
+              if (toolCalls.length > 0) toolBatch++
+              for (const tc of toolCalls) {
+                restored.push({
+                  id: `tool_hist_${idx++}`,
+                  role: 'tool',
+                  content: tc.toolName ?? '',
+                  toolName: tc.toolName ?? '',
+                  toolArgs: tc.input ?? {},
+                  toolStatus: 'completed' as const,
+                  toolBatch,
+                  timestamp: Date.now(),
+                })
+              }
+            }
+          }
+        }
+
+        if (restored.length > 0) {
+          setMessages(restored)
         }
       } catch {
       }
