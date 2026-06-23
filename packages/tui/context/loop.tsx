@@ -1,4 +1,4 @@
-import { createContext, useContext, createSignal, createMemo, onMount, type JSX, type Accessor } from "solid-js"
+import { createContext, useContext, createSignal, createMemo, onMount, batch, type JSX, type Accessor } from "solid-js"
 import type { Phase } from "../../core/types"
 import type { CoreLoop } from "../../core/loop"
 import { createModel } from "../../llm/provider"
@@ -6,6 +6,7 @@ import { listModelsByProvider } from "../../llm/catalog"
 import { devLogger } from "../../core/dev-logger"
 import { readImageFile } from "../../tools/builtin"
 import { checkDangerousPattern } from "../../security"
+import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
 import { useToast } from "../ui/toast"
 import { Scheduler } from "../../core/scheduler"
 
@@ -66,6 +67,8 @@ export interface LoopContext {
   pendingCount: Accessor<number>
   elapsed: Accessor<number>
   messages: Accessor<Message[]>
+  streamingSegments: Accessor<Segment[]>
+  pendingText: Accessor<string>
   addMessage: (msg: AddMessageInput) => void
   updateMessage: (id: string, patch: Partial<Message>) => void
   clearMessages: () => void
@@ -113,6 +116,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const [verifyResults, setVerifyResults] = createSignal<Array<{ passed: boolean; message?: string }>>([])
 
   const [pendingCount, setPendingCount] = createSignal(0)
+  const [streamingSegments, setStreamingSegments] = createSignal<Segment[]>([])
+  const [pendingText, setPendingText] = createSignal("")
+  let streamAccumulator = createStreamAccumulator()
   const inputQueue: { id: string; text: string }[] = []
   let toolCallIdCounter = 0
   const toolStartTimes = new Map<string, number>()
@@ -436,12 +442,22 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             total: usage.inputTokens + usage.outputTokens,
           })
         },
-        onStreamText: (text: string) => {
-          // generateText 模式：直接添加消息，不需要流式累积
-          addMessage({ role: "assistant", content: text })
+        onStreamText: (delta: string) => {
+          const { closed, pending } = streamAccumulator.push(delta)
+          batch(() => {
+            if (closed.length > 0) {
+              setStreamingSegments(prev => [...prev, ...closed])
+            }
+            if (pending !== pendingText()) {
+              setPendingText(pending)
+            }
+          })
         },
         onIntermediateText: (text: string) => {
-          // 中间轮文本直接添加为 assistant 消息
+          // 中间轮一次性把当前段收尾，然后整个块作为新消息
+          streamAccumulator.reset()
+          setStreamingSegments([])
+          setPendingText("")
           addMessage({ role: "assistant", content: text })
         },
         onToolCall: (toolName: string, args: Record<string, unknown>, batch: number) => {
@@ -596,6 +612,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     pendingCount,
     elapsed,
     messages,
+    streamingSegments,
+    pendingText,
     addMessage,
     updateMessage,
     clearMessages,

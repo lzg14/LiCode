@@ -1,4 +1,4 @@
-import { generateText, tool, jsonSchema } from "ai"
+import { generateText, streamText, tool, jsonSchema } from "ai"
 import { z } from "zod"
 import { globalToolRegistry } from "../../tools/registry"
 import { devLogger } from "../dev-logger"
@@ -403,7 +403,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       if (activeSkillContent) {
         fullSystem += `\n\n## 当前激活技能: ${ctx.activeSkill ?? "?"}\n\n${activeSkillContent}\n\n请严格遵循上述技能的指令与规则。`
       }
-      const result = await generateText({
+      const streamResult = streamText({
         model: ctx.model,
         system: fullSystem,
         messages: msgs,
@@ -412,11 +412,29 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         abortSignal: ctx.signal,
       })
 
+      // 手动消费流，触发 streaming 回调
+      let streamedText = ''
+      let streamedToolCalls: any[] = []
+      let chunkCount = 0
+      try {
+        for await (const chunk of streamResult.fullStream) {
+          chunkCount++
+          if (chunk.type === 'text-delta') {
+            streamedText += chunk.text
+            ctx.onStreamText?.(chunk.text)
+          } else if (chunk.type === 'tool-call') {
+            streamedToolCalls.push(chunk)
+          }
+        }
+      } catch (streamError: any) {
+        devLogger.error('STREAM', `stream consumption failed: ${streamError}`)
+      }
+
       const resolvedResult = {
-        text: result.text || undefined,
-        toolCalls: result.toolCalls,
-        usage: result.usage,
-        finishReason: result.finishReason,
+        text: streamedText || undefined,
+        toolCalls: streamedToolCalls.length > 0 ? streamedToolCalls : undefined,
+        usage: await streamResult.usage,
+        finishReason: await streamResult.finishReason,
       }
       const duration = Date.now() - startTime
       if (resolvedResult.usage) {
