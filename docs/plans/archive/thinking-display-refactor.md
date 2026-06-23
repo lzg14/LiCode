@@ -1,3 +1,9 @@
+> ⚠️ **本文档大部分完成（2026-07-22 状态）**
+>
+> 把 3 状态 thinking 逻辑抽成纯函数 + 单测。主体已合入，遗留问题（P0 反复 patch 3 次未稳定）见 [`production-gaps-2026-q3.md`](../production-gaps-2026-q3.md)。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # Thinking 显示逻辑重构计划
 
 **目标**：把 streaming thinking 的 3 种状态逻辑**抽成纯函数 + 单测覆盖**，停止 patch 行为。

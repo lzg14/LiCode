@@ -1,3 +1,11 @@
+> ⚠️ **本计划为草稿状态（自 2026-06-20 以来未推进）**
+>
+> 实施前请重新评估：现状（v0.3.0）的 Core Loop 已简化为单 EXECUTE + VERIFY 阶段，文档中描述的"七阶段硬编码问题"在 `680fb13 feat: Skill 模式补全 + Core Loop 简化 + 类型修复` 中已部分解决。
+>
+> **推荐做法**：参考 [`docs/plans/production-gaps-2026-q3.md`](./production-gaps-2026-q3.md) 重新规划。
+
+---
+
 # licode 架构重构计划
 
 **版本**: v1.0

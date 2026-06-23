@@ -1,3 +1,9 @@
+> ⚠️ **本文档已完成（2026-06-21）**
+>
+> 阻止 API key / token / 密码写入 `~/.licode/logs/dev/`，同时降低日志噪声。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # devLogger 安全修复计划
 
 **目标**：阻止敏感信息（API key、token、密码）写入 `~/.licode/logs/dev/` 日志文件，同时降低日志噪音。

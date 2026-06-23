@@ -1,3 +1,9 @@
+> ⚠️ **本文档已完成（2026-06-21）**
+>
+> 让 `licode.config.json` 的 `security.*` 字段真正生效（之前被忽略），同时解决 PowerShell 等白名单扩展需求。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # Security 配置接线修复计划
 
 **目标**：让 `licode.config.json` 的 `security.*` 字段真正生效（不再被忽略），同时解决 powershell 等白名单扩展需求。

@@ -1,3 +1,13 @@
+> ⚠️ **本计划未实施（2026-07-22 列入计划）**
+>
+> 计划内容：解决"已完成消息被反复触碰"的 SolidJS 响应式重渲染问题。`loop.tsx` 当前是 `generateText` 一次性 addMessage，问题未完全暴露；切到 `streamText` 后会立刻出现。
+>
+> 实施前请确认：
+> - `streamText` 切换是否仍在路线图（参见 [`production-gaps-2026-q3.md`](./production-gaps-2026-q3.md)）
+> - opentui API 是否有变动（`useElementBounds` / `<scrollbox stickyScroll>`）
+
+---
+
 # TUI 渲染优化 实施计划
 
 **目标**：解决"一轮对话结束后，历史对话的数据已渲染过、却仍被反复触碰"的问题。完成后：

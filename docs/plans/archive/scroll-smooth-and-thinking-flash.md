@@ -1,3 +1,9 @@
+> ⚠️ **本文档已完成（2026-06-22）**
+>
+> 修复 MessageList 流式添加时滚动卡顿 + thinking 切换闪烁。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # 计划：消除 MessageList 滚动顿挫 + Thinking 切换视觉跳变
 
 ## 背景

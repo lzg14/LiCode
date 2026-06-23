@@ -1,3 +1,9 @@
+> ⚠️ **本文档已搁置（2026-06-20 草稿 v0.1.0）**
+>
+> 早期 Workflow 系统设计（参考 mimo-code workflow / opencode V2）。未实施，被更轻量的 Skill 模式取代（参见活跃 [`architecture-refactor-plan.md`](../architecture-refactor-plan.md) 提及的方向）。
+>
+> 完整归档说明参见：[`docs/plans/archive/README.md`](./README.md)
+
 # Workflow 系统设计
 
 **版本**: v0.1.0
