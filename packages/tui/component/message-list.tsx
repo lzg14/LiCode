@@ -237,27 +237,72 @@ export function MessageList() {
   const { messages, streamingSegments, pendingText, isProcessing, toolCallExpanded, toggleToolCallExpanded } = useLoop()
   const { text, textMuted } = useTheme()
 
+  // 预处理：识别 tool 批次并折叠显示
+  const processedMessages = createMemo(() => {
+    const allMsgs = messages()
+    const result: Array<{ type: 'msg'; msg: Message } | { type: 'tool-batch'; batchId: number; count: number; tools: Message[] }> = []
+    
+    let i = 0
+    while (i < allMsgs.length) {
+      const msg = allMsgs[i]
+      if (msg.queued) {
+        i++
+        continue
+      }
+      
+      // 检测 tool 批次
+      if (msg.role === 'tool') {
+        const batchId = msg.toolBatch ?? 0
+        const batchTools: Message[] = [msg]
+        
+        // 收集同一批次的所有 tool 消息
+        let j = i + 1
+        while (j < allMsgs.length && allMsgs[j].role === 'tool' && (allMsgs[j].toolBatch ?? 0) === batchId) {
+          batchTools.push(allMsgs[j])
+          j++
+        }
+        
+        // 如果批次有多个 tool，折叠显示
+        if (batchTools.length > 1 && batchId > 0) {
+          result.push({ type: 'tool-batch', batchId, count: batchTools.length, tools: batchTools })
+        } else {
+          // 单个 tool 或批次 ID 为 0，正常显示
+          result.push({ type: 'msg', msg })
+        }
+        i = j
+      } else {
+        result.push({ type: 'msg', msg })
+        i++
+      }
+    }
+    return result
+  })
+
   return (
     <box flexDirection="column" paddingX={1}>
-      <For each={messages()}>
-        {(msg, idx) => {
-          if (msg.queued) return null
-          const allMsgs = messages()
-          if (msg.role === "tool") {
-            const batchId = msg.toolBatch ?? 0
-            const prevMsg = idx() > 0 ? allMsgs[idx() - 1] : null
-            const isFirstInBatch = !prevMsg || prevMsg.role !== "tool" || prevMsg.toolBatch !== batchId
-            const isLastInBatch = idx() + 1 >= allMsgs.length || allMsgs[idx() + 1].role !== "tool" || allMsgs[idx() + 1].toolBatch !== batchId
-
-            if (isFirstInBatch && batchId > 1) {
-              return (
-                <box marginTop={0}>
-                  <MessageItem msg={msg} />
+      <For each={processedMessages()}>
+        {(item) => {
+          if (item.type === 'tool-batch') {
+            const isExpanded = toolCallExpanded()
+            return (
+              <box flexDirection="column" marginBottom={0}>
+                <box flexDirection="row">
+                  <text fg={textMuted()}>
+                    {isExpanded ? '▾' : '▸'} {item.count} 个工具调用
+                  </text>
+                  <text fg={textMuted()}>
+                    {item.tools.map(t => t.toolName).filter(Boolean).join(', ')}
+                  </text>
                 </box>
-              )
-            }
+                <Show when={isExpanded}>
+                  <For each={item.tools}>
+                    {(tool) => <MessageItem msg={tool} />}
+                  </For>
+                </Show>
+              </box>
+            )
           }
-          return <MessageItem msg={msg} />
+          return <MessageItem msg={item.msg} />
         }}
       </For>
 
