@@ -7,6 +7,7 @@ import { devLogger } from "../../core/dev-logger"
 import { readImageFile } from "../../tools/builtin"
 import { checkDangerousPattern } from "../../security"
 import { useToast } from "../ui/toast"
+import { Scheduler } from "../../core/scheduler"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
 function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
@@ -84,6 +85,10 @@ export interface LoopContext {
   getAvailableModels: () => string[]
   getAvailableProviders: () => string[]
   contextTokens: Accessor<number>
+  addLoop: (interval: string, prompt: string) => string | null
+  stopLoops: () => void
+  listLoops: () => void
+  scheduler: Scheduler
 }
 
 const Ctx = createContext<LoopContext>()
@@ -493,6 +498,45 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     return Math.ceil(totalChars / 3)
   })
 
+  // ===== /loop 定时执行 =====
+  const scheduler = new Scheduler({
+    onTrigger: async (prompt: string) => {
+      await run(prompt)
+    },
+    onLog: (msg: string) => {
+      addMessage({ role: "system", content: msg })
+    },
+  })
+
+  const addLoop = (interval: string, prompt: string): string | null => {
+    const ms = scheduler.parseInterval(interval)
+    if (!ms) {
+      addMessage({ role: "system", content: `无效的时间格式: ${interval}。支持: 30s, 5m, 2h, 1d` })
+      return null
+    }
+    const id = scheduler.create(ms, prompt)
+    addMessage({ role: "system", content: `循环已启动 (ID: ${id})\n间隔: ${interval}\nPrompt: ${prompt}\n输入 /loop stop 停止` })
+    return id
+  }
+
+  const stopLoops = () => {
+    const count = scheduler.deleteAll()
+    addMessage({ role: "system", content: count > 0 ? `已停止 ${count} 个循环` : "没有运行中的循环" })
+  }
+
+  const listLoops = () => {
+    const tasks = scheduler.list()
+    if (tasks.length === 0) {
+      addMessage({ role: "system", content: "没有运行中的循环" })
+      return
+    }
+    const lines = tasks.map(t => {
+      const mins = Math.round(t.intervalMs / 60_000)
+      return `  ${t.id} | 每 ${mins}m | 已执行 ${t.runCount} 次 | ${t.prompt}`
+    })
+    addMessage({ role: "system", content: `运行中的循环 (${tasks.length}):\n${lines.join('\n')}` })
+  }
+
   const value: LoopContext = {
     run,
     abort,
@@ -519,6 +563,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     contextTokens,
     activeSkill,
     setActiveSkill,
+    addLoop,
+    stopLoops,
+    listLoops,
+    scheduler,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }
