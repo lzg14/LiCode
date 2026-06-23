@@ -243,18 +243,6 @@ export class CoreLoop {
 
 
 
-      // 记录 AI 回复
-      if (ctx.aiResponse) {
-        const saveId = timer.start('save.assistant')
-        this.sessionManager.addMessage({
-          sessionId: session.id,
-          role: 'assistant',
-          content: ctx.aiResponse,
-          model: this.config.llm.model,
-        })
-        timer.end(saveId)
-      }
-
       // 存储记忆
       if (ctx.aiResponse) {
         const memId = timer.start('memory.store')
