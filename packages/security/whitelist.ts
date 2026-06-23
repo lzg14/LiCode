@@ -7,6 +7,7 @@ const BASE_WHITELIST = [
   'pip', 'uv',
   'vitest', 'prisma',
   'node', 'next',
+  'python', 'python3',
 ]
 
 const PLATFORM_WHITELIST: Record<string, string[]> = {
@@ -30,7 +31,6 @@ const BLOCKED_COMMANDS = [
   'rm', 'del',
   'sudo', 'su',
   'chmod', 'chown',
-  'python', 'python3',
   'exec', 'eval',
 ]
 
