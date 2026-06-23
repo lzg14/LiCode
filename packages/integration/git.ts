@@ -15,10 +15,15 @@ export class GitIntegration extends BaseIntegration {
   constructor(repoPath: string) {
     super()
     this.repoPath = repoPath
-    this.git = simpleGit(repoPath)
+    try {
+      this.git = simpleGit(repoPath)
+    } catch {
+      this.enabled = false
+    }
   }
 
   async connect(): Promise<void> {
+    if (!this.git) { this.enabled = false; return }
     if (existsSync(join(this.repoPath, '.git'))) {
       this.enabled = true
     }
@@ -29,6 +34,7 @@ export class GitIntegration extends BaseIntegration {
   }
 
   async health(): Promise<HealthStatus> {
+    if (!this.git) return { healthy: false, message: 'Git not available' }
     try {
       await this.git.status()
       return { healthy: true }
@@ -41,6 +47,7 @@ export class GitIntegration extends BaseIntegration {
    * 获取状态
    */
   async getStatus(): Promise<{ branch: string; ahead: number; behind: number; dirty: boolean }> {
+    if (!this.git) return { branch: '', ahead: 0, behind: 0, dirty: false }
     const status: StatusResult = await this.git.status()
     return {
       branch: status.current ?? '',
@@ -54,6 +61,7 @@ export class GitIntegration extends BaseIntegration {
    * 获取 diff
    */
   async getDiff(staged = false): Promise<string> {
+    if (!this.git) return ''
     if (staged) {
       const diff = await this.git.diff(['--cached'])
       return diff
@@ -66,6 +74,7 @@ export class GitIntegration extends BaseIntegration {
    * 获取 log
    */
   async getLog(count = 10): Promise<{ hash: string; message: string; author: string; date: string }[]> {
+    if (!this.git) return []
     const log: LogResult = await this.git.log({ maxCount: count })
     return log.all.map(entry => ({
       hash: entry.hash,
@@ -79,6 +88,7 @@ export class GitIntegration extends BaseIntegration {
    * 暂存文件
    */
   async add(files: string[]): Promise<void> {
+    if (!this.git) return
     await this.git.add(files)
   }
 
@@ -86,6 +96,7 @@ export class GitIntegration extends BaseIntegration {
    * 提交
    */
   async commit(message: string): Promise<string> {
+    if (!this.git) return ''
     const result = await this.git.commit(message)
     return result.commit
   }
@@ -94,6 +105,7 @@ export class GitIntegration extends BaseIntegration {
    * 获取分支列表
    */
   async getBranches(): Promise<string[]> {
+    if (!this.git) return []
     const branches = await this.git.branchLocal()
     return branches.all
   }

@@ -29,13 +29,15 @@ export class Memory {
     }
 
     try {
+      const globalDir = join(MEMORY_BASE, 'global')
+      const isGlobal = dir === globalDir
       const files = await readdir(dir)
       for (const file of files.filter(f => f.endsWith('.md'))) {
         const content = await readFile(join(dir, file), 'utf-8')
         const id = file.replace('.md', '')
         this.entries.set(id, {
           id,
-          scope: dir.includes('global') ? 'global' : 'project',
+          scope: isGlobal ? 'global' : 'project',
           type: 'memory',
           content,
           createdAt: Date.now(),
@@ -44,7 +46,7 @@ export class Memory {
         })
       }
     } catch (e) {
-      console.warn(`[Memory] loadFromDir failed for ${dir}:`, e)
+      process.stderr.write(`[Memory] loadFromDir failed for ${dir}: ${e}\n`)
     }
   }
 

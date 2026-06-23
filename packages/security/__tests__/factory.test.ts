@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createSecurityLayer, SecurityLayer, setSecurityLayer, getSecurityLayer, checkDangerousPattern } from '../index'
 import { getDefaultWhitelist, BLOCKED_COMMANDS } from '../whitelist'
 
@@ -32,6 +32,10 @@ describe('SecurityLayer factory', () => {
 })
 
 describe('getSecurityLayer / setSecurityLayer', () => {
+  let original: SecurityLayer
+  beforeAll(() => { original = getSecurityLayer() })
+  afterAll(() => setSecurityLayer(original))
+
   it('should return the injected instance', () => {
     const custom = createSecurityLayer({ commandWhitelist: ['custom-cmd'] })
     setSecurityLayer(custom)

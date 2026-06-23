@@ -44,13 +44,13 @@ export class ConfigLoader {
     const localPath = join(process.cwd(), 'licode.config.json')
 
     if (existsSync(localPath)) {
-      try { this.config = await this.load(localPath); console.log('[✓] Loaded project config') }
-      catch (e) { console.warn('[!] Failed to load project config:', e) }
+      try { this.config = await this.load(localPath); process.stderr.write('[config] Loaded project config\n') }
+      catch (e) { process.stderr.write(`[config] Failed to load project config: ${e}\n`) }
     }
 
     if (!this.config && existsSync(globalPath)) {
-      try { this.config = await this.load(globalPath); console.log('[✓] Loaded global config') }
-      catch (e) { console.warn('[!] Failed to load global config:', e) }
+      try { this.config = await this.load(globalPath); process.stderr.write('[config] Loaded global config\n') }
+      catch (e) { process.stderr.write(`[config] Failed to load global config: ${e}\n`) }
     }
 
     if (!this.config) {
@@ -62,7 +62,7 @@ export class ConfigLoader {
         let baseUrl = cc.baseUrl
         if (isDeepSeek) { provider = 'deepseek'; baseUrl = 'https://api.deepseek.com' }
         if (isMiniMax) { provider = 'minimax'; baseUrl = 'https://api.minimax.chat/v1' }
-        console.log(`[✓] Imported LLM config from Claude Code (${provider})`)
+        process.stderr.write(`[config] Imported LLM config from Claude Code (${provider})\n`)
         this.config = {
           llm: { provider: provider as any, model: cc.model, apiKeyEnv: 'ANTHROPIC_AUTH_TOKEN', apiKey: cc.apiKey, baseUrl },
           security: { commandWhitelist: [], allowedPaths: [], deniedPaths: [] },
@@ -74,7 +74,7 @@ export class ConfigLoader {
 
     if (!this.config) {
       this.config = { ...DEFAULT_CONFIG }
-      console.log('[!] Using default config')
+      process.stderr.write('[config] Using default config\n')
     }
 
     if (process.env.LICODE_MODEL) this.config.llm.model = process.env.LICODE_MODEL
@@ -94,8 +94,8 @@ export class ConfigLoader {
     if (this.watchers.has(path)) return
     const watcher = watch(path, async (eventType) => {
       if (eventType === 'change') {
-        try { const c = await this.load(path); this.config = c; onChange(c); console.log(`[✓] Config reloaded: ${path}`) }
-        catch (e) { console.error(`[!] Failed to reload config: ${e}`) }
+        try { const c = await this.load(path); this.config = c; onChange(c); process.stderr.write(`[config] Reloaded: ${path}\n`) }
+        catch (e) { process.stderr.write(`[config] Failed to reload: ${e}\n`) }
       }
     })
     this.watchers.set(path, () => watcher.close())

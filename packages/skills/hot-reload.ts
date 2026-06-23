@@ -22,9 +22,9 @@ export class SkillHotReload {
       const content = readFileSync(skillPath, 'utf-8')
       const skill = JSON.parse(content) as Skill
       globalSkillRegistry.register(skill)
-      console.log(`Skill reloaded: ${skill.name}`)
+      process.stderr.write(`[hot-reload] Skill reloaded: ${skill.name}\n`)
     } catch (e) {
-      console.error(`Failed to reload skill: ${skillPath}`, e)
+      process.stderr.write(`[hot-reload] Failed to reload skill: ${skillPath} ${e}\n`)
     }
   }
 
