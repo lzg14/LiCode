@@ -4,10 +4,11 @@ import { useTheme } from "../context/theme"
 interface CollapsibleTextProps {
   content: string
   maxLines?: number
+  fg?: string
 }
 
 export function CollapsibleText(props: CollapsibleTextProps) {
-  const { text, textMuted } = useTheme()
+  const { text: textColor, textMuted } = useTheme()
   const maxLines = props.maxLines ?? 10
 
   const lineCount = createMemo(() => props.content.split('\n').length)
@@ -21,7 +22,7 @@ export function CollapsibleText(props: CollapsibleTextProps) {
 
   return (
     <box flexDirection="column">
-      <text fg={text()}>{displayText()}</text>
+      <text fg={props.fg ?? textColor()}>{displayText()}</text>
       <Show when={isLong()}>
         <text fg={textMuted()}>{`  ... (剩余 ${lineCount() - maxLines} 行，共 ${lineCount()} 行)`}</text>
       </Show>

@@ -33,7 +33,7 @@ export function ThinkingView(props: {
     return (
       <box flexDirection="column" marginBottom={1} paddingLeft={1}>
         <text fg={textMuted()}>┄ 思考过程 ┄</text>
-        <CollapsibleText content={props.display.text || ''} maxLines={5} />
+        <CollapsibleText content={props.display.text || ''} maxLines={5} fg={textMuted()} />
       </box>
     )
   }
@@ -44,7 +44,7 @@ export function ThinkingView(props: {
         <Show when={props.display.thinking}>
           <box flexDirection="column" marginBottom={1} paddingLeft={1}>
             <text fg={textMuted()}>┄ 思考过程 ┄</text>
-            <CollapsibleText content={props.display.thinking!} maxLines={5} />
+            <CollapsibleText content={props.display.thinking!} maxLines={5} fg={textMuted()} />
           </box>
         </Show>
         <MarkdownTextInline content={props.display.rest} streaming={props.streaming ?? false} />
