@@ -69,6 +69,7 @@ export interface LoopContext {
   messages: Accessor<Message[]>
   streamingSegments: Accessor<Segment[]>
   pendingText: Accessor<string>
+  streamMode: Accessor<'text' | 'in-thinking' | 'in-system-reminder'>
   addMessage: (msg: AddMessageInput) => void
   updateMessage: (id: string, patch: Partial<Message>) => void
   clearMessages: () => void
@@ -118,6 +119,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const [pendingCount, setPendingCount] = createSignal(0)
   const [streamingSegments, setStreamingSegments] = createSignal<Segment[]>([])
   const [pendingText, setPendingText] = createSignal("")
+  const [streamMode, setStreamMode] = createSignal<'text' | 'in-thinking' | 'in-system-reminder'>('text')
   let streamAccumulator = createStreamAccumulator()
   const inputQueue: { id: string; text: string }[] = []
   let toolCallIdCounter = 0
@@ -443,8 +445,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           })
         },
         onStreamText: (delta: string) => {
-          const { closed, pending } = streamAccumulator.push(delta)
+          const { closed, pending, mode } = streamAccumulator.push(delta)
           batch(() => {
+            setStreamMode(mode)
             if (closed.length > 0) {
               setStreamingSegments(prev => [...prev, ...closed])
             }
@@ -614,6 +617,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     messages,
     streamingSegments,
     pendingText,
+    streamMode,
     addMessage,
     updateMessage,
     clearMessages,

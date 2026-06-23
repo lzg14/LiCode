@@ -47,10 +47,10 @@ function MarkdownText(props: { content: string; streaming?: boolean }) {
 
 /**
  * PendingStreamView - 渲染未闭合的 streaming 内容
- * 使用单一子树 + 条件 Show，避免 Switch 切分支时的 DOM 销毁/重建
+ * streaming 中的 thinking 内容始终灰色 + 可折叠
  */
 function PendingStreamView() {
-  const { pendingText } = useLoop()
+  const { pendingText, streamMode } = useLoop()
   const { textMuted } = useTheme()
   const display = createMemo(() => deriveThinkingDisplay(pendingText(), false))
 
@@ -67,17 +67,20 @@ function PendingStreamView() {
     return ''
   })
 
+  const isThinkingStream = createMemo(() => streamMode() === 'in-thinking' || thinking().length > 0)
+
   return (
     <box flexDirection="column">
-      <Show when={thinking()}>
-        <box marginBottom={1} paddingLeft={1}>
-          <text fg={textMuted()}>{thinking()}</text>
+      <Show when={isThinkingStream()}>
+        <box flexDirection="column" marginBottom={1} paddingLeft={1}>
+          <text fg={textMuted()}>┄ 思考过程 ┄</text>
+          <CollapsibleText content={thinking() || pendingText()} maxLines={5} />
         </box>
       </Show>
-      <Show when={rest()}>
+      <Show when={!isThinkingStream() && rest()}>
         <MarkdownText content={rest()} streaming={true} />
       </Show>
-      <Show when={!thinking() && !rest() && pendingText()}>
+      <Show when={!isThinkingStream() && !rest() && pendingText()}>
         <box marginBottom={1}>
           <MarkdownText content={pendingText()} streaming={true} />
         </box>
@@ -263,8 +266,9 @@ export function MessageList() {
         {(seg) => {
           if (seg.kind === 'thinking') {
             return (
-              <box marginBottom={1} paddingLeft={1}>
-                <text fg={textMuted()}>{seg.text}</text>
+              <box flexDirection="column" marginBottom={1} paddingLeft={1}>
+                <text fg={textMuted()}>┄ 思考过程 ┄</text>
+                <CollapsibleText content={seg.text} maxLines={5} />
               </box>
             )
           }
