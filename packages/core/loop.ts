@@ -1,6 +1,7 @@
 import type { Phase, Config, Plan } from './types'
 import type { LLMProvider } from '../llm/types'
 import { createModel } from '../llm/provider'
+import { getModelConfig } from '../llm/catalog'
 import { execute } from './phases/execute'
 import { devLogger } from './dev-logger'
 import { homedir } from 'os'
@@ -297,8 +298,9 @@ export class CoreLoop {
     const history = this.sessionManager.getMessagesAsModelMessages(ctx.sessionId)
     timer.end(historyStartId, { count: history.length })
 
-    // 检查是否需要压缩历史
-    if (this.sessionCompactor.shouldCompact(history, ctx.sessionId)) {
+    // 检查是否需要压缩历史（基于 context window 80% 阈值）
+    const contextWindow = getModelConfig(this.config.llm.model)?.contextWindow
+    if (this.sessionCompactor.shouldCompact(history, ctx.sessionId, contextWindow)) {
       devLogger.debug('COMPACT', `History ${history.length} messages, triggering compaction`)
       const hasExisting = this.sessionCompactor.hasSummary(ctx.sessionId)
       if (!hasExisting) {
