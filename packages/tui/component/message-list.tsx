@@ -51,35 +51,15 @@ function MarkdownText(props: { content: string; streaming?: boolean }) {
  */
 function PendingStreamView() {
   const { pendingText, streamMode } = useLoop()
-  const { textMuted } = useTheme()
-  const display = createMemo(() => deriveThinkingDisplay(pendingText(), false))
-
-  const thinking = createMemo(() => {
-    const d = display()
-    if (d.kind === 'thinking-only') return d.text
-    if (d.kind === 'has-rest') return d.thinking
-    return ''
-  })
-  const rest = createMemo(() => {
-    const d = display()
-    if (d.kind === 'has-rest') return d.rest
-    if (d.kind === 'no-thinking') return d.rest
-    return ''
-  })
-
-  const isThinkingOnly = createMemo(() => streamMode() === 'in-thinking' || (thinking().length > 0 && !rest()))
 
   return (
     <box flexDirection="column">
-      <Show when={isThinkingOnly()}>
+      <Show when={streamMode() === 'in-thinking'}>
         <box marginBottom={1} paddingLeft={1}>
           <Spinner>思考中</Spinner>
         </box>
       </Show>
-      <Show when={rest()}>
-        <MarkdownText content={rest()} streaming={true} />
-      </Show>
-      <Show when={!isThinkingOnly() && !rest() && pendingText()}>
+      <Show when={streamMode() !== 'in-thinking' && pendingText()}>
         <box marginBottom={1}>
           <MarkdownText content={pendingText()} streaming={true} />
         </box>
