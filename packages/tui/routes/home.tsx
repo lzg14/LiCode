@@ -215,6 +215,13 @@ export function Home() {
       else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false); setPendingSlashCmd(null) }
       return
     }
+    // pendingSlashCmd 有值时，return 键直接执行命令
+    if (pendingSlashCmd() && evt.name === "return") {
+      evt.preventDefault()
+      handleSlashSubmitByLabel(pendingSlashCmd()!)
+      setPendingSlashCmd(null)
+      return
+    }
     // PageUp/PageDown/Home/End: 直接控制消息列表滚动
     if (evt.name === "pageup") {
       evt.preventDefault()
