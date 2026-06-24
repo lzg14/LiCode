@@ -218,8 +218,9 @@ export function Home() {
     // pendingSlashCmd 有值时，return 键直接执行命令
     if (pendingSlashCmd() && evt.name === "return") {
       evt.preventDefault()
-      handleSlashSubmitByLabel(pendingSlashCmd()!)
+      const cmd = pendingSlashCmd()!
       setPendingSlashCmd(null)
+      handleSlashSubmitByLabel(cmd)
       return
     }
     // PageUp/PageDown/Home/End: 直接控制消息列表滚动
