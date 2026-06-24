@@ -10,7 +10,7 @@ const VERSION = "0.2.0"
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning, error } = useTheme()
   const config = useConfig()
-  const { isProcessing, messages, llmCallCount, llmTokenUsage, contextTokens, currentModel } = useLoop()
+  const { isProcessing, messages, llmCallCount, llmTokenUsage, contextTokens, currentModel, activeSkill, activeSkillInstructions } = useLoop()
 
   const msgCount = createMemo(() => messages().length)
   const toolCallCount = createMemo(() => messages().filter((m) => m.role === "tool").length)
@@ -121,6 +121,20 @@ export function Sidebar() {
               }}
             </For>
           </box>
+        </box>
+      </Show>
+
+      <Show when={activeSkill()}>
+        <box flexDirection="column" gap={0} paddingTop={1}>
+          <text fg={primary()}>Skill</text>
+          <box paddingLeft={1}>
+            <text fg={success()}>{activeSkill()}</text>
+          </box>
+          <Show when={activeSkillInstructions()}>
+            <box flexDirection="column" paddingLeft={1} marginTop={0}>
+              <text fg={textMuted()}>{activeSkillInstructions()!.slice(0, 120)}{activeSkillInstructions()!.length > 120 ? '...' : ''}</text>
+            </box>
+          </Show>
         </box>
       </Show>
 
