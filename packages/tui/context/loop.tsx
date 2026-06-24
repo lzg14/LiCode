@@ -507,6 +507,11 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       }
 
       if (result.text) {
+        // 清空 streaming 状态，避免重复显示
+        streamAccumulator.reset()
+        setStreamingSegments([])
+        setPendingText("")
+        
         addMessage({
           role: "assistant",
           content: result.text,
