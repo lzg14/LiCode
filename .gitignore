@@ -19,3 +19,10 @@ Thumbs.db
 memory/
 tsc-result*.txt
 test-results/
+
+# 临时文件
+.tmp/
+tmp/
+.vscode/
+.licode/
+*.tmp
