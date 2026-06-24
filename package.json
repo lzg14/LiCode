@@ -1,7 +1,19 @@
 {
   "name": "licode",
   "version": "0.3.0",
+  "description": "Terminal-native AI coding agent — SolidJS + @opentui + multi-provider + persistent sessions",
   "type": "module",
+  "license": "MIT",
+  "author": "lzg14 <lzg14@users.noreply.github.com>",
+  "keywords": ["ai", "cli", "agent", "tui", "solidjs", "anthropic", "openai", "deepseek", "bun"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lzg14/licode.git"
+  },
+  "homepage": "https://github.com/lzg14/licode#readme",
+  "bugs": {
+    "url": "https://github.com/lzg14/licode/issues"
+  },
   "engines": {
     "bun": ">=1.3.14"
   },
