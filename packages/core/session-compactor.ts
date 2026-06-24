@@ -65,8 +65,9 @@ export class SessionCompactor {
 
   /**
    * 判断是否需要压缩
+   * @param contextWindow 可选，传入 model 的 context window，触发阈值 = contextWindow * 0.8
    */
-  shouldCompact(messages: any[], sessionId: string): boolean {
+  shouldCompact(messages: any[], sessionId: string, contextWindow?: number): boolean {
     const now = Date.now()
     const lastTime = this.lastCompactTime.get(sessionId) ?? 0
     if (now - lastTime < this.config.debounceMs) return false
@@ -74,13 +75,16 @@ export class SessionCompactor {
     const msgCount = messages.length
     const estimatedTokens = this.estimateTokens(messages)
 
+    // 优先用传入的 contextWindow * 0.8，否则用配置的 maxTokens
+    const tokenThreshold = contextWindow ? Math.floor(contextWindow * 0.8) : this.config.maxTokens
+
     if (msgCount >= this.config.maxMessages) {
       devLogger.debug('COMPACTOR', `msgCount=${msgCount} >= ${this.config.maxMessages}, will compact`)
       return true
     }
 
-    if (estimatedTokens >= this.config.maxTokens) {
-      devLogger.debug('COMPACTOR', `tokens=${estimatedTokens} >= ${this.config.maxTokens}, will compact`)
+    if (estimatedTokens >= tokenThreshold) {
+      devLogger.debug('COMPACTOR', `tokens=${estimatedTokens} >= ${tokenThreshold} (${contextWindow ? `80% of ${contextWindow}` : `maxTokens`}), will compact`)
       return true
     }
 
