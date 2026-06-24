@@ -16,6 +16,7 @@ export function Home() {
   const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)
+  const [scrollRef, setScrollRef] = createSignal<any>(null)
 
   const toggleModelPicker = () => {
     setModelPickerOpen(prev => !prev)
@@ -214,9 +215,25 @@ export function Home() {
       else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false); setPendingSlashCmd(null) }
       return
     }
-    // PageUp/PageDown/Home/End: 传递给 scrollbox 处理
-    if (["pageup", "pagedown", "home", "end"].includes(evt.name)) {
-      // 不 preventDefault，让 scrollbox 处理
+    // PageUp/PageDown/Home/End: 直接控制消息列表滚动
+    if (evt.name === "pageup") {
+      evt.preventDefault()
+      scrollRef()?.scrollBy(-0.5, "viewport")
+      return
+    }
+    if (evt.name === "pagedown") {
+      evt.preventDefault()
+      scrollRef()?.scrollBy(0.5, "viewport")
+      return
+    }
+    if (evt.name === "home") {
+      evt.preventDefault()
+      scrollRef()?.scrollTo(0)
+      return
+    }
+    if (evt.name === "end") {
+      evt.preventDefault()
+      scrollRef()?.scrollTo(scrollRef()?.scrollHeight ?? 0)
       return
     }
   })
@@ -266,6 +283,7 @@ export function Home() {
 
         <Show when={messages().length > 0}>
           <scrollbox
+            ref={setScrollRef}
             flexGrow={1}
             scrollY={true}
             stickyScroll={true}
