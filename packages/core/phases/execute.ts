@@ -6,6 +6,7 @@ import type { Timer } from "../perf"
 import { readFile } from "fs/promises"
 import { existsSync } from "fs"
 import { join, dirname } from "path"
+import { detectProject, buildProjectRole } from "../detect-project"
 
 /**
  * 加载项目配置文件（.licode.md / LICODE.md）
@@ -395,7 +396,12 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       const activeSkillContent = ctx.activeSkillInstructions
       // 加载项目配置文件
       const projectConfig = await loadProjectConfig(ctx.cwd)
-      let fullSystem = SYSTEM_PROMPT
+      const projectInfo = detectProject(ctx.cwd ?? process.cwd())
+      const projectRole = buildProjectRole(projectInfo)
+      let fullSystem = SYSTEM_PROMPT.replace(
+        '你是一个名为 licode 的 AI 助手，专注于代码开发。',
+        projectRole
+      )
       if (projectConfig) {
         fullSystem += `\n\n## 项目配置\n\n${projectConfig}`
       }
