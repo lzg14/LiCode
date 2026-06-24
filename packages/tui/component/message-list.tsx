@@ -67,20 +67,19 @@ function PendingStreamView() {
     return ''
   })
 
-  const isThinkingStream = createMemo(() => streamMode() === 'in-thinking' || thinking().length > 0)
+  const isThinkingOnly = createMemo(() => streamMode() === 'in-thinking' || (thinking().length > 0 && !rest()))
 
   return (
     <box flexDirection="column">
-      <Show when={isThinkingStream()}>
-        <box flexDirection="column" marginBottom={1} paddingLeft={1}>
-          <text fg={textMuted()}>┄ 思考过程 ┄</text>
-          <CollapsibleText content={thinking() || pendingText()} maxLines={5} />
+      <Show when={isThinkingOnly()}>
+        <box marginBottom={1} paddingLeft={1}>
+          <Spinner>思考中</Spinner>
         </box>
       </Show>
-      <Show when={!isThinkingStream() && rest()}>
+      <Show when={rest()}>
         <MarkdownText content={rest()} streaming={true} />
       </Show>
-      <Show when={!isThinkingStream() && !rest() && pendingText()}>
+      <Show when={!isThinkingOnly() && !rest() && pendingText()}>
         <box marginBottom={1}>
           <MarkdownText content={pendingText()} streaming={true} />
         </box>
@@ -104,14 +103,14 @@ function beijingTime(ts: number): string {
 }
 
 function MessageItem(props: { msg: Message }) {
-  const { primary, text, textMuted, error, success, warning } = useTheme()
+  const { primary, text, textMuted, error, success, warning, info } = useTheme()
 
   if (props.msg.role === "user") {
     const hasImages = props.msg.images && props.msg.images.length > 0
     return (
       <box flexDirection="column" marginBottom={1}>
         <box flexDirection="row">
-          <text fg={props.msg.queued ? textMuted() : primary()}>
+          <text fg={props.msg.queued ? info() : primary()}>
             {props.msg.queued ? "┃ [queued] " : "┃ "}
           </text>
           <CollapsibleText content={props.msg.content} maxLines={5} />
@@ -311,9 +310,8 @@ export function MessageList() {
         {(seg) => {
           if (seg.kind === 'thinking') {
             return (
-              <box flexDirection="column" marginBottom={1} paddingLeft={1}>
-                <text fg={textMuted()}>┄ 思考过程 ┄</text>
-                <CollapsibleText content={seg.text} maxLines={5} fg={textMuted()} />
+              <box marginBottom={1} paddingLeft={1}>
+                <Spinner>思考中</Spinner>
               </box>
             )
           }
