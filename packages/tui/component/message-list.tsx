@@ -213,7 +213,7 @@ export function QueueMessages() {
 }
 
 export function MessageList() {
-  const { messages, streamingSegments, pendingText, isProcessing, toolCallExpanded, toggleToolCallExpanded } = useLoop()
+  const { messages, streamingSegments, pendingText, isProcessing, toolCallExpanded, toggleToolCallExpanded, streamMode } = useLoop()
   const { text, textMuted } = useTheme()
 
   // 预处理：识别 tool 批次并折叠显示
