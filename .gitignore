@@ -20,9 +20,8 @@ memory/
 tsc-result*.txt
 test-results/
 
-# 临时文件
-.tmp/
-tmp/
-.vscode/
-.licode/
-*.tmp
+# 临时文件（只匹配仓库根，避免误伤源码中合理的 .tmp 命名）
+/.tmp/
+/tmp/
+/.vscode/
+/.licode/
