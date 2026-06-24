@@ -25,3 +25,8 @@ test-results/
 /tmp/
 /.vscode/
 /.licode/
+
+# 调试日志（一次性运行产生的临时日志，避免被 *.log 全量误伤）
+tsc-*.log
+test-*.log
+vitest-*.log
