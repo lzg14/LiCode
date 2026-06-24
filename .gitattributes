@@ -1,0 +1,2 @@
+# Force git to treat these as text for proper diff/review
+CHANGELOG.md text
