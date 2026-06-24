@@ -289,11 +289,8 @@ export function MessageList() {
       <For each={streamingSegments()}>
         {(seg) => {
           if (seg.kind === 'thinking') {
-            return (
-              <box marginBottom={1} paddingLeft={1}>
-                <Spinner>思考中</Spinner>
-              </box>
-            )
+            // thinking 内容不显示，只在流式过程中显示思考指示器
+            return null
           }
           if (seg.kind === 'system-reminder') {
             return null
