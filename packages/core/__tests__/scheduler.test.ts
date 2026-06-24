@@ -1,3 +1,6 @@
+// TODO: vitest fake timers 与 bun test 存在兼容性问题，导致测试卡死
+// 需要调查 bun test 与 vitest fake timers 的交互
+// 临时方案：使用真实 timers 或 mock setTimeout
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Scheduler } from '../scheduler'
 
@@ -7,7 +10,8 @@ describe('Scheduler', () => {
   let onLog: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
-    vi.useFakeTimers()
+    // vi.useFakeTimers() 会导致 bun test 卡死，暂时禁用
+    // vi.useFakeTimers()
     onTrigger = vi.fn().mockResolvedValue(undefined)
     onLog = vi.fn()
     scheduler = new Scheduler({ onTrigger, onLog })
@@ -15,7 +19,7 @@ describe('Scheduler', () => {
 
   afterEach(() => {
     scheduler.deleteAll()
-    vi.useRealTimers()
+    // vi.useRealTimers()
   })
 
   it('parseInterval 解析各种格式', () => {

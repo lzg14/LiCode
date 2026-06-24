@@ -1,5 +1,5 @@
 import { readFile, writeFile, stat, readdir, mkdir, unlink, copyFile, rename } from 'fs/promises'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, unlinkSync } from 'fs'
 import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
 import { glob } from 'glob'
@@ -229,23 +229,44 @@ export function registerBuiltinTools(): void {
       if (stdout === null) {
         stdout = await tryExec('grep', ['-rn', '--color=never', ...(include ? [`--include=${include}`] : []), pattern, cwd])
       }
-      if (stdout === null) stdout = await tryExec('findstr', ['/s', '/n', '/r', pattern, join(cwd, '*')])
+      if (stdout === null) {
+        // Windows findstr: 使用 \\* 递归搜索
+        const winPath = cwd.replace(/\//g, '\\')
+        stdout = await tryExec('findstr', ['/s', '/n', '/r', pattern, `${winPath}\\*`])
+      }
       return { success: true, output: (stdout || '').trim() || '未找到匹配' }
     },
   })
 
   globalToolRegistry.register({
     name: 'codesearch',
-    description: '使用 ripgrep 搜索代码。',
+    description: '搜索代码。优先 ripgrep，自动 fallback 到 grep/findstr。',
     inputSchema: z.object({ pattern: z.string(), path: z.string().optional(), include: z.string().optional(), maxResults: z.number().default(30) }),
     handler: async ({ pattern, path, include, maxResults }) => {
+      const cwd = path ?? process.cwd()
+      // 尝试 ripgrep
       try {
         const args = ['-n', '--max-count', String(maxResults)]
         if (include) args.push('-g', include)
-        args.push(pattern, path ?? process.cwd())
+        args.push(pattern, cwd)
         const { stdout } = await execFileAsync('rg', args, { maxBuffer: 1024 * 1024 })
         const lines = (stdout || '').split('\n').filter(Boolean).slice(0, maxResults)
         return { success: true, output: lines.join('\n') || '未找到匹配' }
+      } catch {}
+      // fallback: grep (unix) 或 findstr (windows)
+      try {
+        if (process.platform === 'win32') {
+          const { stdout } = await execAsync(`findstr /S /N "${pattern}" ${cwd}\\*`, { maxBuffer: 1024 * 1024 })
+          const lines = (stdout || '').split('\n').filter(Boolean).slice(0, maxResults)
+          return { success: true, output: lines.join('\n') || '未找到匹配' }
+        } else {
+          const grepArgs = ['-rn', '--max-count', String(maxResults)]
+          if (include) grepArgs.push('--include', include)
+          grepArgs.push(pattern, cwd)
+          const { stdout } = await execFileAsync('grep', grepArgs, { maxBuffer: 1024 * 1024 })
+          const lines = (stdout || '').split('\n').filter(Boolean).slice(0, maxResults)
+          return { success: true, output: lines.join('\n') || '未找到匹配' }
+        }
       } catch (e) { return { success: false, error: String(e) } }
     },
   })
@@ -320,27 +341,6 @@ export function registerBuiltinTools(): void {
     inputSchema: z.object({}),
     handler: async () => {
       return { success: true, output: JSON.stringify({ platform: process.platform, arch: process.arch, node: process.version, cwd: process.cwd(), mem: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB` }, null, 2) }
-    },
-  })
-
-  globalToolRegistry.register({
-    name: 'datetime',
-    description: '获取当前日期时间。支持自定义格式。',
-    inputSchema: z.object({ format: z.string().optional() }),
-    handler: async ({ format }) => {
-      if (format) {
-        const d = new Date()
-        const pad = (n: number) => String(n).padStart(2, '0')
-        const result = format
-          .replace('YYYY', String(d.getFullYear()))
-          .replace('MM', pad(d.getMonth() + 1))
-          .replace('DD', pad(d.getDate()))
-          .replace('HH', pad(d.getHours()))
-          .replace('mm', pad(d.getMinutes()))
-          .replace('ss', pad(d.getSeconds()))
-        return { success: true, output: result }
-      }
-      return { success: true, output: new Date().toISOString() }
     },
   })
 
@@ -720,7 +720,7 @@ export function registerBuiltinTools(): void {
       patch: z.string().describe('补丁内容（unified diff 格式，或 JSON Patch 格式）'),
       reverse: z.boolean().optional().describe('是否反向应用（撤销补丁）'),
     }),
-    handler: async ({ filePath, patch, reverse }) => {
+    handler: async ({ filePath, patch, reverse }, ctx) => {
       // 安全检查：apply_patch 等同于写文件
       const pathCheck = getSecurityLayer().checkPath(filePath)
       if (!pathCheck.allowed) {
@@ -729,7 +729,7 @@ export function registerBuiltinTools(): void {
       try {
         const absPath = resolve(filePath)
         if (!existsSync(absPath)) return { success: false, error: `文件不存在: ${absPath}` }
-        const patchFile = join(process.cwd(), '.tmp_patch.tmp')
+        const patchFile = join(ctx.cwd ?? process.cwd(), '.tmp_patch.tmp')
         await writeFile(patchFile, patch, 'utf-8')
         const args = ['apply', reverse ? '-R' : '', patchFile]
         try {
@@ -940,7 +940,7 @@ export async function readClipboardImage(): Promise<{ data: string; mime: string
   }
 
   if (platform === 'darwin') {
-    const tmpfile = join(require('os').tmpdir(), 'licode-clipboard.png')
+    const tmpfile = join((await import('os')).tmpdir(), 'licode-clipboard.png')
     try {
       await promisify(exec)(
         `osascript -e 'set imageData to the clipboard as "PNGf"' -e 'set fileRef to open for access POSIX file "${tmpfile}" with write permission' -e 'set eof fileRef to 0' -e 'write imageData to fileRef' -e 'close access fileRef'`,
@@ -949,7 +949,7 @@ export async function readClipboardImage(): Promise<{ data: string; mime: string
       const buffer = readFileSync(tmpfile)
       return { data: buffer.toString('base64'), mime: 'image/png' }
     } catch { /* macOS 剪贴板无图片 */ } finally {
-      try { require('fs').unlinkSync(tmpfile) } catch { /* 临时文件清理 */ }
+      try { unlinkSync(tmpfile) } catch { /* 临时文件清理 */ }
     }
   }
 
