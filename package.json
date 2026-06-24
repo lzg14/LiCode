@@ -15,6 +15,7 @@
     "url": "https://github.com/lzg14/licode/issues"
   },
   "engines": {
+    "node": ">=18",
     "bun": ">=1.3.14"
   },
   "main": "dist/index.js",

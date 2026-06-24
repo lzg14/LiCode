@@ -9,7 +9,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within licode, please send an email to **lzg14@users.noreply.github.com**.
+If you discover a security vulnerability within licode, please use [GitHub Security Advisories](https://github.com/lzg14/licode/security/advisories/new) to report it privately.
 
 Please include:
 - Description of the vulnerability
@@ -30,7 +30,6 @@ You should receive a response within 48 hours. If the vulnerability is confirmed
 This security policy applies to:
 - The licode CLI tool
 - The licode TUI application
-- The licode API server (if deployed)
 
 This does NOT apply to:
 - Third-party integrations (MCP servers, etc.)
