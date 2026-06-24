@@ -575,14 +575,27 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     }
   }
 
-  // 估算当前上下文的 token 数（总字符数 / 3，中英文混合粗略估）
+  // 估算当前上下文的 token 数（与 session-compactor 一致）
   const contextTokens = createMemo(() => {
     let totalChars = 0
     for (const msg of messages()) {
-      totalChars += msg.content.length
+      const content = msg.content
+      if (Array.isArray(content)) {
+        for (const part of content) {
+          if (part?.type === 'text' && part?.text) {
+            totalChars += part.text.length
+          } else if (part?.type === 'tool-result' && part?.output?.value) {
+            totalChars += typeof part.output.value === 'string' ? part.output.value.length : JSON.stringify(part.output.value).length
+          } else if (part?.type === 'tool-call' && part?.input) {
+            totalChars += JSON.stringify(part.input).length
+          }
+        }
+      } else if (typeof content === 'string') {
+        totalChars += content.length
+      }
       if (msg.toolArgs) totalChars += JSON.stringify(msg.toolArgs).length
     }
-    return Math.ceil(totalChars / 3)
+    return Math.ceil(totalChars / 4)
   })
 
   // ===== /loop 定时执行 =====
