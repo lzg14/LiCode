@@ -29,7 +29,7 @@ export function HelpPanel(props: { onClose: () => void }) {
       >
         <text fg={primary()}>  帮助 (↑↓ 滚动, Esc 关闭)</text>
         <box height={1} />
-        <scrollbox flexGrow={1} scrollY scrollAcceleration={3}>
+        <scrollbox flexGrow={1} scrollY>
           <For each={HELP_CONTENT}>
             {(section) => (
               <box flexDirection="column" marginBottom={1}>
