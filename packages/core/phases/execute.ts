@@ -112,13 +112,15 @@ const SYSTEM_PROMPT = `你是一个名为 licode 的 AI 助手，专注于代码
 
 ## 文件操作
 - read: 读取文件内容
-- write: 写入文件
+- write: 写入文件（**必须用此工具创建/覆盖文件，禁止用 bash 写文件**）
 - edit: 编辑文件（替换字符串）
 - list_directory: 列出目录内容
 - create_directory: 创建目录
 - delete_file: 删除文件
 - move_file: 移动/重命名文件
 - copy_file: 复制文件
+
+**重要**：写文件（创建新文件、覆盖文件内容）必须用 write 工具，不要用 bash 的 echo/Set-Content/Out-File 等命令。bash 只用于执行 shell 命令（如 git、npm、tsc 等）。
 
 ## 搜索工具
 - glob: 按模式搜索文件
@@ -421,6 +423,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       let streamedText = ''
       let streamedToolCalls: any[] = []
       let chunkCount = 0
+      let aborted = false
       try {
         for await (const chunk of streamResult.fullStream) {
           chunkCount++
@@ -432,7 +435,18 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
           }
         }
       } catch (streamError: any) {
-        devLogger.error('STREAM', `stream consumption failed: ${streamError}`)
+        // 检查是否是 abort 错误
+        if (streamError?.name === 'AbortError' || ctx.signal?.aborted) {
+          aborted = true
+          devLogger.info('STREAM', 'Stream aborted by user')
+        } else {
+          devLogger.error('STREAM', `stream consumption failed: ${streamError}`)
+        }
+      }
+
+      // 如果被中断，返回中断信息
+      if (aborted) {
+        return "已取消当前执行"
       }
 
       const resolvedResult = {
