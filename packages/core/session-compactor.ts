@@ -122,10 +122,13 @@ export class SessionCompactor {
       wasFallback = true
     }
 
-    // 2. 构建完整摘要
+    // 2. 清理 LLM 输出中的 thinking 标签
+    summaryBody = this.stripXmlTags(summaryBody)
+
+    // 3. 构建完整摘要
     const summary = this.buildSummaryDocument(summaryBody, total, preserved.length)
 
-    // 3. 保存
+    // 4. 保存
     const summaryPath = this.saveSummary(sessionId, summary)
 
     return {
@@ -191,7 +194,7 @@ export class SessionCompactor {
 2）有什么技术决策
 3）项目当前状态
 
-直接输出摘要正文，不要前缀说明。
+直接输出摘要正文，不要前缀说明，不要输出任何 XML 标签（如 <think>）。
 
 ## 对话记录
 ${conversationText}`
@@ -394,6 +397,18 @@ ${conversationText}`
   }
 
   // ─── 工具方法 ─────────────────────────────────────────
+
+  /**
+   * 清理 LLM 输出中的 thinking/system-reminder 等 XML 标签
+   */
+  private stripXmlTags(text: string): string {
+    return text
+      .replace(/<think>[\s\S]*?<\/think>/g, '')
+      .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
 
   private estimateTokens(messages: any[]): number {
     let total = 0
