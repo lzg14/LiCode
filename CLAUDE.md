@@ -39,7 +39,7 @@
 D:\ProjectFile\licode\
 ├── packages/              # 业务模块（monorepo 但无 workspace 工具）
 │   ├── core/              # Core Loop（已简化为单 EXECUTE 阶段）
-│   ├── tools/             # 38 个内置工具
+│   ├── tools/             # 39 个内置工具
 │   ├── session/           # SQLite 持久化 + 历史压缩
 │   ├── tui/               # SolidJS 终端 UI
 │   ├── config/            # 多层级配置
@@ -108,10 +108,9 @@ docs/plans/<topic>-plan.md
 - "不做什么" 区块（明确排除范围）
 
 **当前位置**：
-- `productization-plan.md` — 5 阶段产品化（已完成大部分）
+- `production-gaps-2026-q3.md` — 生产差距评估（当前 roadmap）
 - `claude-code-skills-integration.md` — Skill 集成计划
 - `slash-menu-simplification.md` — `/` 菜单精简计划
-- `roadmap.md` — 总体路线图
 - `workflow-system.md` — Workflow 设计（早期）
 - `fix-intermediate-text-duplication.md` — 历史修复
 

@@ -1,4 +1,4 @@
-preload = ["./.preload"]
+preload = ["./.preload.js"]
 
 [test]
-preload = ["./.preload"]
+preload = ["./.preload.js"]
