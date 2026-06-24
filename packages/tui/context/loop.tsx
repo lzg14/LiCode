@@ -81,6 +81,7 @@ export interface LoopContext {
   compactSession: () => Promise<void>
   listSkills: () => Promise<string[]>
   activeSkill: Accessor<string | null>
+  activeSkillInstructions: Accessor<string | null>
   setActiveSkill: (name: string | null) => void
   currentModel: Accessor<string>
   currentProvider: Accessor<string>
@@ -651,6 +652,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     getAvailableProviders,
     contextTokens,
     activeSkill,
+    activeSkillInstructions,
     setActiveSkill,
     addLoop,
     stopLoops,
