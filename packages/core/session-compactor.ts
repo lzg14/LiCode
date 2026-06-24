@@ -44,9 +44,11 @@ export interface CompactionResult {
 
 const DEFAULT_CONFIG: CompactionConfig = {
   maxMessages: 200,
-  maxTokens: 100000,
+  /**  token 估算用 length/4（中英文混合粗估），阈值 20 万 = ~80 万字符 */
+  maxTokens: 200_000,
   preserveRecent: 30,
-  debounceMs: 300_000,
+  /** 10 分钟内不重复压缩 */
+  debounceMs: 600_000,
   dataDir: '',
 }
 
@@ -69,10 +71,20 @@ export class SessionCompactor {
     const lastTime = this.lastCompactTime.get(sessionId) ?? 0
     if (now - lastTime < this.config.debounceMs) return false
 
-    if (messages.length >= this.config.maxMessages) return true
+    const msgCount = messages.length
+    const estimatedTokens = this.estimateTokens(messages)
 
-    const tokens = this.estimateTokens(messages)
-    return tokens >= this.config.maxTokens
+    if (msgCount >= this.config.maxMessages) {
+      devLogger.debug('COMPACTOR', `msgCount=${msgCount} >= ${this.config.maxMessages}, will compact`)
+      return true
+    }
+
+    if (estimatedTokens >= this.config.maxTokens) {
+      devLogger.debug('COMPACTOR', `tokens=${estimatedTokens} >= ${this.config.maxTokens}, will compact`)
+      return true
+    }
+
+    return false
   }
 
   /**
@@ -415,13 +427,20 @@ ${conversationText}`
     for (const msg of messages) {
       const content = msg.content ?? []
       for (const part of content) {
-        if (typeof part === 'object') {
-          total += JSON.stringify(part).length
+        if (part?.type === 'text' && part?.text) {
+          total += part.text.length
+        } else if (part?.type === 'tool-result' && part?.output?.value) {
+          // tool-result 的 value 是字符串，取其长度
+          total += typeof part.output.value === 'string' ? part.output.value.length : JSON.stringify(part.output.value).length
+        } else if (part?.type === 'tool-call' && part?.input) {
+          // tool-call 的 input 参数
+          total += JSON.stringify(part.input).length
         } else if (typeof part === 'string') {
           total += part.length
         }
       }
     }
-    return Math.ceil(total / 3)
+    // 除以 4：中英文混合，每 token ≈ 4 字符
+    return Math.ceil(total / 4)
   }
 }
