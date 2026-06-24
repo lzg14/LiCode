@@ -268,7 +268,6 @@ export function Home() {
             viewportOptions={{
               paddingRight: 1,
             }}
-            scrollAcceleration={3}
           >
             <MessageList />
           </scrollbox>

@@ -178,11 +178,6 @@ export async function tui(config: any) {
     r.enableMouse()
   }
 
-  // 调试：监听鼠标事件
-  r.on?.("mouse", (event: any) => {
-    devLogger.debug('MOUSE', `type=${event.type} x=${event.x} y=${event.y} scroll=${JSON.stringify(event.scroll)}`)
-  })
-
   try {
     await render(() => {
       return (
