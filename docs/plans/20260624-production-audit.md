@@ -116,18 +116,20 @@
   | 文档 | 工具数 | provider 名 |
   |---|---|---|
   | CLAUDE.md:23 | "38 个内置工具" | "DeepSeek" |
-  | CHANGELOG [0.3.0] | "34 工具" | — |
+  | CHANGELOG [0.3.0] | — | — |
   | README.md:7 | — | "DeepSeek / MiniMax" |
-  | production-gaps-2026-q3.md | "34 工具" | — |
+  | production-gaps-2026-q3.md | "34 工具"¹ | — |
   | **实际 builtin.ts** | **39 工具**（read, write, edit, list_directory, create_directory, delete_file, move_file, copy_file, glob, grep, codesearch, stat, bash, env_vars, datetime, system_info, process_list, kill_process, open_explorer, open_url, gh, git_status, git_diff, git_log, git_commit, webfetch, websearch, run_tests, install_deps, format, lint, skill, database_query, apply_patch, excel_read, excel_write, read_image, todo_write, todo_read）| **minimax**（小写 provider id）|
+
+¹ CHANGELOG 自 0.1.0 起**从未列过工具数**（仅列变更项）；原"34 工具"为审计时的事实错误。production-gaps-2026-q3.md 的 34 工具是 2026-07-22 评估快照当时的事实，**按归档原则不动**。
 - **影响**：用户/外部协作者困惑；README 与实际代码不一致
 - **修复**：
   - CLAUDE.md 工具数 38 → 39
-  - CHANGELOG [0.3.0] 34 → 39（或加注释说明 refactor 后增量）
   - README "MiniMax" → "minimax"（或对齐 anthropic/openai 的 lowercase）
-  - production-gaps-2026-q3.md 同上
+  - ~~CHANGELOG [0.3.0] 34 → 39~~（**已删除**：CHANGELOG 从未列过工具数，无修改目标）
+  - production-gaps-2026-q3.md **不动**（历史快照归档）
 - **工时**：10 分钟
-- **verify**：`grep -rn "38 个\|34 工具\|34 个工具" docs/ README.md CLAUDE.md` 全部更新
+- **verify**：`grep -rn "38 个\|34 工具\|34 个工具" docs/ README.md CLAUDE.md`（排除 `docs/archive/` 和 `docs/plans/archive/`）全部更新
 
 #### P0-6. 缺 SECURITY.md 漏洞披露策略
 - **位置**：仓库根
@@ -391,3 +393,4 @@
 | 日期 | 修订 | 作者 |
 |---|---|---|
 | 2026-06-24 | 初版：基于 q3 报告的事实纠错 + 6 P0 + 5 P1 + 5 P2 | Claude（补充审计）|
+| 2026-06-25 | P0-5 节事实纠错：CHANGELOG 从未列过"34 工具"（原表写错），删除修复建议中的伪任务；production-gaps-2026-q3.md "34 工具" 加注脚说明为历史快照归档；verify grep 排除 archive/ 目录 | Claude（修正）|
