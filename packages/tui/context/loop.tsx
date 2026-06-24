@@ -558,6 +558,16 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         } else {
           addMessage({ role: "system", content: result.saved > 0 ? `压缩完成，节省 ${result.saved} 条消息` : "无需压缩" })
         }
+        // 重新加载 session 消息以更新 contextTokens
+        if (persistentSessionId) {
+          const history = props.loop.getSessionMessages(persistentSessionId)
+          setMessages(history.map((m, i) => ({
+            id: `hist_${i}`,
+            role: m.role as Message["role"],
+            content: m.content,
+            timestamp: Date.now() - (history.length - i) * 1000,
+          })))
+        }
       }
     } catch (e) {
       addMessage({ role: "system", content: `压缩失败: ${e instanceof Error ? e.message : String(e)}` })
