@@ -7,6 +7,7 @@ import { readFile } from "fs/promises"
 import { existsSync } from "fs"
 import { join, dirname } from "path"
 import { detectProject, buildProjectRole } from "../detect-project"
+import { SubagentManager, type SubagentInput } from "../subagent"
 
 /**
  * 加载项目配置文件（.licode.md / LICODE.md）
@@ -298,6 +299,7 @@ function zodToJsonSchema(schema: any): any {
 export async function execute(ctx: ExecuteContext): Promise<string> {
   if (!ctx.model) return "请配置 LLM provider"
 
+  // 构建工具列表
   const tools: Record<string, any> = {}
   for (const t of globalToolRegistry.list()) {
     const jsonSchemaDef = zodToJsonSchema(t.inputSchema)
@@ -307,6 +309,33 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       inputSchema: jsonSchema(jsonSchemaDef),
     })
   }
+
+  // 创建 SubagentManager 并注册 subagent 工具
+  // 子 agent 共享父 session 的上下文
+  const subagentManager = new SubagentManager({
+    maxConcurrent: 3,
+    timeoutMs: 120000,
+    blockedTools: ["subagent"], // 禁止子 agent 再创建子 agent
+  })
+
+  // 构建系统提示（用于子 agent）
+  const subagentSystem = `你是一个专注于代码开发的 AI 子助手。
+请用中文回答，独立完成分配给你的任务。
+只输出最终结果，不要有多余的解释。`
+
+  // subagent 工具：让 LLM 可以派发并行任务
+  tools["subagent"] = tool({
+    description: "派发一个子任务给独立的 AI agent 并行执行。适用于需要多路并行的场景（如同时搜索多个文件、同时分析多个模块）。输入任务描述和可选的工具白名单。",
+    inputSchema: jsonSchema({
+      type: "object",
+      properties: {
+        task: { type: "string", description: "子任务描述" },
+        tools: { type: "array", items: { type: "string" }, description: "允许使用的工具列表，空表示全部可用" },
+        timeoutMs: { type: "number", description: "超时毫秒，默认 120000" },
+      },
+      required: ["task"],
+    }),
+  })
 
   // 重建 msgs：摘要（如果存在）+ 最近消息 + 本轮 user 输入
   // 有摘要时只保留 user/assistant 纯文本（摘要已记录工具调用历史）
@@ -546,10 +575,26 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         ctx.onToolCall?.(tc.toolName, tcInput, toolBatch)
         const toolId = ctx.timer?.start(`tool.${tc.toolName}`)
         let execResult: any
-        try {
-          execResult = await globalToolRegistry.execute(tc.toolName, tcInput, { cwd: ctx.cwd })
-        } catch (toolError: any) {
-          execResult = { success: false, error: `工具执行异常: ${toolError?.message ?? toolError}` }
+
+        // 子 agent 工具：走 SubagentManager，不走 globalToolRegistry
+        if (tc.toolName === "subagent") {
+          const subagentInput: SubagentInput = {
+            task: tcInput.task as string,
+            tools: tcInput.tools as string[] | undefined,
+            timeoutMs: tcInput.timeoutMs as number | undefined,
+          }
+          execResult = await subagentManager.spawn(subagentInput, {
+            model: ctx.model,
+            system: subagentSystem,
+            messages: msgs.filter(m => m.role === "user" || m.role === "assistant"),
+            cwd: ctx.cwd ?? process.cwd(),
+          })
+        } else {
+          try {
+            execResult = await globalToolRegistry.execute(tc.toolName, tcInput, { cwd: ctx.cwd })
+          } catch (toolError: any) {
+            execResult = { success: false, error: `工具执行异常: ${toolError?.message ?? toolError}` }
+          }
         }
         devLogger.logToolCall(tc.toolName, tc.input, execResult)
         if (toolId) ctx.timer?.end(toolId, { success: execResult?.success ?? false })
@@ -561,8 +606,8 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
           output: {
             type: "text",
             value: execResult?.success
-              ? `OK: ${execResult.output ?? '(无输出)'}`
-              : `Error: ${execResult?.error ?? '未知错误'}`,
+              ? `OK: ${execResult.text ?? execResult.output ?? '(无输出)'}`
+              : `Error: ${execResult.error ?? execResult?.error ?? '未知错误'}`,
           },
         }
       }))
