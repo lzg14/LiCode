@@ -214,6 +214,11 @@ export function Home() {
       else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false); setPendingSlashCmd(null) }
       return
     }
+    // PageUp/PageDown/Home/End: 传递给 scrollbox 处理
+    if (["pageup", "pagedown", "home", "end"].includes(evt.name)) {
+      // 不 preventDefault，让 scrollbox 处理
+      return
+    }
   })
 
   return (
