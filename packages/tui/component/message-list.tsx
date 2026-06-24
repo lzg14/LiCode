@@ -307,7 +307,7 @@ export function MessageList() {
       </For>
 
       {/* 流式内容：未闭合的 pending 文本 */}
-      <Show when={pendingText()}>
+      <Show when={pendingText() || streamMode() === 'in-thinking'}>
         <PendingStreamView />
       </Show>
 
