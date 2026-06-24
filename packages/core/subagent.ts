@@ -8,7 +8,7 @@
  * - 不实现 fork session，子 agent 共享父 session 消息上下文
  */
 
-import { generateText } from "ai"
+import { generateText, tool, jsonSchema } from "ai"
 import { globalToolRegistry } from "../tools/registry"
 import { devLogger } from "./dev-logger"
 import { z } from "zod"
@@ -21,8 +21,6 @@ export interface SubagentInput {
   tools?: string[]
   /** 超时毫秒（默认继承全局配置） */
   timeoutMs?: number
-  /** 是否后台运行（目前无实际区别，第一版简化） */
-  background?: boolean
 }
 
 /** 子 agent 执行结果 */
@@ -30,6 +28,7 @@ export interface SubagentResult {
   success: boolean
   text?: string
   error?: string
+  toolResults?: Array<{ tool: string; output: string }>
   durationMs: number
 }
 
@@ -56,7 +55,7 @@ function zodToJsonSchema(schema: any): any {
  * SubagentManager — 简化的子 agent 生命周期管理
  *
  * 核心能力：
- * 1. spawn() — 创建一个子 agent 执行任务
+ * 1. spawn() — 创建一个子 agent 执行任务（带工具执行循环）
  * 2. runMultiple() — 并发运行多个子 agent（受 maxConcurrent 限制）
  */
 export class SubagentManager {
@@ -66,7 +65,7 @@ export class SubagentManager {
   constructor(private options: SubagentOptions) {}
 
   /**
-   * 创建一个子 agent 执行任务
+   * 创建一个子 agent 执行任务（含工具执行循环）
    */
   async spawn(
     input: SubagentInput,
@@ -86,27 +85,91 @@ export class SubagentManager {
     const start = Date.now()
 
     try {
-      const tools = this.buildTools(input.tools)
       const timeout = input.timeoutMs ?? this.options.timeoutMs
+      const allowedTools = this.buildToolsWithExecute(input.tools, ctx.cwd)
 
-      const result = await Promise.race([
-        generateText({
-          model: ctx.model,
-          system: ctx.system,
-          messages: [...ctx.messages, { role: "user", content: [{ type: "text", text: input.task }] }],
-          tools,
-          temperature: 0.7,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Subagent timeout after ${timeout}ms`)), timeout)
-        ),
-      ])
+      // 构建消息：历史 + 当前任务
+      const taskMessage = { role: "user" as const, content: [{ type: "text" as const, text: input.task }] }
+      const allMessages = [...ctx.messages, taskMessage]
 
-      devLogger.debug("SUBAGENT", `spawn completed in ${Date.now() - start}ms`)
+      let iteration = 0
+      const MAX_TOOL_ITERATIONS = 20
+      let accumulatedText = ""
+
+      while (iteration < MAX_TOOL_ITERATIONS) {
+        iteration++
+
+        const result = await Promise.race([
+          generateText({
+            model: ctx.model,
+            system: ctx.system,
+            messages: allMessages,
+            tools: allowedTools,
+            temperature: 0.7,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Subagent timeout after ${timeout}ms`)), timeout)
+          ),
+        ])
+
+        // 收集文本输出
+        if (result.text) {
+          accumulatedText += result.text + "\n"
+        }
+
+        // 没有 tool calls 说明任务完成
+        if (!result.toolCalls || result.toolCalls.length === 0) {
+          break
+        }
+
+        // 执行工具调用
+        const toolResults = await Promise.all(
+          result.toolCalls.map(async (tc: any) => {
+            devLogger.debug("SUBAGENT-TOOL", `${tc.toolName}`, tc.input)
+            try {
+              const execResult = await globalToolRegistry.execute(tc.toolName, tc.input as Record<string, unknown>, { cwd: ctx.cwd })
+              return {
+                toolCallId: tc.toolCallId,
+                toolName: tc.toolName,
+                output: {
+                  type: "text" as const,
+                  value: execResult.success
+                    ? `OK: ${execResult.output ?? "(无输出)"}`
+                    : `Error: ${execResult.error ?? "未知错误"}`,
+                },
+              }
+            } catch (e) {
+              const err = e instanceof Error ? e.message : String(e)
+              return {
+                toolCallId: tc.toolCallId,
+                toolName: tc.toolName,
+                output: { type: "text" as const, value: `Error: ${err}` },
+              }
+            }
+          })
+        )
+
+        // 把工具结果追加到消息历史
+        allMessages.push({
+          role: "assistant",
+          content: [
+            ...(result.text ? [{ type: "text" as const, text: result.text }] : []),
+            ...result.toolCalls.map((tc: any) => ({
+              type: "tool-call" as const,
+              toolCallId: tc.toolCallId,
+              toolName: tc.toolName,
+              input: tc.input,
+            })),
+          ],
+        })
+        allMessages.push({ role: "tool", content: toolResults })
+      }
+
+      devLogger.debug("SUBAGENT", `spawn completed in ${Date.now() - start}ms (${iteration} iterations)`)
 
       return {
         success: true,
-        text: result.text || "(无输出)",
+        text: accumulatedText.trim() || "(无输出)",
         durationMs: Date.now() - start,
       }
     } catch (e) {
@@ -154,8 +217,8 @@ export class SubagentManager {
     }
   }
 
-  /** 构建工具列表 */
-  private buildTools(allowed?: string[]): Record<string, any> {
+  /** 构建带 execute 的工具列表 */
+  private buildToolsWithExecute(allowed?: string[], cwd?: string): Record<string, any> {
     const allTools = globalToolRegistry.list()
     const blocked = new Set(this.options.blockedTools)
 
@@ -166,10 +229,23 @@ export class SubagentManager {
     const tools: Record<string, any> = {}
     for (const t of filtered) {
       const jsonSchemaDef = zodToJsonSchema(t.inputSchema)
-      tools[t.name] = {
+
+      tools[t.name] = tool({
         description: t.description,
-        parameters: jsonSchemaDef,
-      }
+        inputSchema: jsonSchema(jsonSchemaDef),
+        // AI SDK v6: execute 函数让 generateText 自动执行工具
+        execute: async (args: Record<string, unknown>) => {
+          try {
+            const result = await globalToolRegistry.execute(t.name, args, { cwd: cwd ?? process.cwd() })
+            return result.success
+              ? `OK: ${result.output ?? "(无输出)"}`
+              : `Error: ${result.error ?? "未知错误"}`
+          } catch (e) {
+            const err = e instanceof Error ? e.message : String(e)
+            return `Error: ${err}`
+          }
+        },
+      } as any)
     }
 
     return tools
