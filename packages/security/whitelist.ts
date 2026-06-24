@@ -1,5 +1,5 @@
 const BASE_WHITELIST = [
-  'git', 'cargo', 'npm', 'npx', 'pnpm', 'bun',
+  'git', 'cargo', 'npm', 'npx', 'pnpm', 'bun', 'bunx',
   'ruff', 'mypy', 'eslint', 'prettier', 'biome', 'tsc',
   'psql', 'mysql', 'docker', 'playwright',
   'grep', 'find', 'ls', 'cat', 'head', 'tail', 'wc', 'echo', 'pwd', 'tree',
