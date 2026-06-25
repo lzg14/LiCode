@@ -91,7 +91,11 @@ export class SecurityLayer {
     if (!trimmed) {
       return { allowed: false, reason: '命令为空' }
     }
-    const base = trimmed.split(' ')[0].toLowerCase()
+    // 提取命令基础名称，去掉 .exe 后缀（Windows）
+    let base = trimmed.split(' ')[0].toLowerCase()
+    if (base.endsWith('.exe')) {
+      base = base.slice(0, -4)
+    }
 
     // 检查黑名单
     if (this.config.blockedCommands.includes(base)) {
