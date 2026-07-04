@@ -30,3 +30,9 @@ test-results/
 tsc-*.log
 test-*.log
 vitest-*.log
+
+# Biome 运行产物
+biome-*.txt
+
+# Git 操作日志
+git-restore.txt
