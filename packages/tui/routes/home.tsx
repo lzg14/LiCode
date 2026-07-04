@@ -11,6 +11,13 @@ import { useLoop } from "../context/loop"
 import { modelPickerOpen, setModelPickerOpen, setSidebarVisible, sidebarVisible } from "../context/shortcuts"
 import { useTheme } from "../context/theme"
 
+const BUILTIN_COMMANDS: { type: string; label: string; desc: string }[] = [
+  { type: 'cmd', label: '/clear', desc: '开新会话（清空当前对话）' },
+  { type: 'cmd', label: '/compact', desc: '压缩对话历史' },
+  { type: 'cmd', label: '/help', desc: '查看所有快捷键' },
+  { type: 'cmd', label: '/loop', desc: '定时重复执行 prompt' },
+]
+
 export function Home() {
   const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
@@ -100,12 +107,7 @@ export function Home() {
   const truncate = (s: string, n = 40) => s.length > n ? `${s.slice(0, n)}…` : s
 
   const slashItems = createMemo(() => {
-    const items: { type: string; label: string; desc: string }[] = [
-      { type: 'cmd', label: '/clear', desc: '开新会话（清空当前对话）' },
-      { type: 'cmd', label: '/compact', desc: '压缩对话历史' },
-      { type: 'cmd', label: '/help', desc: '查看所有快捷键' },
-      { type: 'cmd', label: '/loop', desc: '定时重复执行 prompt' },
-    ]
+    const items = [...BUILTIN_COMMANDS]
     for (const s of availableSkills()) {
       items.push({ type: 'skill', label: `/${s.name}`, desc: truncate(s.description) })
     }

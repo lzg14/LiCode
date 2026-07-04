@@ -222,20 +222,45 @@ export class Memory {
   async cleanup(maxAgeMs: number = this.maxAgeMs): Promise<number> {
     await this.ensureInit()
     const now = Date.now()
-    let count = 0
-    const expiredIds: string[] = []
+    const expired: { id: string; scope: MemoryEntry['scope'] }[] = []
 
     for (const [id, entry] of this.entries.entries()) {
       if (now - entry.updatedAt > maxAgeMs) {
-        expiredIds.push(id)
-        count++
+        expired.push({ id, scope: entry.scope })
       }
     }
 
-    for (const id of expiredIds) {
-      await this.delete(id)
+    if (expired.length === 0) return 0
+
+    // 批量从内存 Map 中移除
+    for (const { id } of expired) {
+      this.entries.delete(id)
     }
 
-    return count
+    // 并行删除所有过期文件
+    const deleteErrors: unknown[] = []
+    const results = await Promise.allSettled(
+      expired.map(({ id, scope }) => {
+        let dir: string
+        if (scope === 'global') {
+          dir = join(this.baseDir, 'global')
+        } else if (scope === 'project' && this.projectPath) {
+          const projectId = Buffer.from(this.projectPath).toString('base64').slice(0, 16)
+          dir = join(this.baseDir, 'projects', projectId)
+        } else {
+          dir = join(this.baseDir, 'sessions')
+        }
+        return unlink(join(dir, `${id}.md`))
+      })
+    )
+
+    for (const r of results) {
+      if (r.status === 'rejected') deleteErrors.push(r.reason)
+    }
+    if (deleteErrors.length > 0) {
+      process.stderr.write(`[Memory] cleanup: ${deleteErrors.length} file deletions failed\n`)
+    }
+
+    return expired.length
   }
 }
