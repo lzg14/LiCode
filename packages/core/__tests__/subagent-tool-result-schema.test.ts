@@ -4,13 +4,42 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { SubagentManager } from '../subagent'
 
-// Mock generateText 必须在 import subagent 之前；vitest 会 hoist 到文件顶部
-const mockGenerateText = vi.hoisted(() => vi.fn())
+// Mock generateText 必须在 import subagent 之前
+// 通过 globalThis + vi.mock 避开 bun test runner 下 vi.hoisted 缺失的兼容问题
 vi.mock('ai', () => ({
-  generateText: mockGenerateText,
+  generateText: (...args: any[]) => (globalThis as any).__mockGenerateText__?.(...args),
   tool: (def: any) => def,
   jsonSchema: (schema: any) => schema,
 }))
+
+// 模拟 mockGenerateText 对象，提供 mockReturnValueOnce 和 mock.calls
+const mockGenerateTextQueue: any[] = []
+const mockGenerateTextCalls: any[][] = []
+
+;(globalThis as any).__mockGenerateText__ = (...args: any[]) => {
+  mockGenerateTextCalls.push(args)
+  if (mockGenerateTextQueue.length > 0) {
+    return mockGenerateTextQueue.shift()
+  }
+  return {
+    text: '',
+    toolCalls: [],
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    finishReason: 'stop',
+  }
+}
+
+const mockGenerateText = {
+  mockReturnValueOnce: (value: any) => {
+    mockGenerateTextQueue.push(value)
+    return mockGenerateText
+  },
+  mock: {
+    get calls() {
+      return mockGenerateTextCalls
+    },
+  },
+}
 
 // 注册 read 工具（builtin.registerBuiltinTools 副作用）
 import '../../tools/builtin'

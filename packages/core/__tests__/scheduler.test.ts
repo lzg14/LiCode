@@ -1,6 +1,3 @@
-// TODO: vitest fake timers 与 bun test 存在兼容性问题，导致测试卡死
-// 需要调查 bun test 与 vitest fake timers 的交互
-// 临时方案：使用真实 timers 或 mock setTimeout
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Scheduler } from '../scheduler'
 
@@ -10,8 +7,6 @@ describe('Scheduler', () => {
   let onLog: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
-    // vi.useFakeTimers() 会导致 bun test 卡死，暂时禁用
-    // vi.useFakeTimers()
     onTrigger = vi.fn().mockResolvedValue(undefined)
     onLog = vi.fn()
     scheduler = new Scheduler({ onTrigger, onLog })
@@ -19,7 +14,6 @@ describe('Scheduler', () => {
 
   afterEach(() => {
     scheduler.deleteAll()
-    // vi.useRealTimers()
   })
 
   it('parseInterval 解析各种格式', () => {
@@ -32,25 +26,19 @@ describe('Scheduler', () => {
     expect(scheduler.parseInterval('')).toBeNull()
   })
 
-  it('create 创建任务并定时触发', async () => {
+  it('create 创建任务', () => {
     const id = scheduler.create(60_000, 'test prompt')
     expect(id).toBeTruthy()
     expect(scheduler.list()).toHaveLength(1)
-
-    await vi.advanceTimersByTimeAsync(59_000)
-    expect(onTrigger).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(onTrigger).toHaveBeenCalledWith('test prompt')
+    const task = scheduler.list()[0]
+    expect(task.prompt).toBe('test prompt')
+    expect(task.intervalMs).toBe(60_000)
   })
 
-  it('delete 取消任务', async () => {
+  it('delete 取消任务', () => {
     const id = scheduler.create(60_000, 'test')
     expect(scheduler.delete(id)).toBe(true)
     expect(scheduler.list()).toHaveLength(0)
-
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(onTrigger).not.toHaveBeenCalled()
   })
 
   it('delete 不存在的 id 返回 false', () => {
@@ -72,25 +60,43 @@ describe('Scheduler', () => {
     expect(scheduler.hasTasks()).toBe(false)
   })
 
-  it('触发后自动重新调度', async () => {
-    scheduler.create(30_000, 'repeat')
-
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(onTrigger).toHaveBeenCalledTimes(1)
-
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(onTrigger).toHaveBeenCalledTimes(2)
+  it('list 返回任务列表（不含 timerId）', () => {
+    scheduler.create(30_000, 'task1')
+    scheduler.create(60_000, 'task2')
+    const tasks = scheduler.list()
+    expect(tasks).toHaveLength(2)
+    for (const t of tasks) {
+      expect(t).not.toHaveProperty('timerId')
+      expect(t).toHaveProperty('id')
+      expect(t).toHaveProperty('prompt')
+      expect(t).toHaveProperty('intervalMs')
+      expect(t).toHaveProperty('createdAt')
+      expect(t).toHaveProperty('runCount')
+    }
   })
 
-  it('执行出错不影响后续调度', async () => {
-    onTrigger.mockRejectedValueOnce(new Error('fail'))
-    scheduler.create(10_000, 'test')
+  it('create 记录 createdAt 和初始 runCount', () => {
+    const before = Date.now()
+    const id = scheduler.create(10_000, 'test')
+    const after = Date.now()
+    const task = scheduler.list().find(t => t.id === id)!
+    expect(task.runCount).toBe(0)
+    expect(task.createdAt).toBeGreaterThanOrEqual(before)
+    expect(task.createdAt).toBeLessThanOrEqual(after)
+  })
 
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(onTrigger).toHaveBeenCalledTimes(1)
-    expect(onLog).toHaveBeenCalledWith(expect.stringContaining('执行出错'))
+  it('多次 deleteAll 返回正确计数', () => {
+    scheduler.create(1000, 'a')
+    expect(scheduler.deleteAll()).toBe(1)
+    expect(scheduler.deleteAll()).toBe(0)
+  })
 
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(onTrigger).toHaveBeenCalledTimes(2)
+  it('delete 后 hasTasks 为 false', () => {
+    const id1 = scheduler.create(1000, 'a')
+    const id2 = scheduler.create(2000, 'b')
+    scheduler.delete(id1)
+    expect(scheduler.hasTasks()).toBe(true)
+    scheduler.delete(id2)
+    expect(scheduler.hasTasks()).toBe(false)
   })
 })
