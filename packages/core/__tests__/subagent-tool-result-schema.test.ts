@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { SubagentManager } from '../subagent'
+import { makeMockLanguageModel } from './helpers/mock-model'
 
 // Mock generateText 必须在 import subagent 之前
 // 通过 globalThis + vi.mock 避开 bun test runner 下 vi.hoisted 缺失的兼容问题
@@ -150,7 +151,7 @@ describe('SubagentManager tool-result schema', () => {
     const result = await manager.spawn(
       { task: '读不存在文件' },
       {
-        model: { modelId: 'mock', provider: 'mock' } as any,
+        model: makeMockLanguageModel({ modelId: 'mock', provider: 'mock' }),
         system: 'test',
         messages: [],
         cwd: TEST_DIR,

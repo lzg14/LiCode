@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type ExecuteContext, execute } from '../phases/execute'
+import { makeMockLanguageModel } from './helpers/mock-model'
 
 // 必须先 import builtin，registerBuiltinTools
 import '../../tools/builtin'
@@ -84,7 +85,7 @@ describe('execute - stream pipeThrough 抛错时不应丢 tool-call', () => {
     ;(globalThis as any).__mockStreamTextImpl__ = () => responses[callIdx++]
 
     const ctx: ExecuteContext = {
-      model: { modelId: 'mock-model', provider: 'mock-provider' },
+      model: makeMockLanguageModel(),
       userInput: '读取 stream-error.txt',
       cwd: TEST_DIR,
       history: [{ role: 'user', content: [{ type: 'text', text: '读取 stream-error.txt' }] }],
@@ -103,7 +104,7 @@ describe('execute - stream pipeThrough 抛错时不应丢 tool-call', () => {
       streamTextResultWithPipeThroughBug('纯文本回复', [])
 
     const ctx: ExecuteContext = {
-      model: { modelId: 'mock-model', provider: 'mock-provider' },
+      model: makeMockLanguageModel(),
       userInput: 'hi',
       cwd: TEST_DIR,
       history: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],

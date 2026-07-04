@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type ExecuteContext, execute } from '../phases/execute'
+import { makeMockLanguageModel } from './helpers/mock-model'
 
 // 确保工具已注册（导入 builtin 会注册）
 import '../../tools/builtin'
@@ -54,7 +55,7 @@ describe('execute E2E', () => {
     ;(globalThis as any).__mockStreamText__ = () => streamTextResponse('直接回复')
 
     const ctx: ExecuteContext = {
-      model: { modelId: 'mock-model', provider: 'mock-provider' },
+      model: makeMockLanguageModel(),
       userInput: 'hello',
       cwd: TEST_DIR,
       history: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
@@ -83,7 +84,7 @@ describe('execute E2E', () => {
     ;(globalThis as any).__mockStreamText__ = () => responses[callIdx++]
 
     const ctx: ExecuteContext = {
-      model: { modelId: 'mock-model', provider: 'mock-provider' },
+      model: makeMockLanguageModel(),
       userInput: '请读取 test.txt',
       cwd: TEST_DIR,
       history: [{ role: 'user', content: [{ type: 'text', text: '请读取 test.txt' }] }],

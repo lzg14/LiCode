@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { registerBuiltinTools } from '../../tools/builtin'
+import { makeMockLanguageModel } from './helpers/mock-model'
 
 const TS = String(Date.now())
 const TEST_DIR = join(tmpdir(), `licode-exec-data-${TS}`)
@@ -66,7 +67,7 @@ describe('Cross-conversation context recovery', () => {
     const session = manager.createSession({ title: 'Cross-call', directory: TEST_DIR })
     manager.addMessage({ sessionId: session.id, role: 'user', content: '读 hello.txt 这个文件' })
 
-    const mockModel = { modelId: 'mock-model', provider: 'mock-provider' }
+    const mockModel = makeMockLanguageModel()
 
     // ===== 第一次对话 =====
     await execute({
