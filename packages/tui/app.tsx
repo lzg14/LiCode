@@ -140,7 +140,7 @@ export async function tui(config: any) {
   setSecurityLayer(securityLayer)
   devLogger.info('APP', `SecurityLayer created: ${securityConfig.commandWhitelist.length} commands allowed`)
 
-  const model = await createModel(config.llm)
+  const { model, contextWindow } = await createModel(config.llm)
   const llmProvider: LLMProvider = {
     name: 'compact',
     async complete(req) {
@@ -193,7 +193,7 @@ export async function tui(config: any) {
                     <DialogProvider>
                       <ToastProvider>
                         <Toast />
-                        <LoopProvider loop={loop} model={model} provider={config.llm.provider} sessionId={lastSessionId ?? undefined} llmConfig={config.llm}>
+                        <LoopProvider loop={loop} model={model} provider={config.llm.provider} sessionId={lastSessionId ?? undefined} llmConfig={config.llm} effectiveContextWindow={contextWindow}>
                           <App />
                         </LoopProvider>
                       </ToastProvider>

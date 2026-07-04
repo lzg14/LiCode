@@ -38,7 +38,7 @@ export interface LoopContext {
   onToolResult?: (result: unknown) => void
   onIntermediateText?: (text: string) => void
   onConfirmContinue?: () => Promise<boolean>
-  onCompaction?: (summary: string, originalCount: number, preservedCount: number) => void
+  onCompaction?: (summary: string, originalCount: number, preservedCount: number, error?: Error) => void
   // 流式输出缓冲
   streamBuffer?: string
   // Phase-specific fields
@@ -318,7 +318,11 @@ export class CoreLoop {
         this.sessionCompactor.compact(history, ctx.sessionId, this.llm).then((result) => {
           ctx.onCompaction?.(result.summary, result.originalCount, result.preservedCount)
         }).catch((e) => {
-          devLogger.debug('COMPACT', 'Background compaction failed', e)
+          // 静默失败升级：warn 级让 dev 日志可见，并把错误回调给上层
+          // 让 TUI 能感知（之前完全吞掉，UI 不知情，参考 docs/todos/fix-session-compactor-minimax-m3.md）
+          const err = e instanceof Error ? e : new Error(String(e))
+          devLogger.warn('COMPACT', `Background compaction failed: ${err.message}`, err)
+          ctx.onCompaction?.('', 0, 0, err)
         })
       }
     } else {
