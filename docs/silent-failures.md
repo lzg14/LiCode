@@ -41,7 +41,7 @@
 | 8 | `packages/tools/builtin.ts` - apply_patch 临时文件清理 | swallow | unlink → swallow | ✅ 合理：清理性操作，文件不存在属正常 |
 | a | `packages/cli/index.ts` - runTUI 入口 | visible | `runTUI().catch(console.error)` | ✅ 合理：CLI 入口兜底 |
 | b | `packages/core/loop.ts` - Git 集成 | debug | Git 连接失败 → devLogger.debug | ✅ 合理：Git 是可选功能 |
-| c | `packages/core/loop.ts` - sessionCompactor | debug | 后台压缩失败 → devLogger.debug | ✅ 合理：压缩失败不影响当前对话 |
+| c | `packages/core/loop.ts` - sessionCompactor | warn + visible | 后台压缩失败 → `devLogger.warn` + `onCompaction(error)` 回调 → TUI toast.error + sidebar `⚠` | ✅ 合理：压缩失败不影响当前对话，但用户应该知道历史未压缩、可能撞 contextWindow 硬上限（详见下方"扩展 d"） |
 | d | `packages/tui/util/selection.ts` - doCopy | visible | 用户复制错误 → toast.error | ✅ 合理：直接展示给用户 |
 
 ### 测试代码
@@ -50,6 +50,32 @@
 |---|---|---|---|---|
 | 1 | `packages/core/__tests__/session-recovery.test.ts` | swallow | 测试 DB 清理 `rm -f` → swallow | ✅ 合理：测试 setup 清理 |
 | 2 | `packages/session/__tests__/session.test.ts` | swallow | 测试 DB 清理 `rm -rf` → swallow | ✅ 合理：同上 |
+
+---
+
+## 扩展：非 catch 来源的 silent failure
+
+主表列的是 catch 块——但 silent failure 不止于代码异常。**LLM 自身也是一种 silent failure 来源**：模型/Agent 答应要做某事，最后什么都没做或做了但产物不对，用户/上游完全感知不到失败。
+
+### d · LLM 假装收口（hard-limit 信号缺失）
+
+**位置**：system prompt / execute.ts 的 prompt 拼装（`packages/core/phases/execute.ts:432-441`）
+
+**症状**：
+- LLM 走到第 N 轮时 tool-call 不断（read 一个新文件 → 又 read 一个 → 又 read 一个），耗光 context window
+- LLM 在最后一步写"好的，我会继续修复"但实际没 patch / 没 run 验证 / 没确认交付
+- 用户看到"看起来对话在推进"，但实际只有 tool-call 没产物，最后撞 contextWindow 硬上限 → API 报错或响应截断
+
+**根因**：system prompt 没有给 LLM "硬约束信号"。当前只在第 99 轮注入"这是最后一步"软提醒，LLM 当成建议而非约束。
+
+**修复方向**（待实施）：
+- 每 N 轮（建议 N=20）读 `contextTokens / effectiveContextWindow` 算 remaining%
+- remaining < 20% → system prompt 追加硬约束："禁止 read/grep 新文件；必须基于已有信息 patch + run 验证 + 给出明确 next step"
+- remaining < 10% → 更激进："禁止任何 tool-call，直接给最终回复"
+- 这些约束应该**作为 user message 注入**（不是 system prompt），让 LLM 在最近上下文里看到，权重比 system prompt 高
+- 同时把当前 c 行那条 silent-fail 升级为触发条件——压缩失败后下次 turn 就注入 hard-limit 信号，让 LLM 别继续膨胀 history
+
+**为什么这条归到 silent-failures.md**：用户感觉"对话在推进"实际是 silent failure 的另一种形态——上层（catch 块）没抛错，下层（LLM）也没报错，但最终结果是"什么都没交付"。这正是该文档范畴的延伸：所有"看起来没失败但其实没产出"的路径都该列出来。
 
 ---
 
@@ -73,6 +99,7 @@
 - [ ] 是清理性操作（unlink、close、rm）？→ swallow 是合理的
 - [ ] 测试代码？→ swallow 是合理的
 - [ ] CLI 入口或进程退出路径？→ console.error 是合理的（兜底）
+- [ ] 是否存在**非 catch 的 silent failure**？（LLM 假装收口、shell 命令 return 0 但产物为空、异步 fire-and-forget 回调丢失）→ 在"扩展"章节加条目
 
 ---
 
@@ -90,3 +117,4 @@
 |---|---|---|
 | 2026-06-17 | 初始版本：新增 8 处生产 catch 清单 + console.* 收敛 + scope bug 修复 + reasoning 类型处理 | licode |
 | 2026-06-24 | 行号刷新为函数名定位，新增 4 处 catch，总数更新为 12 处 | licode |
+| 2026-07-04 | c 行更新（sessionCompactor 升级为 warn + visible）；新增"扩展"章节 + d 条目（LLM 假装收口：hard-limit 信号缺失）；同步 review 检查清单加"非 catch 的 silent failure"项 | Claude |
