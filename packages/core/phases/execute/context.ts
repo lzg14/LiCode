@@ -1,9 +1,14 @@
 import type { LanguageModel } from "ai"
-import type { TextPart, ToolCallPart, ToolResultPart } from "@ai-sdk/provider-utils"
+import type { ImagePart, TextPart } from "@ai-sdk/provider-utils"
 import type { SessionManager } from "../../../session/session"
 import type { Timer } from "../../perf"
 
-export type MessageContent = TextPart | ToolCallPart | ToolResultPart
+import type { ToolCallPart, ToolResultPart } from "@ai-sdk/provider-utils"
+
+export type MessageContent = TextPart | ImagePart | ToolCallPart | ToolResultPart
+
+/** 内部消息格式兼容 AI SDK */
+type InternalMessage = { role: string; content: MessageContent[] }
 
 export interface ExecuteContext {
   model: LanguageModel

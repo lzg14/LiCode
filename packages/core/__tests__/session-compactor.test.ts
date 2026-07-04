@@ -264,4 +264,121 @@ describe('SessionCompactor', () => {
       expect(compactor.hasSummary('nonexistent')).toBe(false)
     })
   })
+
+  describe('buildFallbackSummary', () => {
+    it('输出包含全部 6 个一级 section', () => {
+      const compactor = new SessionCompactor(DEFAULT_CONFIG)
+      const summary = (compactor as any).buildFallbackSummary({
+        userIntents: ['重构 module'],
+        fileOps: [],
+        commands: [],
+        conclusions: [],
+      })
+
+      for (const section of [
+        '# Goal',
+        '# Constraints & Preferences',
+        '# Progress',
+        '# Key Decisions',
+        '# Next Steps',
+        '# Critical Context',
+      ]) {
+        expect(summary).toContain(section)
+      }
+    })
+
+    it('Progress 下包含 Done / In Progress / Blocked 三个二级 section', () => {
+      const compactor = new SessionCompactor(DEFAULT_CONFIG)
+      const summary = (compactor as any).buildFallbackSummary({
+        userIntents: [], fileOps: [], commands: [], conclusions: [],
+      })
+      expect(summary).toContain('## Done')
+      expect(summary).toContain('## In Progress')
+      expect(summary).toContain('## Blocked')
+    })
+
+    it('Goal 取 userIntents 第一条', () => {
+      const compactor = new SessionCompactor(DEFAULT_CONFIG)
+      const summary = (compactor as any).buildFallbackSummary({
+        userIntents: ['第一条意图', '第二条意图'],
+        fileOps: [], commands: [], conclusions: [],
+      })
+      const lines = summary.split('\n')
+      const idx = lines.findIndex(l => l === '# Goal')
+      expect(idx).toBeGreaterThanOrEqual(0)
+      expect(lines[idx + 1]).toBe('第一条意图')
+    })
+
+    it('无 userIntents 时 Goal 写"（无）"', () => {
+      const compactor = new SessionCompactor(DEFAULT_CONFIG)
+      const summary = (compactor as any).buildFallbackSummary({
+        userIntents: [], fileOps: [], commands: [], conclusions: [],
+      })
+      expect(summary).toMatch(/# Goal\n（无）/u)
+    })
+
+    it('Done section 列出 fileOps 和 commands（最多 5 + 3 条）', () => {
+      const compactor = new SessionCompactor(DEFAULT_CONFIG)
+      const fileOps = Array.from({ length: 8 }, (_, i) => `src/file-${i}.ts`)
+      const commands = Array.from({ length: 5 }, (_, i) => `cmd-${i}`)
+      const summary = (compactor as any).buildFallbackSummary({
+        userIntents: [], fileOps, commands, conclusions: [],
+      })
+
+      // 验证前 5 个文件出现
+      for (let i = 0; i < 5; i++) {
+        expect(summary).toContain(`- 修改 \`src/file-${i}.ts\``)
+      }
+      // 第 6 个文件应被截断
+      expect(summary).not.toContain('src/file-5.ts')
+      // 前 3 个命令出现
+      for (let i = 0; i < 3; i++) {
+        expect(summary).toContain(`- 执行 \`cmd-${i}\``)
+      }
+      // 第 4 个命令被截断
+      expect(summary).not.toContain('cmd-3')
+    })
+
+    it('无 fileOps 和 commands 时 Done 写"（无）"', () => {
+      const compactor = new SessionCompactor(DEFAULT_CONFIG)
+      const summary = (compactor as any).buildFallbackSummary({
+        userIntents: [], fileOps: [], commands: [], conclusions: [],
+      })
+      expect(summary).toMatch(/## Done\n（无）/u)
+    })
+
+    it('Key Decisions 列出 conclusions（最多 3 条）', () => {
+      const compactor = new SessionCompactor(DEFAULT_CONFIG)
+      const conclusions = ['决策 1', '决策 2', '决策 3', '决策 4', '决策 5']
+      const summary = (compactor as any).buildFallbackSummary({
+        userIntents: [], fileOps: [], commands: [], conclusions,
+      })
+      expect(summary).toContain('- 决策 1')
+      expect(summary).toContain('- 决策 2')
+      expect(summary).toContain('- 决策 3')
+      expect(summary).not.toContain('决策 4')
+    })
+
+    it('Critical Context 标注为降级方案', () => {
+      const compactor = new SessionCompactor(DEFAULT_CONFIG)
+      const summary = (compactor as any).buildFallbackSummary({
+        userIntents: [], fileOps: [], commands: [], conclusions: [],
+      })
+      expect(summary).toContain('（规则提取降级，无 LLM 参与）')
+    })
+
+    it('空 extraction 时所有 section 都有"（无）"占位', () => {
+      const compactor = new SessionCompactor(DEFAULT_CONFIG)
+      const summary = (compactor as any).buildFallbackSummary({
+        userIntents: [], fileOps: [], commands: [], conclusions: [],
+      })
+      expect(summary).toMatch(/# Goal\n（无）/u)
+      expect(summary).toMatch(/# Constraints & Preferences\n（无）/u)
+      expect(summary).toMatch(/## Done\n（无）/u)
+      expect(summary).toMatch(/## In Progress\n（无）/u)
+      expect(summary).toMatch(/## Blocked\n（无）/u)
+      expect(summary).toMatch(/# Key Decisions\n（无）/u)
+      expect(summary).toMatch(/# Next Steps\n（无）/u)
+    })
+  })
 })

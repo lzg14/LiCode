@@ -1,7 +1,6 @@
-/**
- * 收集一段消息中所有的 tool-call 和 tool-result ID
- */
-function collectToolIds(msgs: Array<{ role: string; content: any[] }>, start: number): { calls: Set<string>; results: Set<string> } {
+import type { MessageContent } from "./context"
+
+function collectToolIds(msgs: Array<{ role: string; content: MessageContent[] }>, start: number): { calls: Set<string>; results: Set<string> } {
   const calls = new Set<string>()
   const results = new Set<string>()
   for (let j = start; j < msgs.length; j++) {
@@ -20,7 +19,7 @@ function collectToolIds(msgs: Array<{ role: string; content: any[] }>, start: nu
  * 判断从指定位置开始的消息块是否存在 orphan tool-result
  * （有 tool-result 但缺少对应的 tool-call）
  */
-function hasOrphanFrom(msgs: Array<{ role: string; content: any[] }>, start: number): boolean {
+function hasOrphanFrom(msgs: Array<{ role: string; content: MessageContent[] }>, start: number): boolean {
   const { calls, results } = collectToolIds(msgs, start)
   for (const rid of results) {
     if (!calls.has(rid)) return true
@@ -35,7 +34,7 @@ function hasOrphanFrom(msgs: Array<{ role: string; content: any[] }>, start: num
  * 算法：从第一个 user 消息开始扫描，找到第一个不包含 orphan 的位置。
  * 复杂度：O(n * m)，n = 消息数，m = 平均每条消息的 parts 数。
  */
-export function findValidStart(msgs: Array<{ role: string; content: any[] }>): number {
+export function findValidStart(msgs: Array<{ role: string; content: MessageContent[] }>): number {
   // 第一步：收集全局 tool-call 和 tool-result ID
   const allToolCallIds = new Set<string>()
   const allToolResultIds = new Set<string>()

@@ -1,4 +1,4 @@
-import { type DynamicToolCall, type ImagePart, type TextPart, type Tool, type ToolResultPart, jsonSchema, streamText, tool } from "ai"
+import { type DynamicToolCall, type ImagePart, type LanguageModelUsage, type TextPart, type Tool, type ToolResultPart, jsonSchema, streamText, tool } from "ai"
 import type { ToolResult } from "../../../tools/types"
 import { globalToolRegistry } from "../../../tools/registry"
 import { buildProjectRole, detectProject } from "../../detect-project"
@@ -17,7 +17,7 @@ const MAX_ITERATIONS = 100
 interface LLMResult {
   text?: string
   toolCalls?: DynamicToolCall[]
-  usage: Record<string, number>
+  usage: LanguageModelUsage
   finishReason: string
 }
 
@@ -34,7 +34,7 @@ async function callLLM(
   const streamResult = streamText({
     model: ctx.model,
     system,
-    messages: msgs as Array<{ role: "user" | "assistant" | "tool"; content: Array<any> }>,
+    messages: msgs,
     tools,
     temperature: 0.7,
     abortSignal: ctx.signal,
@@ -59,7 +59,7 @@ async function callLLM(
 
   if (aborted) return null
 
-  const safeAwait = async <T>(p: Promise<T> | undefined, fallback: T, label: string): Promise<T> => {
+  const safeAwait = async <T>(p: PromiseLike<T> | undefined, fallback: T, label: string): Promise<T> => {
     try { return p !== undefined ? await p : fallback }
     catch (e: any) { devLogger.warn('STREAM', `result.${label} rejected: ${e?.message ?? e}`); return fallback }
   }
@@ -67,7 +67,7 @@ async function callLLM(
   const [finalText, finalToolCalls, usage, finishReason] = await Promise.all([
     safeAwait(streamResult.text, '', 'text'),
     safeAwait(streamResult.toolCalls, [], 'toolCalls'),
-    safeAwait(streamResult.usage, { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, 'usage'),
+    safeAwait(streamResult.usage, { inputTokens: 0, outputTokens: 0, totalTokens: 0, inputTokenDetails: { cachedTokens: 0 }, outputTokenDetails: { reasoningTokens: 0 } } as LanguageModelUsage, 'usage'),
     safeAwait(streamResult.finishReason, 'unknown', 'finishReason'),
   ])
 
@@ -302,7 +302,7 @@ function buildInitialMessages(ctx: ExecuteContext): Array<{ role: string; conten
 
 function persistAssistantMessage(ctx: ExecuteContext, text: string, result: LLMResult): void {
   if (!ctx.sessionManager || !ctx.sessionId || !text) return
-  const modelId = (ctx.model as { modelId?: string })?.modelId
+  const modelId = ctx.model.modelId
   try {
     ctx.sessionManager.appendMessageWithParts({
       sessionId: ctx.sessionId,
@@ -319,10 +319,10 @@ function persistAssistantMessage(ctx: ExecuteContext, text: string, result: LLMR
 
 function persistContent(ctx: ExecuteContext, role: string, content: MessageContent[]): void {
   if (!ctx.sessionManager || !ctx.sessionId) return
-  const modelId = (ctx.model as { modelId?: string })?.modelId
+  const modelId = ctx.model.modelId
   try {
     ctx.sessionManager.appendMessageWithParts({
-      sessionId: ctx.sessionId, role: role as any, content,
+      sessionId: ctx.sessionId, role: role as 'user' | 'assistant' | 'system' | 'tool', content,
       ...(role === 'assistant' ? { model: modelId } : {}),
     })
   } catch (e) { devLogger.logException(`execute.persist${role}`, e) }

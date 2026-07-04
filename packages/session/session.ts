@@ -6,6 +6,35 @@ import type { Message, Part, PartType, Session, SessionStatus, SessionSummary } 
 
 export type { Message, Part, PartType, Session, SessionStatus, SessionSummary }
 
+interface SessionRow {
+  id: string
+  title: string
+  directory: string
+  parent_id: string | null
+  context_from: string | null
+  context_watermark: string | null
+  status: string
+  model: string | null
+  provider: string | null
+  token_input: number | null
+  token_output: number | null
+  cost: number | null
+  summary_additions: number | null
+  summary_deletions: number | null
+  summary_files: string | null
+  last_checkpoint_message_id: string | null
+  created_at: number
+  updated_at: number
+  completed_at: number | null
+}
+
+const SESSION_STATUSES: readonly SessionStatus[] = ['idle', 'running', 'blocked', 'completed', 'failed']
+
+/** SQLite 没 enum 约束，DB 里的 status 可能是任意字符串。运行时验证兜底 */
+function parseSessionStatus(raw: string): SessionStatus {
+  return (SESSION_STATUSES as readonly string[]).includes(raw) ? (raw as SessionStatus) : 'failed'
+}
+
 export class SessionManager {
   private db: Database
 
@@ -96,7 +125,7 @@ export class SessionManager {
   getSession(id: string): Session | null {
     const row = this.db.query(
       'SELECT * FROM sessions WHERE id = ?'
-    ).get(id) as any
+    ).get(id) as SessionRow | null
 
     if (!row) return null
 
@@ -134,7 +163,7 @@ export class SessionManager {
       params.push(options.offset)
     }
 
-    const rows = this.db.query(sql).all(...params) as any[]
+    const rows = this.db.query(sql).all(...params) as SessionRow[]
     return rows.map(row => this.rowToSession(row))
   }
 
@@ -598,7 +627,7 @@ export class SessionManager {
       params.push(directory)
     }
     sql += ' ORDER BY updated_at DESC LIMIT 1'
-    const row = this.db.query(sql).get(...params) as any
+    const row = this.db.query(sql).get(...params) as SessionRow | null
     return row ? this.rowToSession(row) : null
   }
 
@@ -606,33 +635,33 @@ export class SessionManager {
     this.db.close()
   }
 
-  private rowToSession(row: any): Session {
-    const summaryFiles = row.summary_files ? JSON.parse(row.summary_files) : undefined
+  private rowToSession(row: SessionRow): Session {
+    const summaryFiles = row.summary_files ? (JSON.parse(row.summary_files) as string[]) : undefined
     return {
       id: row.id,
       title: row.title,
       directory: row.directory,
-      parentId: row.parent_id,
-      contextFrom: row.context_from,
-      contextWatermark: row.context_watermark,
-      status: row.status,
-      model: row.model,
-      provider: row.provider,
-      tokenUsage: row.token_input > 0 ? {
-        input: row.token_input,
-        output: row.token_output,
-        total: row.token_input + row.token_output,
+      parentId: row.parent_id ?? undefined,
+      contextFrom: row.context_from ?? undefined,
+      contextWatermark: row.context_watermark ?? undefined,
+      status: parseSessionStatus(row.status),
+      model: row.model ?? undefined,
+      provider: row.provider ?? undefined,
+      tokenUsage: (row.token_input ?? 0) > 0 ? {
+        input: row.token_input ?? 0,
+        output: row.token_output ?? 0,
+        total: (row.token_input ?? 0) + (row.token_output ?? 0),
       } : undefined,
-      cost: row.cost,
-      summary: (row.summary_additions || row.summary_deletions || summaryFiles) ? {
+      cost: row.cost ?? undefined,
+      summary: (row.summary_additions ?? 0) > 0 || (row.summary_deletions ?? 0) > 0 || summaryFiles ? {
         additions: row.summary_additions ?? 0,
         deletions: row.summary_deletions ?? 0,
         files: summaryFiles ?? [],
       } : undefined,
-      lastCheckpointMessageId: row.last_checkpoint_message_id,
+      lastCheckpointMessageId: row.last_checkpoint_message_id ?? undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      completedAt: row.completed_at,
+      completedAt: row.completed_at ?? undefined,
     }
   }
 }
