@@ -1,3 +1,4 @@
+import type { LanguageModel } from "ai"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createOpenAI } from "@ai-sdk/openai"
 import { getModelConfig, PROVIDER_PRIORITY } from "./catalog"
@@ -79,7 +80,7 @@ function createModelForProvider(provider: string, config: ModelConfig) {
  * 否则 MiniMax-M3[1M] 会被剥成 MiniMax-M3 命中 128K 而不是 1M。
  */
 export interface CreateModelResult {
-  model: any
+  model: LanguageModel
   contextWindow: number | undefined
 }
 

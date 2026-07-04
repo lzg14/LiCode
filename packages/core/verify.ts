@@ -46,7 +46,7 @@ async function checkDeliverable(d: Deliverable, cwd: string): Promise<VerifyResu
     case 'glob_match':
       return checkGlobMatch(d.glob!, cwd)
     default:
-      return { passed: false, message: `未知的 check 类型: ${(d as any).check}` }
+      return { passed: false, message: `未知的 check 类型: ${(d as Deliverable).check}` }
   }
 }
 
@@ -119,13 +119,14 @@ function checkHasNoError(path: string, cwd: string): VerifyResult {
       timeout: 60000,
     })
     return { passed: true }
-  } catch (err: any) {
-    return {
-      passed: false,
-      message: `TypeScript 编译错误: ${path}`,
-      detail: err.stdout?.toString() || err.message
+    } catch (err) {
+      const e = err as { stdout?: Buffer; message?: string }
+      return {
+        passed: false,
+        message: `TypeScript 编译错误: ${path}`,
+        detail: e.stdout?.toString() || e.message || String(err),
+      }
     }
-  }
 }
 
 function checkGlobMatch(globPattern: string, cwd: string): VerifyResult {

@@ -1,12 +1,10 @@
 import { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { Message, Part, PartType, Session } from './types'
-import type { SessionSummary, SessionStatus } from './types'
-
-export type { Message, Part, PartType, Session, SessionSummary, SessionStatus }
-
 import { SCHEMA } from './schema'
+import type { Message, Part, PartType, Session, SessionStatus, SessionSummary } from './types'
+
+export type { Message, Part, PartType, Session, SessionStatus, SessionSummary }
 
 export class SessionManager {
   private db: Database

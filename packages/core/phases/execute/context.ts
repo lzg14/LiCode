@@ -1,7 +1,12 @@
+import type { LanguageModel } from "ai"
+import type { TextPart, ToolCallPart, ToolResultPart } from "@ai-sdk/provider-utils"
+import type { SessionManager } from "../../../session/session"
 import type { Timer } from "../../perf"
 
+export type MessageContent = TextPart | ToolCallPart | ToolResultPart
+
 export interface ExecuteContext {
-  model: any
+  model: LanguageModel
   userInput: string
   userImages?: Array<{ base64: string; mimeType: string }>
   cwd?: string
@@ -13,10 +18,10 @@ export interface ExecuteContext {
   onToolResult?: (result: unknown) => void
   onIntermediateText?: (text: string) => void
   onConfirmContinue?: () => Promise<boolean>
-  history?: Array<{ role: string; content: any[] }>
+  history?: Array<{ role: string; content: MessageContent[] }>
   sessionSummary?: string
   sessionId?: string
-  sessionManager?: any
+  sessionManager?: SessionManager
   activeSkill?: string | null
   activeSkillInstructions?: string | null
   timer?: Timer

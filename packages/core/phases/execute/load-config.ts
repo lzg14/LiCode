@@ -5,6 +5,11 @@ import { devLogger } from "../../dev-logger"
 
 const projectConfigCache = new Map<string, string>()
 
+/** 清除配置缓存（开发场景下文件变更后调用） */
+export function clearProjectConfigCache(): void {
+  projectConfigCache.clear()
+}
+
 export async function loadProjectConfig(cwd?: string): Promise<string> {
   const dir = cwd || process.cwd()
 
