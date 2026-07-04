@@ -2,9 +2,13 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { exec } from 'node:child_process'
+import { promisify } from 'node:util'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { registerBuiltinTools } from '../builtin'
 import { globalToolRegistry } from '../registry'
+
+const execAsync = promisify(exec)
 
 const TEST_DIR = join(tmpdir(), `licode-test-${Date.now()}`)
 const TEST_FILE = join(TEST_DIR, 'test.txt')
@@ -299,4 +303,376 @@ describe('websearch tool (cn.bing.com)', () => {
     const links = output.match(/\[.+?\]\(https?:\/\/.+?\)/g) ?? []
     expect(links.length).toBeGreaterThan(0)
   }, 15000)
+})
+
+describe('git_status tool', () => {
+  it('should return git status', async () => {
+    const result = await globalToolRegistry.execute('git_status', { cwd: 'D:/ProjectFile/licode' })
+    expect(result.success).toBe(true)
+    expect(result.output).toBeDefined()
+  })
+
+  it('should return clean working tree message when clean', async () => {
+    // 使用临时目录测试干净工作树的情况
+    const tempGitDir = join(tmpdir(), `licode-git-test-${Date.now()}`)
+    await mkdir(tempGitDir, { recursive: true })
+    
+    try {
+      // 初始化 git 仓库
+      await execAsync('git init', { cwd: tempGitDir })
+      
+      const result = await globalToolRegistry.execute('git_status', { cwd: tempGitDir })
+      expect(result.success).toBe(true)
+      expect(result.output).toBe('工作区干净')
+    } finally {
+      await rm(tempGitDir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('git_diff tool', () => {
+  it('should return git diff', async () => {
+    const result = await globalToolRegistry.execute('git_diff', { cwd: 'D:/ProjectFile/licode' })
+    expect(result.success).toBe(true)
+    expect(result.output).toBeDefined()
+  })
+
+  it('should return no changes message when no diff', async () => {
+    // 使用临时目录测试无变更的情况
+    const tempGitDir = join(tmpdir(), `licode-git-diff-test-${Date.now()}`)
+    await mkdir(tempGitDir, { recursive: true })
+    
+    try {
+      // 初始化 git 仓库并创建初始提交
+      await execAsync('git init', { cwd: tempGitDir })
+      await writeFile(join(tempGitDir, 'test.txt'), 'initial content', 'utf-8')
+      await execAsync('git add .', { cwd: tempGitDir })
+      await execAsync('git commit -m "initial commit"', { cwd: tempGitDir })
+      
+      const result = await globalToolRegistry.execute('git_diff', { cwd: tempGitDir })
+      expect(result.success).toBe(true)
+      expect(result.output).toBe('无变更')
+    } finally {
+      await rm(tempGitDir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('git_log tool', () => {
+  it('should return git log', async () => {
+    const result = await globalToolRegistry.execute('git_log', { cwd: 'D:/ProjectFile/licode' })
+    expect(result.success).toBe(true)
+    expect(result.output).toBeDefined()
+  })
+
+  it('should respect count parameter', async () => {
+    const result = await globalToolRegistry.execute('git_log', { cwd: 'D:/ProjectFile/licode', count: 5 })
+    expect(result.success).toBe(true)
+    expect(result.output).toBeDefined()
+    // 检查输出行数是否不超过5行
+    const lines = (result.output as string).split('\n').filter(line => line.trim() !== '')
+    expect(lines.length).toBeLessThanOrEqual(5)
+  })
+})
+
+describe('webfetch tool', () => {
+  // 网络依赖测试。CI 环境无网络时默认跳过。
+  const HAS_NETWORK = process.env.LICODE_TEST_NETWORK !== 'false'
+  const itNet = HAS_NETWORK ? it : it.skip
+
+  itNet('should be registered with correct description', () => {
+    const tool = globalToolRegistry.list().find(t => t.name === 'webfetch')
+    expect(tool).toBeDefined()
+    expect(tool?.description).toContain('网页')
+  })
+
+  itNet('should fetch URL content', async () => {
+    const result = await globalToolRegistry.execute('webfetch', {
+      url: 'https://example.com',
+    })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('Example Domain')
+  }, 30000)
+
+  itNet('should fetch markdown format', async () => {
+    const result = await globalToolRegistry.execute('webfetch', {
+      url: 'https://example.com',
+      format: 'markdown',
+    })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('Example Domain')
+  }, 30000)
+
+  itNet('should handle invalid URL', async () => {
+    const result = await globalToolRegistry.execute('webfetch', {
+      url: 'http://invalid.invalid.invalid',
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toBeDefined()
+  }, 30000)
+
+  itNet('should handle non-existent URL', async () => {
+    const result = await globalToolRegistry.execute('webfetch', {
+      url: 'https://example.com/nonexistent',
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('404')
+  }, 30000)
+})
+
+describe('grep tool', () => {
+  const grepDir = join(TEST_DIR, 'grep-test')
+  const subDir = join(grepDir, 'sub')
+
+  beforeAll(async () => {
+    await mkdir(subDir, { recursive: true })
+    // 创建测试文件
+    await writeFile(join(grepDir, 'file1.txt'), 'Hello world\nFoo bar\nHello again', 'utf-8')
+    await writeFile(join(grepDir, 'file2.ts'), 'const x = 1;\nconst y = 2;\nfunction hello() {}', 'utf-8')
+    await writeFile(join(subDir, 'nested.txt'), 'Nested file content\nHello from nested', 'utf-8')
+  })
+
+  it('should search file content', async () => {
+    const result = await globalToolRegistry.execute('grep', { pattern: 'Hello', path: grepDir })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('Hello world')
+    expect(result.output).toContain('Hello again')
+    expect(result.output).toContain('Hello from nested')
+  })
+
+  it('should search with regex pattern', async () => {
+    const result = await globalToolRegistry.execute('grep', { pattern: 'const', path: grepDir })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('const')
+  })
+
+  it('should search recursively in subdirectories', async () => {
+    const result = await globalToolRegistry.execute('grep', { pattern: 'Nested', path: grepDir })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('Nested file content')
+  })
+
+  it('should filter by include pattern', async () => {
+    const result = await globalToolRegistry.execute('grep', { pattern: 'Hello', path: grepDir, include: '*.txt' })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('Hello world')
+    // .ts 文件不应匹配
+    expect(result.output).not.toContain('file2.ts')
+  })
+
+  it('should return no match message when pattern not found', async () => {
+    const result = await globalToolRegistry.execute('grep', { pattern: 'NONEXISTENT_PATTERN_XYZ_12345', path: grepDir })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('未找到匹配')
+  })
+
+  it('should handle case-sensitive search', async () => {
+    const result = await globalToolRegistry.execute('grep', { pattern: 'Hello', path: grepDir })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('Hello')
+  })
+
+  it('should search specific file with include pattern', async () => {
+    const result = await globalToolRegistry.execute('grep', { pattern: 'function', path: grepDir, include: 'file2.ts' })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('function')
+  })
+})
+
+describe('todo_write tool', () => {
+  beforeEach(async () => {
+    const { setTodos } = await import('../../tui/context/todos')
+    setTodos([])
+  })
+
+  it('should create todo items', async () => {
+    const items = [
+      { id: '1', content: 'Test task 1', status: 'pending' as const },
+      { id: '2', content: 'Test task 2', status: 'in_progress' as const },
+    ]
+    const result = await globalToolRegistry.execute('todo_write', { items })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('已更新 2 个 todo')
+  })
+
+  it('should fail with duplicate ids', async () => {
+    const items = [
+      { id: '1', content: 'Task 1', status: 'pending' as const },
+      { id: '1', content: 'Task 2', status: 'completed' as const },
+    ]
+    const result = await globalToolRegistry.execute('todo_write', { items })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('重复的 todo id')
+  })
+
+  it('should support activeForm field', async () => {
+    const items = [
+      { id: '1', content: 'Task with form', status: 'in_progress' as const, activeForm: 'Working on it' },
+    ]
+    const result = await globalToolRegistry.execute('todo_write', { items })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe('todo_read tool', () => {
+  beforeEach(async () => {
+    const { setTodos } = await import('../../tui/context/todos')
+    setTodos([])
+  })
+
+  it('should return message when no todos', async () => {
+    const result = await globalToolRegistry.execute('todo_read', {})
+    expect(result.success).toBe(true)
+    expect(result.output).toBe('暂无 todo')
+  })
+
+  it('should read todo items with correct icons', async () => {
+    const { setTodos } = await import('../../tui/context/todos')
+    setTodos([
+      { id: '1', content: 'Pending task', status: 'pending' },
+      { id: '2', content: 'In progress task', status: 'in_progress' },
+      { id: '3', content: 'Completed task', status: 'completed' },
+      { id: '4', content: 'Cancelled task', status: 'cancelled' },
+    ])
+    const result = await globalToolRegistry.execute('todo_read', {})
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('⬜ [1] Pending task')
+    expect(result.output).toContain('🔄 [2] In progress task')
+    expect(result.output).toContain('✅ [3] Completed task')
+    expect(result.output).toContain('❌ [4] Cancelled task')
+  })
+
+  it('should show activeForm when present', async () => {
+    const { setTodos } = await import('../../tui/context/todos')
+    setTodos([
+      { id: '1', content: 'Task with form', status: 'in_progress', activeForm: 'Coding' },
+    ])
+    const result = await globalToolRegistry.execute('todo_read', {})
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('🔄 [1] Task with form (Coding)')
+  })
+})
+
+describe('todo status updates', () => {
+  beforeEach(async () => {
+    const { setTodos } = await import('../../tui/context/todos')
+    setTodos([])
+  })
+
+  it('should update todo status from pending to completed', async () => {
+    await globalToolRegistry.execute('todo_write', {
+      items: [{ id: '1', content: 'Update task', status: 'pending' }],
+    })
+    await globalToolRegistry.execute('todo_write', {
+      items: [{ id: '1', content: 'Update task', status: 'completed' }],
+    })
+    const result = await globalToolRegistry.execute('todo_read', {})
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('✅ [1]')
+    expect(result.output).not.toContain('⬜ [1]')
+  })
+
+  it('should update todo status from in_progress to cancelled', async () => {
+    await globalToolRegistry.execute('todo_write', {
+      items: [{ id: '1', content: 'Cancel task', status: 'in_progress' }],
+    })
+    await globalToolRegistry.execute('todo_write', {
+      items: [{ id: '1', content: 'Cancel task', status: 'cancelled' }],
+    })
+    const result = await globalToolRegistry.execute('todo_read', {})
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('❌ [1]')
+  })
+
+  it('should replace entire todo list on write', async () => {
+    await globalToolRegistry.execute('todo_write', {
+      items: [
+        { id: '1', content: 'Task 1', status: 'pending' },
+        { id: '2', content: 'Task 2', status: 'pending' },
+      ],
+    })
+    // Write only one item — replaces entire list
+    await globalToolRegistry.execute('todo_write', {
+      items: [{ id: '3', content: 'Task 3', status: 'completed' }],
+    })
+    const result = await globalToolRegistry.execute('todo_read', {})
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('✅ [3]')
+    expect(result.output).not.toContain('Task 1')
+    expect(result.output).not.toContain('Task 2')
+  })
+})
+
+describe('apply_patch tool', () => {
+  const patchTestFile = join(TEST_DIR, 'patch-test.txt')
+  const patchTestContent = 'Hello, licode!\nLine 2\nLine 3'
+
+  beforeEach(async () => {
+    await writeFile(patchTestFile, patchTestContent, 'utf-8')
+  })
+
+  it('should apply JSON patch with replace operation', async () => {
+    const patch = JSON.stringify([
+      { op: 'replace', path: 'Hello, licode!', value: 'Hello, world!' }
+    ])
+    const result = await globalToolRegistry.execute('apply_patch', {
+      filePath: patchTestFile,
+      patch,
+    })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('JSON 补丁应用成功')
+    const content = await readFile(patchTestFile, 'utf-8')
+    expect(content).toBe('Hello, world!\nLine 2\nLine 3')
+  })
+
+  it('should apply multiple JSON patch operations', async () => {
+    const patch = JSON.stringify([
+      { op: 'replace', path: 'Line 2', value: 'Second line' },
+      { op: 'replace', path: 'Line 3', value: 'Third line' }
+    ])
+    const result = await globalToolRegistry.execute('apply_patch', {
+      filePath: patchTestFile,
+      patch,
+    })
+    expect(result.success).toBe(true)
+    expect(result.output).toContain('JSON 补丁应用成功')
+    const content = await readFile(patchTestFile, 'utf-8')
+    expect(content).toBe('Hello, licode!\nSecond line\nThird line')
+  })
+
+  it('should handle invalid patch format', async () => {
+    const invalidPatch = 'this is not a valid patch'
+    const result = await globalToolRegistry.execute('apply_patch', {
+      filePath: patchTestFile,
+      patch: invalidPatch,
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('补丁格式不支持')
+  })
+
+  it('should handle non-existent file', async () => {
+    const patch = JSON.stringify([
+      { op: 'replace', path: 'test', value: 'replaced' }
+    ])
+    const result = await globalToolRegistry.execute('apply_patch', {
+      filePath: '/nonexistent/file.txt',
+      patch,
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('文件不存在')
+  })
+
+  it('should handle patch with no matching content', async () => {
+    const patch = JSON.stringify([
+      { op: 'replace', path: 'nonexistent content', value: 'replaced' }
+    ])
+    const result = await globalToolRegistry.execute('apply_patch', {
+      filePath: patchTestFile,
+      patch,
+    })
+    // JSON patch should succeed even if content not found (replace returns original if no match)
+    expect(result.success).toBe(true)
+    const content = await readFile(patchTestFile, 'utf-8')
+    expect(content).toBe(patchTestContent)
+  })
 })

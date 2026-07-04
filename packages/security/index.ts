@@ -17,24 +17,24 @@ export {
  * 危险命令模式 - 需要二次确认
  */
 export const DANGEROUS_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
-  { pattern: /rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+|-\s+f\s+).*\//g, description: '强制递归删除' },
-  { pattern: /rm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+|-\s+r\s+).*\//g, description: '递归删除目录' },
-  { pattern: /curl\s+.*\|\s*(ba)?sh/g, description: 'curl 管道执行脚本' },
-  { pattern: /wget\s+.*\|\s*(ba)?sh/g, description: 'wget 管道执行脚本' },
-  { pattern: /sudo\s+/g, description: '使用 sudo 提权' },
-  { pattern: /chmod\s+777/g, description: '给所有人写权限' },
-  { pattern: /chmod\s+-R\s+777/g, description: '递归给所有人写权限' },
-  { pattern: /mkfs\./g, description: '格式化磁盘' },
-  { pattern: /dd\s+if=/g, description: 'dd 裸写磁盘' },
-  { pattern: />\s*\/dev\/sd[a-z]/g, description: '直接写磁盘设备' },
+  { pattern: /rm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+|-\s+f\s+).*\//, description: '强制递归删除' },
+  { pattern: /rm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+|-\s+r\s+).*\//, description: '递归删除目录' },
+  { pattern: /curl\s+.*\|\s*(ba)?sh/, description: 'curl 管道执行脚本' },
+  { pattern: /wget\s+.*\|\s*(ba)?sh/, description: 'wget 管道执行脚本' },
+  { pattern: /sudo\s+/, description: '使用 sudo 提权' },
+  { pattern: /chmod\s+777/, description: '给所有人写权限' },
+  { pattern: /chmod\s+-R\s+777/, description: '递归给所有人写权限' },
+  { pattern: /mkfs\./, description: '格式化磁盘' },
+  { pattern: /dd\s+if=/, description: 'dd 裸写磁盘' },
+  { pattern: />\s*\/dev\/sd[a-z]/, description: '直接写磁盘设备' },
   // PowerShell 危险模式
-  { pattern: /Remove-Item\s+(-Recurse|-Force|-rf)\b/gi, description: 'PowerShell 强制删除' },
-  { pattern: /Set-ExecutionPolicy\s+Unrestricted/gi, description: '禁用 PowerShell 执行策略' },
-  { pattern: /Invoke-Expression\b/gi, description: 'PowerShell 动态执行' },
-  { pattern: /\|\s*iex\b/gi, description: 'iex 管道执行' },
-  { pattern: /Clear-RecycleBin\s+-Force/gi, description: '清空回收站' },
-  { pattern: /Format-Volume\b/gi, description: '格式化磁盘' },
-  { pattern: /Stop-Service\s+-Force/gi, description: '强制停止系统服务' },
+  { pattern: /Remove-Item\s+(-Recurse|-Force|-rf)\b/i, description: 'PowerShell 强制删除' },
+  { pattern: /Set-ExecutionPolicy\s+Unrestricted/i, description: '禁用 PowerShell 执行策略' },
+  { pattern: /Invoke-Expression\b/i, description: 'PowerShell 动态执行' },
+  { pattern: /\|\s*iex\b/i, description: 'iex 管道执行' },
+  { pattern: /Clear-RecycleBin\s+-Force/i, description: '清空回收站' },
+  { pattern: /Format-Volume\b/i, description: '格式化磁盘' },
+  { pattern: /Stop-Service\s+-Force/i, description: '强制停止系统服务' },
 ]
 
 /**
@@ -42,7 +42,6 @@ export const DANGEROUS_PATTERNS: Array<{ pattern: RegExp; description: string }>
  */
 export function checkDangerousPattern(command: string): { dangerous: boolean; reason?: string } {
   for (const { pattern, description } of DANGEROUS_PATTERNS) {
-    pattern.lastIndex = 0
     if (pattern.test(command)) {
       return { dangerous: true, reason: `检测到危险操作: ${description}` }
     }
