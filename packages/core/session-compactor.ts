@@ -25,6 +25,8 @@ export interface CompactionConfig {
   maxMessages: number
   /** 触发压缩的 token 数阈值（估） */
   maxTokens: number
+  /** contextWindow 未知（未注册模型）时使用的兜底阈值；取 min(maxTokens, unknownModelThreshold) */
+  unknownModelThreshold: number
   /** 压缩后保留的最近消息数 */
   preserveRecent: number
   /** 防抖间隔（ms），同一 session 压缩后此时间内不再压缩 */
@@ -46,6 +48,8 @@ const DEFAULT_CONFIG: CompactionConfig = {
   maxMessages: 200,
   /**  token 估算用 length/4（中英文混合粗估），阈值 20 万 = ~80 万字符 */
   maxTokens: 200_000,
+  /** 未注册模型时兜底阈值（10 万 tokens），避免 fallback 到 maxTokens=200K 永远不触发 */
+  unknownModelThreshold: 100_000,
   preserveRecent: 30,
   /** 10 分钟内不重复压缩 */
   debounceMs: 600_000,
@@ -75,8 +79,11 @@ export class SessionCompactor {
     const msgCount = messages.length
     const estimatedTokens = this.estimateTokens(messages)
 
-    // 优先用传入的 contextWindow * 0.8，否则用配置的 maxTokens
-    const tokenThreshold = contextWindow ? Math.floor(contextWindow * 0.8) : this.config.maxTokens
+    // 优先用传入的 contextWindow * 0.8，否则用 unknownModelThreshold / maxTokens 取较小者
+    // 关键：maxTokens=200K 会让绝大多数模型永远触发不了（contextWindow ≤ 200K），所以未注册模型必须用更紧的兜底
+    const tokenThreshold = contextWindow
+      ? Math.floor(contextWindow * 0.8)
+      : Math.min(this.config.maxTokens, this.config.unknownModelThreshold)
 
     if (msgCount >= this.config.maxMessages) {
       devLogger.debug('COMPACTOR', `msgCount=${msgCount} >= ${this.config.maxMessages}, will compact`)

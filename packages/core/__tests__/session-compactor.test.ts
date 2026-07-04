@@ -4,6 +4,7 @@ import { SessionCompactor, type CompactionConfig } from '../session-compactor'
 const DEFAULT_CONFIG: CompactionConfig = {
   maxMessages: 200,
   maxTokens: 100000,
+  unknownModelThreshold: 50000,
   preserveRecent: 3,
   debounceMs: 0, // 禁用防抖，方便测试
   dataDir: '',

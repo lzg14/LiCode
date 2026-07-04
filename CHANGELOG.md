@@ -8,6 +8,10 @@
 ## [Unreleased]
 
 ### 修复
+- **SessionCompactor 失效根因修复（MiniMax-M3[1M] 等带后缀模型）**：
+  - **effectiveContextWindow 链路**：`createModel` 返回 `{ model, contextWindow }`，用原始 `config.model` 字符串查 catalog（不被 normalize 副作用影响）；TUI `LoopProvider` 加 `effectiveContextWindow` prop；`Sidebar` 优先用它替代 `getModelConfig(currentModel())`（`currentModel` 是被 normalize 剥后缀的 modelId，会让 MiniMax-M3[1M] 用户误报 128K 而不是 1M）
+  - **fallback 阈值收紧**：`CompactionConfig` 新增 `unknownModelThreshold = 100_000`，未注册模型走 `Math.min(maxTokens, unknownModelThreshold)` 而不是单一的 `maxTokens=200_000`（之前 fallback 200K 让绝大多数模型永远触发不了压缩）
+  - **silent-fail 升级**：`onCompaction` 回调加第 4 个参数 `error?: Error`；后台压缩失败从 `devLogger.debug` 升级到 `devLogger.warn`，并把错误回调给上层；TUI 加 `compactionError` signal，sidebar 显示 `⚠ 压缩失败: ...`
 - **内存泄漏 4 个根因修复**：
   - `subagent.ts` race timer 永不 clearTimeout → 每个 subagent 调用泄漏一个 timeoutMs 长寿闭包
   - `Memory.entries` 永久累积 + `cleanup()` 从不被调用 → 长期运行后 Map 单调增长；新增 `hardCap` (默认 1000) 自动淘汰最旧
@@ -16,6 +20,8 @@
 - **加载过期 memory 文件不再入内存**：`Memory.loadFromDir` 用文件 mtimeMs 作为 updatedAt 并按 `maxAgeMs` (默认 30 天) 过滤；过期文件保留在磁盘上由显式 `cleanup()` 删除
 
 ### 测试
+- **resolveContextWindow 单元测试**：7 个用例覆盖 MiniMax-M3 / MiniMax-M3[1M] / 未注册模型查表行为
+- **session-compactor unknownModelThreshold 回归测试**：3 个用例验证未注册模型走更紧兜底、contextWindow 已知仍走 80%、maxTokens 不会拉大兜底
 - **subagent clearTimeout 回归测试**：验证 spawn 完成后 race timer 必须 clearTimeout
 - **memory eviction 回归测试**：3 个用例覆盖过期文件不入内存、store 超过 hardCap 淘汰最旧、加载时按 mtime 限制数量
 - **session metadata 冗余回归测试**：验证 parts.metadata 不再包含完整原始对象

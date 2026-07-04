@@ -85,6 +85,10 @@ export interface LoopContext {
   setActiveSkill: (name: string | null) => void
   currentModel: Accessor<string>
   currentProvider: Accessor<string>
+  /** 该模型真实的 context window（由 createModel 用原始 model 字符串查 catalog 得到，不被 normalize 副作用影响） */
+  effectiveContextWindow: Accessor<number | undefined>
+  /** 最近一次后台压缩的错误；null 表示正常；UI 据此显示 ⚠️ 警示 */
+  compactionError: Accessor<Error | null>
   switchModel: (modelId: string) => void
   switchProvider: (providerId: string) => void
   getAvailableModels: () => string[]
@@ -100,7 +104,7 @@ export interface LoopContext {
 
 const Ctx = createContext<LoopContext>()
 
-export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; provider?: string; sessionId?: string; llmConfig?: { provider: string; model: string; apiKey?: string; baseUrl?: string } }) {
+export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; provider?: string; sessionId?: string; llmConfig?: { provider: string; model: string; apiKey?: string; baseUrl?: string }; effectiveContextWindow?: number }) {
   const toast = useToast()
   const [isProcessing, setIsProcessing] = createSignal(false)
   const [elapsed, setElapsed] = createSignal(0)
@@ -111,6 +115,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const [llmTokenUsage, setLlmTokenUsage] = createSignal({ input: 0, output: 0, total: 0 })
   const [currentModel, setCurrentModel] = createSignal(props.model?.modelId ?? "unknown")
   const [currentProvider, setCurrentProvider] = createSignal(props.provider ?? "deepseek")
+  const [effectiveContextWindow, setEffectiveContextWindow] = createSignal<number | undefined>(props.effectiveContextWindow)
+  const [compactionError, setCompactionError] = createSignal<Error | null>(null)
   const [activeSkill, setActiveSkillState] = createSignal<string | null>(null)
   const [activeSkillInstructions, setActiveSkillInstructions] = createSignal<string | null>(null)
   // VERIFY 阶段状态
@@ -490,7 +496,18 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             setIsProcessing(false)
           })
         },
-        onCompaction: (summary: string, originalCount: number, preservedCount: number) => {
+        onCompaction: (summary: string, originalCount: number, preservedCount: number, error?: Error) => {
+          if (error) {
+            // 压缩失败不再静默：toast.error + signal 让 sidebar 显示 ⚠️
+            setCompactionError(error)
+            toast.show({
+              message: `压缩失败: ${error.message.slice(0, 80)}`,
+              variant: "error",
+              duration: 8000,
+            })
+            return
+          }
+          setCompactionError(null)
           addMessage({ role: "system", content: `🗜️ 已压缩对话历史：${originalCount} 条 → 保留 ${preservedCount} 条\n\n摘要预览：\n${summary.slice(0, 500)}${summary.length > 500 ? '...' : ''}` })
           const saved = originalCount - preservedCount
           toast.show({
@@ -659,6 +676,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     listSkills,
     currentModel,
     currentProvider,
+    effectiveContextWindow,
+    compactionError,
     switchModel,
     switchProvider,
     getAvailableModels,

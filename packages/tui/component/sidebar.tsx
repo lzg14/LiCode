@@ -10,7 +10,7 @@ const VERSION = "0.2.0"
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning, error } = useTheme()
   const config = useConfig()
-  const { isProcessing, messages, llmCallCount, llmTokenUsage, contextTokens, currentModel, activeSkill, activeSkillInstructions } = useLoop()
+  const { isProcessing, messages, llmCallCount, llmTokenUsage, contextTokens, currentModel, effectiveContextWindow, compactionError, activeSkill, activeSkillInstructions } = useLoop()
 
   const msgCount = createMemo(() => messages().length)
   const toolCallCount = createMemo(() => messages().filter((m) => m.role === "tool").length)
@@ -24,8 +24,11 @@ export function Sidebar() {
   })
 
   // 模型上下文窗口信息
+  // 优先用 createModel 返回的 effectiveContextWindow（用原始 model 字符串查 catalog，不受 normalize 副作用影响）。
+  // fallback 才查 currentModel（已被 normalize 剥后缀）+ 128K 兜底。
+  // 这样 MiniMax-M3[1M] 用户能看到 1M context 而不是误报 128K。
   const modelInfo = createMemo(() => getModelConfig(currentModel()))
-  const maxContext = createMemo(() => modelInfo()?.contextWindow ?? 128000)
+  const maxContext = createMemo(() => effectiveContextWindow() ?? modelInfo()?.contextWindow ?? 128000)
   const contextUsage = createMemo(() => maxContext() > 0 ? (contextTokens() / maxContext()) * 100 : 0)
   const contextColor = createMemo(() => {
     if (contextUsage() > 95) return error()
@@ -80,6 +83,12 @@ export function Sidebar() {
           </text>
         </box>
       </box>
+
+      <Show when={compactionError()}>
+        <box paddingTop={1} flexDirection="row">
+          <text fg={error()}>⚠ 压缩失败：{compactionError()!.message.slice(0, 60)}</text>
+        </box>
+      </Show>
 
       <Show when={msgCount() > 0}>
         <box flexDirection="column" gap={0} paddingTop={1}>
