@@ -10,7 +10,7 @@ import { useToast } from "../ui/toast"
 import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
-function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
+export function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
   const images: Array<{ base64: string; mimeType: string }> = []
   // 匹配 @ 后跟文件路径（支持绝对路径、相对路径、~ 路径）
   const cleaned = text.replace(/@(\S+\.(?:png|jpe?g|gif|webp|bmp|svg))/gi, (_, filePath: string) => {
@@ -399,6 +399,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
 
     abortController = new AbortController()
     addMessage({ role: "user", content: cleanText, images: allImages.length > 0 ? allImages : undefined })
+    // 让消息先渲染，再做后续状态更新（避免 solid 批量合并导致"输入清了但消息没出来"的卡顿）
+    await new Promise(r => queueMicrotask(r))
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
     setIsProcessing(true)
