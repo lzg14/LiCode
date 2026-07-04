@@ -299,9 +299,11 @@ export class CoreLoop {
     // 通知阶段变化
     ctx.onPhaseChange?.(phase)
 
-    // 加载 session 历史消息
+    // 加载 session 历史消息（limit=1000 防止长会话每次 turn 加载整个 history 触发循环压缩）
+    // SQLite 完整历史仍保留供审计，limit 只限制本次加载到 shouldCompact 看到的条数
+    // 配合 SessionCompactor.maxMessages=1000，msgCount 涨到 1000 才触发压缩
     const historyStartId = timer.start('history.load')
-    const history = this.sessionManager.getMessagesAsModelMessages(ctx.sessionId)
+    const history = this.sessionManager.getMessagesAsModelMessages(ctx.sessionId, { limit: 1000 })
     timer.end(historyStartId, { count: history.length })
 
     // 检查是否需要压缩历史（基于 context window 80% 阈值）

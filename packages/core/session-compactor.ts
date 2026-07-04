@@ -45,12 +45,14 @@ export interface CompactionResult {
 }
 
 const DEFAULT_CONFIG: CompactionConfig = {
-  maxMessages: 200,
+  /** 触发压缩的消息数阈值（1000：提高避免频繁压缩） */
+  maxMessages: 1000,
   /**  token 估算用 length/4（中英文混合粗估），阈值 20 万 = ~80 万字符 */
   maxTokens: 200_000,
   /** 未注册模型时兜底阈值（10 万 tokens），避免 fallback 到 maxTokens=200K 永远不触发 */
   unknownModelThreshold: 100_000,
-  preserveRecent: 30,
+  /** 压缩后保留的最近消息数（100：保留更多上下文给 LLM） */
+  preserveRecent: 100,
   /** 10 分钟内不重复压缩 */
   debounceMs: 600_000,
   dataDir: '',

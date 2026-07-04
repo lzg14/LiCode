@@ -342,7 +342,8 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
   // 无摘要时保留全部（最多 100 条）+ tool/tool-call 配对校验
   const rawHistory = ctx.history ?? []
   const hasSummary = !!ctx.sessionSummary
-  const PRESERVE_RECENT = hasSummary ? 30 : 100
+  // 匹配 SessionCompactor.preserveRecent=100：有摘要时 LLM 调用传最近 100 条（不靠摘要，保留更多原始上下文）
+  const PRESERVE_RECENT = hasSummary ? 100 : 200
   const sliced = rawHistory.length > PRESERVE_RECENT
     ? rawHistory.slice(-PRESERVE_RECENT)
     : rawHistory
