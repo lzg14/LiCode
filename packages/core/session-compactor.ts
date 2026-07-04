@@ -214,12 +214,43 @@ export class SessionCompactor {
   ): Promise<string> {
     const conversationText = this.formatMessagesForSummary(messages)
 
-    const prompt = `你是一个对话摘要助手。请根据以下对话记录，写一段 3-5 句的连贯摘要，说明：
-1）做了什么任务
-2）有什么技术决策
-3）项目当前状态
+    const prompt = `你是一个对话摘要助手。请根据以下对话记录，按结构化格式输出摘要。
 
-直接输出摘要正文，不要前缀说明，不要输出任何 XML 标签（如 <think>）。
+## 输出格式
+
+\`\`\`markdown
+# Goal
+一句话说明当前任务目标
+
+# Constraints & Preferences
+- 技术约束、用户偏好、不做什么
+
+# Progress
+## Done
+- 已完成的关键步骤
+
+## In Progress
+- 正在进行的工作
+
+## Blocked
+- 被阻塞的事项（如有）
+
+# Key Decisions
+- 重要的技术选型或设计决策
+
+# Next Steps
+- 接下来要做的事
+
+# Critical Context
+- 测试状态、版本号、关键配置等影响后续工作的信息
+\`\`\`
+
+## 规则
+- 每个 section 用 1-5 个 bullet point，不要长段落
+- Done 和 In Progress 按时间倒序排列（最新的在前）
+- 如果某个 section 无内容，写"（无）"
+- 直接输出 markdown，不要包裹在 \`\`\` 代码块中
+- 不要输出 <think> 标签
 
 ## 对话记录
 ${conversationText}`
@@ -227,11 +258,11 @@ ${conversationText}`
     const response = await llm.complete({
       model: '',
       messages: [
-        { role: 'system', content: '你是对话摘要助手，直接输出摘要正文，不要其他内容。' },
+        { role: 'system', content: '你是对话摘要助手，按指定的 markdown 结构输出摘要，不要包裹在代码块中，不要输出其他内容。' },
         { role: 'user', content: prompt },
       ],
       temperature: 0.3,
-      maxTokens: 600,
+      maxTokens: 800,
     })
 
     return response.content ?? ''
@@ -349,25 +380,63 @@ ${conversationText}`
   }
 
   private buildFallbackSummary(extraction: ExtractionResult): string {
-    const parts: string[] = []
+    const lines: string[] = []
 
+    lines.push('# Goal')
     if (extraction.userIntents.length > 0) {
-      parts.push(`用户进行了以下操作：${extraction.userIntents.slice(0, 5).join('；')}`)
+      lines.push(extraction.userIntents[0])
+    } else {
+      lines.push('（无）')
     }
 
+    lines.push('')
+    lines.push('# Constraints & Preferences')
+    lines.push('（无）')
+
+    lines.push('')
+    lines.push('# Progress')
+    lines.push('## Done')
     if (extraction.fileOps.length > 0) {
-      parts.push(`涉及文件：${extraction.fileOps.slice(0, 5).join('、')}`)
+      for (const f of extraction.fileOps.slice(0, 5)) {
+        lines.push(`- 修改 \`${f}\``)
+      }
     }
-
     if (extraction.commands.length > 0) {
-      parts.push(`执行命令：${extraction.commands.slice(0, 3).join('；')}`)
+      for (const c of extraction.commands.slice(0, 3)) {
+        lines.push(`- 执行 \`${c}\``)
+      }
+    }
+    if (extraction.fileOps.length === 0 && extraction.commands.length === 0) {
+      lines.push('（无）')
     }
 
+    lines.push('')
+    lines.push('## In Progress')
+    lines.push('（无）')
+
+    lines.push('')
+    lines.push('## Blocked')
+    lines.push('（无）')
+
+    lines.push('')
+    lines.push('# Key Decisions')
     if (extraction.conclusions.length > 0) {
-      parts.push(`关键结论：${extraction.conclusions.slice(0, 3).join('；')}`)
+      for (const c of extraction.conclusions.slice(0, 3)) {
+        lines.push(`- ${c}`)
+      }
+    } else {
+      lines.push('（无）')
     }
 
-    return parts.join('\n') || '暂无摘要内容'
+    lines.push('')
+    lines.push('# Next Steps')
+    lines.push('（无）')
+
+    lines.push('')
+    lines.push('# Critical Context')
+    lines.push('（规则提取降级，无 LLM 参与）')
+
+    return lines.join('\n')
   }
 
   // ─── 持久化 ─────────────────────────────────────────
