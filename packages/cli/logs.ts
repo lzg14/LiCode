@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
 const DEV_LOG_DIR = join(homedir(), '.licode', 'logs', 'dev')
 
@@ -34,7 +36,7 @@ function printHelp() {
   bun run logs --search "session"       搜索 session 相关日志`)
 }
 
-function main() {
+export function main() {
   const args = process.argv.slice(2)
 
   if (args.includes('--help') || args.includes('-h')) {
@@ -120,4 +122,10 @@ function main() {
   }
 }
 
-main()
+if (
+  process.argv[1] &&
+  (resolve(process.argv[1]) === fileURLToPath(import.meta.url) ||
+    process.argv[1].replace(/\\/g, "/").endsWith("packages/cli/logs.ts"))
+) {
+  main()
+}
