@@ -1,4 +1,4 @@
-import { type DynamicToolCall, type ImagePart, type LanguageModelUsage, type TextPart, type Tool, type ToolResultPart, jsonSchema, streamText, tool } from "ai"
+import { type DynamicToolCall, type ImagePart, type TextPart, type Tool, type ToolResultPart, jsonSchema, streamText, tool } from "ai"
 import type { ToolResult } from "../../../tools/types"
 import { globalToolRegistry } from "../../../tools/registry"
 import { buildProjectRole, detectProject } from "../../detect-project"
@@ -17,7 +17,7 @@ const MAX_ITERATIONS = 100
 interface LLMResult {
   text?: string
   toolCalls?: DynamicToolCall[]
-  usage: LanguageModelUsage
+  usage: any
   finishReason: string
 }
 
@@ -34,7 +34,7 @@ async function callLLM(
   const streamResult = streamText({
     model: ctx.model,
     system,
-    messages: msgs,
+    messages: msgs as any,
     tools,
     temperature: 0.7,
     abortSignal: ctx.signal,
@@ -67,13 +67,13 @@ async function callLLM(
   const [finalText, finalToolCalls, usage, finishReason] = await Promise.all([
     safeAwait(streamResult.text, '', 'text'),
     safeAwait(streamResult.toolCalls, [], 'toolCalls'),
-    safeAwait(streamResult.usage, { inputTokens: 0, outputTokens: 0, totalTokens: 0, inputTokenDetails: { cachedTokens: 0 }, outputTokenDetails: { reasoningTokens: 0 } } as LanguageModelUsage, 'usage'),
+    safeAwait(streamResult.usage, {} as any, 'usage'),
     safeAwait(streamResult.finishReason, 'unknown', 'finishReason'),
   ])
 
   const result: LLMResult = {
     text: finalText || undefined,
-    toolCalls: finalToolCalls.length > 0 ? finalToolCalls : undefined,
+    toolCalls: finalToolCalls.length > 0 ? (finalToolCalls as DynamicToolCall[]) : undefined,
     usage,
     finishReason,
   }
@@ -302,7 +302,7 @@ function buildInitialMessages(ctx: ExecuteContext): Array<{ role: string; conten
 
 function persistAssistantMessage(ctx: ExecuteContext, text: string, result: LLMResult): void {
   if (!ctx.sessionManager || !ctx.sessionId || !text) return
-  const modelId = ctx.model.modelId
+  const modelId = (ctx.model as any).modelId
   try {
     ctx.sessionManager.appendMessageWithParts({
       sessionId: ctx.sessionId,
@@ -319,7 +319,7 @@ function persistAssistantMessage(ctx: ExecuteContext, text: string, result: LLMR
 
 function persistContent(ctx: ExecuteContext, role: string, content: MessageContent[]): void {
   if (!ctx.sessionManager || !ctx.sessionId) return
-  const modelId = ctx.model.modelId
+  const modelId = (ctx.model as any).modelId
   try {
     ctx.sessionManager.appendMessageWithParts({
       sessionId: ctx.sessionId, role: role as 'user' | 'assistant' | 'system' | 'tool', content,

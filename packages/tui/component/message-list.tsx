@@ -95,20 +95,6 @@ function PendingStreamView(props: { syntaxStyle?: SyntaxStyle }) {
   )
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  const m = Math.floor(ms / 60000)
-  const s = Math.floor((ms % 60000) / 1000)
-  return `${m}m${s}s`
-}
-
-function beijingTime(ts: number): string {
-  const d = new Date(ts)
-  const cst = new Date(d.getTime() + 8 * 60 * 60 * 1000)
-  return cst.toISOString().slice(11, 19)
-}
-
 function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
   const { primary, text, textMuted, error, success, warning, info } = useTheme()
 
@@ -146,10 +132,6 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
         {/* 完全照搬 mimocode：markdown 组件永远 streaming={true}
             避免 streaming 切换到 false 触发 finalize 操作的整 viewport 重绘（闪烁） */}
         <ThinkingView display={display} streaming={true} syntaxStyle={props.syntaxStyle} />
-        <Show when={props.msg.duration !== undefined}>
-          <text fg={textMuted()}>{`  ${props.msg.duration}s`}</text>
-        </Show>
-        <text fg={textMuted()}>{`  ${beijingTime(props.msg.timestamp)}`}</text>
       </box>
     )
   }
@@ -161,7 +143,6 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
     const statusColor = props.msg.toolStatus === "completed" ? success()
       : props.msg.toolStatus === "error" ? error() : warning()
     const toolArgs = props.msg.toolArgs && props.msg.toolName ? formatToolArgs(props.msg.toolName, props.msg.toolArgs) : ""
-    const durText = props.msg.duration !== undefined ? formatDuration(props.msg.duration) : ""
     return (
       <box flexDirection="column" marginBottom={0}>
         <box flexDirection="row">
@@ -169,9 +150,6 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
             <text fg={statusColor}>{` ${statusIcon}`}</text>
           </Show>
           <text fg={textMuted()}>{` ${props.msg.toolName ?? props.msg.content}`}</text>
-          <Show when={durText}>
-            <text fg={textMuted()}>{` (${durText})`}</text>
-          </Show>
         </box>
         <Show when={toolArgs}>
           <box paddingLeft={1}>
