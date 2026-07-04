@@ -1,7 +1,7 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
-import { dirname } from 'path'
-import { SessionManager } from './session'
-import { checkpointPath, memoryPath, notesPath, ensureDir, metaDir, memoryRoot } from './checkpoint-paths'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { checkpointPath, ensureDir, memoryPath, metaDir, } from './checkpoint-paths'
+import type { SessionManager } from './session'
 
 export const CHECKPOINT_TEMPLATE = `# Session checkpoint
 

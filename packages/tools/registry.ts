@@ -1,8 +1,8 @@
-import type { ToolDefinition, ToolResult } from './types'
+import { checkDangerousPattern, getSecurityLayer } from '../security'
 import type { ToolContext } from './context'
 import { createToolContext } from './context'
 import { truncateOutput } from './truncate'
-import { getSecurityLayer, checkDangerousPattern } from '../security'
+import type { ToolDefinition, ToolResult } from './types'
 
 export type PreExecuteHook = (
   name: string,

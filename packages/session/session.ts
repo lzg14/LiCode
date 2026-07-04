@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
-import { existsSync, mkdirSync } from 'fs'
-import { dirname } from 'path'
+import { existsSync, mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 
 export type SessionStatus = 'idle' | 'running' | 'blocked' | 'completed' | 'failed'
 

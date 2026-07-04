@@ -1,4 +1,4 @@
-import { createContext, useContext, type JSX, type Accessor } from "solid-js"
+import { type Accessor, createContext, type JSX, useContext } from "solid-js"
 
 export interface HistoryContext {
   list: Accessor<string[]>

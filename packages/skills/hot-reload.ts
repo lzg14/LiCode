@@ -1,6 +1,6 @@
-import { watch, existsSync, readFileSync } from 'fs'
-import type { Skill } from './types'
+import { existsSync, readFileSync, watch } from 'node:fs'
 import { globalSkillRegistry } from './registry'
+import type { Skill } from './types'
 
 export class SkillHotReload {
   private watchers = new Map<string, () => void>()

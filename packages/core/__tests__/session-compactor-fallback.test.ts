@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest"
-import { SessionCompactor, type CompactionConfig } from "../session-compactor"
+import { describe, expect, it } from "vitest"
+import { type CompactionConfig, SessionCompactor } from "../session-compactor"
 
 const BASE_CONFIG: CompactionConfig = {
   maxMessages: 200,

@@ -1,5 +1,5 @@
-import { useTheme } from "../context/theme"
 import type { JSX } from "solid-js"
+import { useTheme } from "../context/theme"
 
 const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 

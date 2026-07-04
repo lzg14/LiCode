@@ -157,7 +157,7 @@ export class Timer {
 
     const renderSpan = (s: PerfSpan, depth: number) => {
       const dur = s.durationMs !== undefined ? `${s.durationMs.toFixed(1)}ms` : '...'
-      const prefix = '  '.repeat(depth) + '- '
+      const prefix = `${'  '.repeat(depth)}- `
       const bar = '█'.repeat(Math.min(40, Math.round((s.durationMs ?? 0) / 50)))
       lines.push(`${prefix}${s.name.padEnd(28)} ${dur.padStart(10)}  ${bar}`)
       const children = this.spans.filter(c => c.parent === s.id)

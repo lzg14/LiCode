@@ -1,16 +1,17 @@
-import { isCommandAllowed, getDefaultWhitelist, DEFAULT_WHITELIST, BLOCKED_COMMANDS } from './whitelist'
+import path from 'path'
 import { checkSensitivePath } from './sensitive'
+import { BLOCKED_COMMANDS, getDefaultWhitelist, } from './whitelist'
 
+export type { PermissionAction, PermissionContext, PermissionRule } from './permission'
 // 导出权限系统
 export {
-  PermissionManager,
-  PERMISSION_PRESETS,
   createPermissionManager,
   mergePermissions,
-  PermissionRuleSchema,
+  PERMISSION_PRESETS,
   PermissionConfigSchema,
+  PermissionManager,
+  PermissionRuleSchema,
 } from './permission'
-export type { PermissionAction, PermissionRule, PermissionContext } from './permission'
 
 /**
  * 危险命令模式 - 需要二次确认
@@ -119,9 +120,9 @@ export class SecurityLayer {
   /**
    * 检查文件路径是否允许访问
    */
-  checkPath(path: string): { allowed: boolean; reason?: string } {
+  checkPath(filePath: string): { allowed: boolean; reason?: string } {
     // 检查敏感路径
-    const sensitiveWarning = checkSensitivePath(path)
+    const sensitiveWarning = checkSensitivePath(filePath)
     if (sensitiveWarning) {
       return {
         allowed: false,
@@ -129,14 +130,32 @@ export class SecurityLayer {
       }
     }
 
-    // 规范化路径分隔符后检查拒绝路径
-    const normalizedPath = path.replace(/\\/g, '/')
-    for (const denied of this.config.deniedPaths) {
+    // 使用 path.resolve() 规范化路径，处理 ../../etc/passwd 等相对路径遍历
+    const resolvedPath = path.resolve(filePath)
+    const normalizedResolved = resolvedPath.replace(/\\/g, '/')
+
+    // 合并拒绝路径列表：平台特定 + 跨平台安全目录
+    const unixSafeDirs = ['/etc', '/sys', '/proc']
+    const allDenied = [...new Set([...this.config.deniedPaths, ...unixSafeDirs])]
+
+    for (const denied of allDenied) {
       const normalizedDenied = denied.replace(/\\/g, '/')
-      if (normalizedPath.startsWith(normalizedDenied)) {
+      const resolvedDenied = path.resolve(denied).replace(/\\/g, '/')
+
+      // 检查原始路径是否以拒绝路径开头（处理绝对路径直接匹配）
+      const normalizedOriginal = filePath.replace(/\\/g, '/')
+      if (normalizedOriginal.startsWith(normalizedDenied)) {
         return {
           allowed: false,
-          reason: `路径 "${path}" 在拒绝列表中`,
+          reason: `路径 "${filePath}" 在拒绝列表中`,
+        }
+      }
+
+      // 检查解析后的路径是否以解析后的拒绝路径开头（处理相对路径遍历）
+      if (normalizedResolved.startsWith(resolvedDenied)) {
+        return {
+          allowed: false,
+          reason: `路径 "${filePath}" 在拒绝列表中`,
         }
       }
     }

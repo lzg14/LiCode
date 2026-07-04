@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { verifyDeliverables } from '../verify'
-import { writeFileSync, mkdirSync, rmSync } from 'fs'
-import { join } from 'path'
 
 const testDir = join(__dirname, '__verify_test_tmp__')
 
@@ -63,7 +63,7 @@ describe('verifyDeliverables', () => {
     writeFileSync(join(testDir, 'a.ts'), '')
     writeFileSync(join(testDir, 'b.ts'), '')
     // 使用正斜杠（glob 规范）
-    const globPattern = testDir.replace(/\\/g, '/') + '/*.ts'
+    const globPattern = `${testDir.replace(/\\/g, '/')}/*.ts`
     const results = await verifyDeliverables([
       { glob: globPattern, check: 'glob_match' }
     ])

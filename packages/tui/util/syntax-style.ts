@@ -1,4 +1,4 @@
-import { SyntaxStyle, RGBA } from "@opentui/core"
+import { RGBA, SyntaxStyle } from "@opentui/core"
 
 function hex(input: string): RGBA {
   let s = input.replace("#", "").trim()

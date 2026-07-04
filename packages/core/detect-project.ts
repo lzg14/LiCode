@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'fs'
-import { join, dirname } from 'path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 export interface ProjectInfo {
   language: string          // 'typescript' | 'python' | 'go' | 'rust' | 'java' | 'csharp' | 'unknown'
@@ -75,7 +75,7 @@ function detectFramework(cwd: string): string | undefined {
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
     const deps = { ...pkg.dependencies, ...pkg.devDependencies }
     if (deps['@nestjs/core']) return 'nest'
-    if (deps['next']) return 'next'
+    if (deps.next) return 'next'
     if (deps.express) return 'express'
     if (deps.fastify) return 'fastify'
     if (deps.react) return 'react'

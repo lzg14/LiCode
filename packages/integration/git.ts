@@ -1,6 +1,6 @@
-import simpleGit, { type SimpleGit, type StatusResult, type LogResult } from 'simple-git'
-import { existsSync } from 'fs'
-import { join } from 'path'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import simpleGit, { type LogResult, type SimpleGit, type StatusResult } from 'simple-git'
 import { BaseIntegration, type HealthStatus } from './types'
 
 /**

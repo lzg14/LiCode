@@ -1,9 +1,9 @@
-import type { Skill, SkillResult } from './types'
 import { globalSkillRegistry } from './registry'
 import { skillSelfImprove } from './self-improve'
+import type { SkillResult } from './types'
 
 export class SkillExecutor {
-  async execute(skillName: string, context: Record<string, unknown> = {}): Promise<SkillResult> {
+  async execute(skillName: string, _context: Record<string, unknown> = {}): Promise<SkillResult> {
     const skill = globalSkillRegistry.findByName(skillName)
     if (!skill) {
       return { success: false, error: `Skill not found: ${skillName}` }

@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from 'fs'
-import { SessionManager } from './session'
+import { existsSync, readFileSync } from 'node:fs'
 import { hasMemoryOrTasks, renderRebuildContext } from './checkpoint'
 import { checkpointPath } from './checkpoint-paths'
+import type { SessionManager } from './session'
 
 /**
  * 构建会话上下文的 system prompt 注入部分。

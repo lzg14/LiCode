@@ -1,16 +1,16 @@
-import { Switch, Match, ErrorBoundary, onMount } from "solid-js"
+import { type CliRendererConfig, createCliRenderer } from "@opentui/core"
 import { render, useKeyboard, useRenderer } from "@opentui/solid"
-import { createCliRenderer, type CliRendererConfig } from "@opentui/core"
-import { CoreLoop } from "../core/loop"
-import { configLoader } from "../config/loader"
-import { createModel } from "../llm/provider"
-import { registerBuiltinTools } from "../tools/builtin"
-import { createSecurityLayer, setSecurityLayer } from "../security"
-import { devLogger, setupGlobalErrorHandlers } from "../core/dev-logger"
-import { doCopy } from "./util/selection"
-import { focusInput } from "./component/prompt"
 import { generateText } from "ai"
+import { ErrorBoundary, Match, onMount, Switch } from "solid-js"
+import { configLoader } from "../config/loader"
+import { devLogger, setupGlobalErrorHandlers } from "../core/dev-logger"
+import { CoreLoop } from "../core/loop"
+import { createModel } from "../llm/provider"
 import type { LLMProvider } from "../llm/types"
+import { createSecurityLayer, setSecurityLayer } from "../security"
+import { registerBuiltinTools } from "../tools/builtin"
+import { focusInput } from "./component/prompt"
+import { doCopy } from "./util/selection"
 
 /** 保存终端尺寸，用于 Ctrl+L 刷新 */
 let savedWidth = 80
@@ -37,15 +37,15 @@ function getTerminalSize(): { width: number; height: number } {
   return { width: 80, height: 24 }
 }
 
-import { ThemeProvider } from "./context/theme"
-import { RouteProvider, useRoute } from "./context/route"
 import { ConfigProvider } from "./context/config"
-import { LoopProvider, useLoop } from "./context/loop"
-import { KeybindProvider } from "./context/keybind"
 import { HistoryProvider } from "./context/history"
-import { DialogProvider } from "./ui/dialog"
-import { ToastProvider, useToast, Toast } from "./ui/toast"
+import { KeybindProvider } from "./context/keybind"
+import { LoopProvider, useLoop } from "./context/loop"
+import { RouteProvider, useRoute } from "./context/route"
+import { ThemeProvider } from "./context/theme"
 import { Home } from "./routes/home"
+import { DialogProvider } from "./ui/dialog"
+import { Toast, ToastProvider, useToast } from "./ui/toast"
 
 setupGlobalErrorHandlers(devLogger)
 
@@ -65,7 +65,7 @@ async function loadConfig() {
 
 function App() {
   const route = useRoute()
-  const loop = useLoop()
+  const _loop = useLoop()
   const renderer = useRenderer()
   const toast = useToast()
 

@@ -1,4 +1,3 @@
-import { Show } from 'solid-js'
 import type { SyntaxStyle } from '@opentui/core'
 import { useTheme } from '../context/theme'
 import { createMarkdownSyntaxStyle } from '../util/syntax-style'

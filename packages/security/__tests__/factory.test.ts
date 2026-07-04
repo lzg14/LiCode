@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { createSecurityLayer, SecurityLayer, setSecurityLayer, getSecurityLayer, checkDangerousPattern } from '../index'
-import { getDefaultWhitelist, BLOCKED_COMMANDS } from '../whitelist'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { checkDangerousPattern, createSecurityLayer, getSecurityLayer, type SecurityLayer, setSecurityLayer } from '../index'
+import { BLOCKED_COMMANDS, getDefaultWhitelist } from '../whitelist'
 
 describe('SecurityLayer factory', () => {
   it('should create SecurityLayer with no config (platform defaults)', () => {

@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { SessionManager } from '../session'
-import { join } from 'path'
-import { tmpdir } from 'os'
-import { rm } from 'fs/promises'
 
 const TEST_DB = join(tmpdir(), `licode-session-raw-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`)
 let manager: SessionManager
@@ -14,8 +14,8 @@ beforeAll(() => {
 afterAll(async () => {
   manager.close()
   await rm(TEST_DB, { force: true }).catch(() => {})
-  await rm(TEST_DB + '-wal', { force: true }).catch(() => {})
-  await rm(TEST_DB + '-shm', { force: true }).catch(() => {})
+  await rm(`${TEST_DB}-wal`, { force: true }).catch(() => {})
+  await rm(`${TEST_DB}-shm`, { force: true }).catch(() => {})
 })
 
 describe('SessionManager part metadata 不应包含完整原始对象副本', () => {
@@ -39,7 +39,7 @@ describe('SessionManager part metadata 不应包含完整原始对象副本', ()
     expect(messages.length).toBe(1)
 
     // 通过 SQLite raw query 直接拿 part 的 metadata 字段，避免走 ORM 重建
-    const rows = manager['db']
+    const rows = manager.db
       .query(`SELECT id, metadata FROM parts WHERE message_id = ?`)
       .all(messages[0].id) as any[]
 

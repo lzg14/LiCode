@@ -1,4 +1,4 @@
-import { createContext, useContext, createSignal, type JSX, type Accessor } from "solid-js"
+import { type Accessor, createContext, createSignal, type JSX, useContext } from "solid-js"
 
 export type Route =
   | { type: "home" }

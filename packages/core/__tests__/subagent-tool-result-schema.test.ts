@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, afterAll } from 'vitest'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { SubagentManager } from '../subagent'
-import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
 
 // Mock generateText 必须在 import subagent 之前；vitest 会 hoist 到文件顶部
 const mockGenerateText = vi.hoisted(() => vi.fn())
@@ -80,8 +80,8 @@ describe('SubagentManager tool-result schema', () => {
 
     const toolMsg = messages.find((m) => m.role === 'tool')
     expect(toolMsg).toBeDefined()
-    expect(Array.isArray(toolMsg!.content)).toBe(true)
-    expect(toolMsg!.content.length).toBeGreaterThan(0)
+    expect(Array.isArray(toolMsg?.content)).toBe(true)
+    expect(toolMsg?.content.length).toBeGreaterThan(0)
 
     for (const part of toolMsg!.content) {
       expect(part.type).toBe('tool-result')

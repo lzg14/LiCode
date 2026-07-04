@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { existsSync } from 'node:fs'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { registerBuiltinTools } from '../builtin'
 import { globalToolRegistry } from '../registry'
-import { writeFile, mkdir, rm, readFile } from 'fs/promises'
-import { existsSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
 
 const TEST_DIR = join(tmpdir(), `licode-test-${Date.now()}`)
 const TEST_FILE = join(TEST_DIR, 'test.txt')
@@ -268,7 +268,7 @@ describe('websearch tool (cn.bing.com)', () => {
   itNet('should be registered with bing description', () => {
     const tool = globalToolRegistry.list().find(t => t.name === 'websearch')
     expect(tool).toBeDefined()
-    expect(tool!.description).toContain('cn.bing.com')
+    expect(tool?.description).toContain('cn.bing.com')
   })
 
   itNet('should return results with title and real URL', async () => {

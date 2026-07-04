@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
-import { homedir } from 'os'
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 export interface ExternalSource {
   type: 'claude-code' | 'opencode' | 'hermes'

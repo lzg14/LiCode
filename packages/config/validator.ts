@@ -1,5 +1,5 @@
-import { ConfigSchema, type Config } from './schema'
 import { formatConfigError } from './format-error'
+import { type Config, ConfigSchema } from './schema'
 
 /**
  * 配置验证器 - 验证配置文件并处理错误
@@ -55,12 +55,12 @@ export class ConfigValidator {
       const errorMessages = result.errors.map(e => `  ${e.path}: ${e.reason}`).join('\n')
       throw new Error(`配置验证失败:\n${errorMessages}`)
     }
+    // biome-ignore lint/style/noNonNullAssertion: result.config is set when valid
     return result.config!
   }
 
   validateWithFormatMessage(data: unknown): Config {
-    const schema = ConfigSchema as any
-    const parseResult = schema.safeParse(data)
+    const parseResult = ConfigSchema.safeParse(data)
     if (!parseResult.success) {
       const msg = formatConfigError(parseResult.error)
       throw new Error(`配置错误:\n${msg}\n\n参考: licode.config.json.example`)
@@ -78,6 +78,7 @@ export class ConfigValidator {
   /**
    * 深度合并对象
    */
+  // biome-ignore lint/suspicious/noExplicitAny: deep merge utility — generic object merge
   private deepMerge(target: any, source: any): any {
     const result = { ...target }
 

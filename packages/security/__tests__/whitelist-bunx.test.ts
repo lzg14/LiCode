@@ -5,7 +5,7 @@
  *      但 v0.3.0 时遗漏添加,导致 agent 跑类型检查被自己拦截。
  *      这个测试保证以后不会再漏。
  */
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { getDefaultWhitelist, isCommandAllowed } from '../whitelist'
 
 describe('whitelist: bunx regression', () => {

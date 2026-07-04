@@ -1,4 +1,4 @@
-import { createContext, useContext, createSignal, createMemo, type JSX, type Accessor } from "solid-js"
+import { type Accessor, createContext, createMemo, createSignal, type JSX, useContext } from "solid-js"
 import defaultTheme from "../theme/default.json"
 
 export type ThemeColors = Record<string, string>

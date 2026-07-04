@@ -1,8 +1,8 @@
-import { createMemo, Show, For, createSignal, onCleanup } from "solid-js"
-import { useTheme } from "../context/theme"
+import { createMemo, For, Show } from "solid-js"
+import { getModelConfig } from "../../llm/catalog"
 import { useConfig } from "../context/config"
 import { useLoop } from "../context/loop"
-import { getModelConfig } from "../../llm/catalog"
+import { useTheme } from "../context/theme"
 import { todos } from "../context/todos"
 
 const VERSION = "0.2.0"
@@ -20,7 +20,7 @@ export function Sidebar() {
     const firstUser = messages().find((m) => m.role === "user")
     if (!firstUser) return "新对话"
     const title = firstUser.content.slice(0, 30)
-    return title.length < firstUser.content.length ? title + "..." : title
+    return title.length < firstUser.content.length ? `${title}...` : title
   })
 
   // 模型上下文窗口信息
@@ -86,7 +86,7 @@ export function Sidebar() {
 
       <Show when={compactionError()}>
         <box paddingTop={1} flexDirection="row">
-          <text fg={error()}>⚠ 压缩失败：{compactionError()!.message.slice(0, 60)}</text>
+          <text fg={error()}>⚠ 压缩失败：{compactionError()?.message.slice(0, 60)}</text>
         </box>
       </Show>
 
@@ -121,7 +121,7 @@ export function Sidebar() {
             <For each={todos()}>
               {(item) => {
                 const icon = item.status === 'completed' ? '✅' : item.status === 'in_progress' ? '🔄' : item.status === 'cancelled' ? '❌' : '⬜'
-                const displayText = item.content.length > 20 ? item.content.slice(0, 20) + '...' : item.content
+                const displayText = item.content.length > 20 ? `${item.content.slice(0, 20)}...` : item.content
                 return (
                   <text fg={text()}>
                     {`${icon} ${displayText}`}
@@ -141,7 +141,7 @@ export function Sidebar() {
           </box>
           <Show when={activeSkillInstructions()}>
             <box flexDirection="column" paddingLeft={1} marginTop={0}>
-              <text fg={textMuted()}>{activeSkillInstructions()!.slice(0, 120)}{activeSkillInstructions()!.length > 120 ? '...' : ''}</text>
+              <text fg={textMuted()}>{activeSkillInstructions()?.slice(0, 120)}{activeSkillInstructions()?.length > 120 ? '...' : ''}</text>
             </box>
           </Show>
         </box>

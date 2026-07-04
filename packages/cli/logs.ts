@@ -1,6 +1,6 @@
-import { readdirSync, readFileSync, statSync } from 'fs'
-import { join } from 'path'
-import { homedir } from 'os'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 const DEV_LOG_DIR = join(homedir(), '.licode', 'logs', 'dev')
 
@@ -44,7 +44,7 @@ function main() {
 
   const files = listLogFiles()
   if (files.length === 0) {
-    console.log('暂无日志文件（未找到 ' + DEV_LOG_DIR + '）')
+    console.log(`暂无日志文件（未找到 ${DEV_LOG_DIR}）`)
     return
   }
   const latestFile = files[0]

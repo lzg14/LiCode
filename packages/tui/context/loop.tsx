@@ -1,14 +1,13 @@
-import { createContext, useContext, createSignal, createMemo, onMount, batch, type JSX, type Accessor } from "solid-js"
-import type { Phase } from "../../core/types"
-import type { CoreLoop } from "../../core/loop"
-import { createModel } from "../../llm/provider"
-import { listModelsByProvider } from "../../llm/catalog"
+import { type Accessor, batch, createContext, createMemo, createSignal, type JSX, onMount, useContext } from "solid-js"
 import { devLogger } from "../../core/dev-logger"
-import { readImageFile } from "../../tools/builtin"
-import { checkDangerousPattern } from "../../security"
-import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
-import { useToast } from "../ui/toast"
+import type { CoreLoop } from "../../core/loop"
 import { Scheduler } from "../../core/scheduler"
+import type { Phase } from "../../core/types"
+import { listModelsByProvider } from "../../llm/catalog"
+import { createModel } from "../../llm/provider"
+import { readImageFile } from "../../tools/builtin"
+import { useToast } from "../ui/toast"
+import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
 function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
@@ -115,7 +114,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const [llmTokenUsage, setLlmTokenUsage] = createSignal({ input: 0, output: 0, total: 0 })
   const [currentModel, setCurrentModel] = createSignal(props.model?.modelId ?? "unknown")
   const [currentProvider, setCurrentProvider] = createSignal(props.provider ?? "deepseek")
-  const [effectiveContextWindow, setEffectiveContextWindow] = createSignal<number | undefined>(props.effectiveContextWindow)
+  const [effectiveContextWindow, _setEffectiveContextWindow] = createSignal<number | undefined>(props.effectiveContextWindow)
   const [compactionError, setCompactionError] = createSignal<Error | null>(null)
   const [activeSkill, setActiveSkillState] = createSignal<string | null>(null)
   const [activeSkillInstructions, setActiveSkillInstructions] = createSignal<string | null>(null)
@@ -127,7 +126,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const [streamingSegments, setStreamingSegments] = createSignal<Segment[]>([])
   const [pendingText, setPendingText] = createSignal("")
   const [streamMode, setStreamMode] = createSignal<'text' | 'in-thinking' | 'in-system-reminder'>('text')
-  let streamAccumulator = createStreamAccumulator()
+  const streamAccumulator = createStreamAccumulator()
   const inputQueue: { id: string; text: string }[] = []
   let toolCallIdCounter = 0
   const toolStartTimes = new Map<string, number>()
@@ -571,7 +570,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         if (result.summary) {
           // 显示摘要内容
           const tag = result.wasFallback ? '[规则提取]' : '[LLM 摘要]'
-          const preview = result.summary.length > 200 ? result.summary.slice(0, 200) + '...' : result.summary
+          const preview = result.summary.length > 200 ? `${result.summary.slice(0, 200)}...` : result.summary
           addMessage({ role: "system", content: `🗜️ 已压缩 ${result.originalCount} 条 → 保留 ${result.preservedCount} 条\n\n${tag}\n${preview}` })
         } else {
           addMessage({ role: "system", content: result.saved > 0 ? `压缩完成，节省 ${result.saved} 条消息` : "无需压缩" })

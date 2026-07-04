@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { PermissionManager, PERMISSION_PRESETS, createPermissionManager, mergePermissions } from '../permission'
+import { describe, expect, it } from 'vitest'
+import { createPermissionManager, mergePermissions, PERMISSION_PRESETS, PermissionManager } from '../permission'
 
 describe('PermissionManager', () => {
   it('should check default allow', () => {

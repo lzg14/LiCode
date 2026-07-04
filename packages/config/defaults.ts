@@ -1,5 +1,5 @@
-import type { Config } from './schema'
 import { PLATFORM_DEFAULTS } from '../security/merge'
+import type { Config } from './schema'
 
 /**
  * 默认配置

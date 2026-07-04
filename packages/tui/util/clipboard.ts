@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { spawn } from 'node:child_process'
 
 /**
  * 跨平台剪贴板操作
@@ -33,7 +33,7 @@ export async function copyToClipboard(text: string): Promise<void> {
 }
 
 export async function readFromClipboard(): Promise<string | null> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     let cmd: string
     if (process.platform === 'win32') {
       cmd = 'powershell -command Get-Clipboard'

@@ -63,7 +63,7 @@ export class Projector {
 
     // 截断过长的文本
     if (text.length > this.config.maxLength!) {
-      return text.slice(0, this.config.maxLength!) + '...'
+      return `${text.slice(0, this.config.maxLength!)}...`
     }
 
     return text
@@ -196,7 +196,7 @@ export class Projector {
    */
   private truncateText(text: string, maxLength: number): string {
     if (text.length <= maxLength) return text
-    return text.slice(0, maxLength - 3) + '...'
+    return `${text.slice(0, maxLength - 3)}...`
   }
 
   /**

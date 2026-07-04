@@ -1,5 +1,5 @@
-import { join } from 'path'
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 
 export function memoryRoot(dataDir: string): string {
   return join(dataDir, 'memory')

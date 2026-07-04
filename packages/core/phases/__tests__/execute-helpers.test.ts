@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { findValidStart, loadProjectConfig } from '../execute'
 
 function msg(role: string, parts?: Array<{ type: string; toolCallId?: string; text?: string }>): { role: string; content: any[] } {
@@ -46,7 +46,7 @@ describe('findValidStart', () => {
   })
 
   it('孤立 tool-result 开头 + user 之后正常 → 从第二个 user 开始', () => {
-    const history = [
+    const _history = [
       msg('user', [{ type: 'text', text: 'old' }]),
       msg('assistant', [toolCall('tc1')]),
       msg('tool', [toolResult('tc1')]),

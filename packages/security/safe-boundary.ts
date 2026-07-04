@@ -25,7 +25,7 @@ export class SafeBoundaryImpl implements SafeBoundary {
     }
   }
 
-  validateChanges(snapshot: ContextSnapshot): boolean {
+  validateChanges(_snapshot: ContextSnapshot): boolean {
     return true
   }
 

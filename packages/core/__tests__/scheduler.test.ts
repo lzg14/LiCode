@@ -1,7 +1,7 @@
 // TODO: vitest fake timers 与 bun test 存在兼容性问题，导致测试卡死
 // 需要调查 bun test 与 vitest fake timers 的交互
 // 临时方案：使用真实 timers 或 mock setTimeout
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Scheduler } from '../scheduler'
 
 describe('Scheduler', () => {

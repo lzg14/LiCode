@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync, existsSync, mkdirSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { execSync } from 'child_process'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { execSync } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { GitIntegration } from '../git'
 
 /**

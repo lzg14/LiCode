@@ -1,8 +1,8 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, watch } from 'fs'
-import { join, dirname } from 'path'
-import { ConfigSchema, type Config } from './schema'
-import { importClaudeCodeConfig } from './external'
+import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { DEFAULT_CONFIG } from './defaults'
+import { importClaudeCodeConfig } from './external'
+import { type Config, ConfigSchema, type PROVIDERS } from './schema'
 
 /**
  * 配置系统 - 多层级配置、环境变量替换、热更新
@@ -15,11 +15,11 @@ function replaceEnvVars(value: string): string {
   })
 }
 
-function replaceEnvVarsInObj(obj: any): any {
+function replaceEnvVarsInObj(obj: unknown): unknown {
   if (typeof obj === 'string') return replaceEnvVars(obj)
-  if (Array.isArray(obj)) return obj.map(replaceEnvVarsInObj)
+  if (Array.isArray(obj)) return obj.map(replaceEnvVarsInObj as (v: unknown) => unknown)
   if (obj && typeof obj === 'object') {
-    const result: any = {}
+    const result: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(obj)) result[key] = replaceEnvVarsInObj(value)
     return result
   }
@@ -61,10 +61,11 @@ export class ConfigLoader {
         let provider = 'anthropic'
         let baseUrl = cc.baseUrl
         if (isDeepSeek) { provider = 'deepseek'; baseUrl = 'https://api.deepseek.com' }
-        if (isMiniMax) { provider = 'minimax'; baseUrl = 'https://api.minimax.chat/v1' }
+        if (isMiniMax) {         provider = 'minimax'; baseUrl = 'https://api.minimax.chat/v1' }
         process.stderr.write(`[config] Imported LLM config from Claude Code (${provider})\n`)
+        type Provider = (typeof PROVIDERS)[number]
         this.config = {
-          llm: { provider: provider as any, model: cc.model, apiKeyEnv: 'ANTHROPIC_AUTH_TOKEN', apiKey: cc.apiKey, baseUrl },
+          llm: { provider: provider as Provider, model: cc.model, apiKeyEnv: 'ANTHROPIC_AUTH_TOKEN', apiKey: cc.apiKey, baseUrl },
           security: { commandWhitelist: [], allowedPaths: [], deniedPaths: [] },
           memory: { path: '~/.licode/licode-sessions.db', retentionDays: 30 },
           subagent: { maxConcurrent: 3, maxDepth: 1, timeoutMs: 900000, blockedTools: ['delegate_task', 'clarify', 'memory_write', 'send_message', 'execute_code'] },
@@ -78,7 +79,7 @@ export class ConfigLoader {
     }
 
     if (process.env.LICODE_MODEL) this.config.llm.model = process.env.LICODE_MODEL
-    if (process.env.LICODE_PROVIDER) this.config.llm.provider = process.env.LICODE_PROVIDER as any
+    if (process.env.LICODE_PROVIDER) this.config.llm.provider = process.env.LICODE_PROVIDER
     if (process.env.LICODE_API_KEY) this.config.llm.apiKey = process.env.LICODE_API_KEY
 
     return this.config
@@ -87,7 +88,29 @@ export class ConfigLoader {
   save(path: string, config: Config): void {
     const dir = dirname(path)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-    writeFileSync(path, JSON.stringify(config, null, 2), 'utf-8')
+    
+    // 深拷贝配置，避免修改原始对象
+    const configCopy = structuredClone(config)
+    
+    // 递归删除所有 apiKey 字段
+    const removeApiKey = (obj: unknown): void => {
+      if (typeof obj !== 'object' || obj === null) return
+      if (Array.isArray(obj)) {
+        obj.forEach(removeApiKey)
+        return
+      }
+      const record = obj as Record<string, unknown>
+      for (const key of Object.keys(record)) {
+        if (key === 'apiKey') {
+          delete record[key]
+        } else {
+          removeApiKey(record[key])
+        }
+      }
+    }
+    
+    removeApiKey(configCopy)
+    writeFileSync(path, JSON.stringify(configCopy, null, 2), 'utf-8')
   }
 
   watch(path: string, onChange: (config: Config) => void): void {

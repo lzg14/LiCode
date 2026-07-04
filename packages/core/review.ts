@@ -1,5 +1,5 @@
-import type { LoopContext } from './loop'
 import { generateText } from 'ai'
+import type { LoopContext } from './loop'
 
 /**
  * Review Agent - 自动触发反方视角评审
@@ -138,7 +138,7 @@ function localReview(ctx: LoopContext): ReviewResult {
 /**
  * 构建评审提示词
  */
-function buildReviewPrompt(ctx: LoopContext): string {
+function buildReviewPrompt(_ctx: LoopContext): string {
   return `你是 licode 的评审 Agent，负责以反方视角评审方案。
 
 ## 评审维度

@@ -1,10 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   classifyError,
-  getRetryStrategy,
   formatRetryMessage,
+  getRetryStrategy,
   waitAndRetry,
-  type RetryCategory,
 } from '../retry-strategy'
 
 describe('classifyError', () => {

@@ -1,6 +1,6 @@
-import { appendFileSync, existsSync, mkdirSync } from 'fs'
-import { dirname, join } from 'path'
-import { homedir } from 'os'
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 /**
  * 开发日志系统 - 记录所有异常、LLM请求响应、调试信息
@@ -17,12 +17,12 @@ const REDACT_KEYS = [
 ]
 
 const INLINE_PATTERNS: RegExp[] = [
-  /sk-ant-api[0-9]{2}-[A-Za-z0-9_\-]{20,}/g,  // Anthropic
-  /sk-proj-[A-Za-z0-9_\-]{20,}/g,                // OpenAI 新
+  /sk-ant-api[0-9]{2}-[A-Za-z0-9_-]{20,}/g,  // Anthropic
+  /sk-proj-[A-Za-z0-9_-]{20,}/g,                // OpenAI 新
   /sk-[A-Za-z0-9]{20,}/g,                        // OpenAI 旧 / DeepSeek / MiniMax
   /ghp_[A-Za-z0-9]{20,}/g,                         // GitHub PAT
   /xox[abpr]-[0-9]+-[0-9]+-[A-Za-z0-9]+/g,      // Slack
-  /Bearer\s+[A-Za-z0-9_\-\.]{20,}/g,             // Bearer token
+  /Bearer\s+[A-Za-z0-9_\-.]{20,}/g,             // Bearer token
   /ANTHROPIC_API_KEY=[^\s]{10,}/g,                // env-style
   /OPENAI_API_KEY=[^\s]{10,}/g,
 ]
@@ -92,7 +92,7 @@ export class DevLogger {
   }
 
   private write(level: string, category: string, msg: string, data?: unknown): void {
-    const line = this.formatMessage(level, category, msg, data) + '\n'
+    const line = `${this.formatMessage(level, category, msg, data)}\n`
     console.log(line.trim())
     try {
       appendFileSync(this.logFile, line, { encoding: 'utf-8' })
@@ -130,9 +130,9 @@ export class DevLogger {
     this.info('LLM', `>>> LLM Request | model=${model} | provider=${provider}`, {
       messageCount: messages.length,
       tools: tools ? 'yes' : 'no',
-      messages: messages.map((m: any) => ({
+      messages: messages.map((m: { role: string; content: string | unknown[] }) => ({
         role: m.role,
-        content: redact(typeof m.content === 'string' ? m.content.slice(0, 200) + '...' : '[complex]'),
+        content: redact(typeof m.content === 'string' ? `${(m.content as string).slice(0, 200)}...` : '[complex]'),
       })),
     })
   }

@@ -69,7 +69,7 @@ export function formatRetryMessage(category: RetryCategory, error: unknown, atte
 export async function waitAndRetry(
   category: RetryCategory,
   attempt: number,
-  error: unknown,
+  _error: unknown,
 ): Promise<boolean> {
   const strategy = getRetryStrategy(category)
   if (!strategy.shouldRetry(attempt)) return false

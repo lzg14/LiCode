@@ -1,8 +1,8 @@
 import { For } from "solid-js"
-import { HELP_CONTENT } from '../util/help-content'
 import { useTheme } from '../context/theme'
+import { HELP_CONTENT } from '../util/help-content'
 
-export function HelpPanel(props: { onClose: () => void }) {
+export function HelpPanel(_props: { onClose: () => void }) {
   const { primary, text, textMuted, backgroundPanel, borderActive } = useTheme()
 
   return (

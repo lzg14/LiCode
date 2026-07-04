@@ -1,8 +1,8 @@
-import { readFileSync, existsSync, readdirSync, mkdirSync, writeFileSync } from 'fs'
-import { join, extname, dirname } from 'path'
-import { homedir } from 'os'
-import type { Skill } from './types'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { globalSkillRegistry } from './registry'
+import type { Skill } from './types'
 
 /**
  * 技能系统 - 技能注册、加载、热更新

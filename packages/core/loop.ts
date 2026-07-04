@@ -1,21 +1,21 @@
-import type { Phase, Config, Plan } from './types'
-import type { LLMProvider } from '../llm/types'
-import { createModel } from '../llm/provider'
-import { getModelConfig } from '../llm/catalog'
-import { execute } from './phases/execute'
-import { devLogger } from './dev-logger'
-import { homedir } from 'os'
-import { join } from 'path'
-import { Memory } from '../memory/memory'
-import { SessionManager } from '../session/session'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { GitIntegration } from '../integration/git'
 import { pluginManager } from '../integration/plugin'
+import { getModelConfig } from '../llm/catalog'
+import { createModel } from '../llm/provider'
+import type { LLMProvider } from '../llm/types'
+import { Memory } from '../memory/memory'
+import { SessionManager } from '../session/session'
 import { CheckpointManager, type SessionCheckpoint } from './checkpoint'
+import { devLogger } from './dev-logger'
+import { type PerfTrace, Timer } from './perf'
+import { execute } from './phases/execute'
 import { Projector } from './projector'
 
 import { SessionCompactor } from './session-compactor'
-import { Timer, type PerfTrace } from './perf'
-import { verifyDeliverables, type VerifyResult } from './verify'
+import type { Config, Phase, Plan } from './types'
+import { verifyDeliverables } from './verify'
 
 
 export interface LoopContext {
@@ -25,7 +25,7 @@ export interface LoopContext {
   phase: Phase
   cwd: string
   llm?: LLMProvider
-  model?: any
+  model?: Record<string, unknown>
   memory?: Memory
   // 回调函数
   onPhaseChange?: (phase: Phase) => void
@@ -123,7 +123,7 @@ export class CoreLoop {
   getSessionModelMessages(
     sessionId: string,
     options: { limit?: number } = { limit: 200 },
-  ): Array<{ role: string; content: any[] }> {
+  ): Array<{ role: string; content: unknown[] }> {
     return this.sessionManager.getMessagesAsModelMessages(sessionId, options)
   }
 
@@ -246,6 +246,7 @@ export class CoreLoop {
       if (lastError) {
         return { text: `LLM 调用失败（已重试 3 次）: ${lastError.message}`, sessionId: ctx.sessionId }
       }
+      // biome-ignore lint/style/noNonNullAssertion: result is set when no lastError
       ctx = { ...ctx, ...result! }
 
 
@@ -269,7 +270,7 @@ export class CoreLoop {
       this.sessionManager.updateSession(session.id, { status: 'completed' })
 
       // 记录会话结束
-      const duration = Date.now() - startTime
+      const _duration = Date.now() - startTime
 
       // 构建并回调 perf trace
       const trace = timer.buildTrace(ctx.sessionId)

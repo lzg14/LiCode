@@ -1,13 +1,13 @@
-import { generateText, streamText, tool, jsonSchema } from "ai"
+import { existsSync } from "node:fs"
+import { readFile } from "node:fs/promises"
+import { dirname, join } from "node:path"
+import { jsonSchema, streamText, tool } from "ai"
 import { z } from "zod"
 import { globalToolRegistry } from "../../tools/registry"
+import { buildProjectRole, detectProject } from "../detect-project"
 import { devLogger } from "../dev-logger"
 import type { Timer } from "../perf"
-import { readFile } from "fs/promises"
-import { existsSync } from "fs"
-import { join, dirname } from "path"
-import { detectProject, buildProjectRole } from "../detect-project"
-import { SubagentManager, type SubagentInput } from "../subagent"
+import { type SubagentInput, SubagentManager } from "../subagent"
 
 /**
  * 加载项目配置文件（.licode.md / LICODE.md）
@@ -324,7 +324,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
 只输出最终结果，不要有多余的解释。`
 
   // subagent 工具：让 LLM 可以派发并行任务
-  tools["subagent"] = tool({
+  tools.subagent = tool({
     description: "派发一个子任务给独立的 AI agent 并行执行。适用于需要多路并行的场景（如同时搜索多个文件、同时分析多个模块）。输入任务描述和可选的工具白名单。",
     inputSchema: jsonSchema({
       type: "object",
@@ -455,11 +455,11 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       // 一旦抛错累积就被截断 / tool-call 丢失，结果是 silent failure。
       // 改用 AI SDK v6 提供的 promise 路径（result.text / result.toolCalls），
       // 这两个 promise 不依赖 fullStream 的可消费性。
-      let chunkCount = 0
+      let _chunkCount = 0
       let aborted = false
       try {
         for await (const chunk of streamResult.fullStream) {
-          chunkCount++
+          _chunkCount++
           if (chunk.type === 'text-delta') {
             // 仅触发流式 callback（用户即时看到），不依赖累积得到最终文本
             ctx.onStreamText?.(chunk.text)

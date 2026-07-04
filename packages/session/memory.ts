@@ -1,5 +1,5 @@
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs'
-import { join, extname } from 'path'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { extname, join } from 'node:path'
 import { memoryRoot } from './checkpoint-paths'
 
 export interface MemoryEntry {

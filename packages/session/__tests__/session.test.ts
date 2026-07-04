@@ -1,15 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { SessionManager } from '../session'
-import { join } from 'path'
-import { tmpdir } from 'os'
-import { rm, mkdir, writeFile } from 'fs/promises'
-import { existsSync } from 'fs'
-import { CHECKPOINT_TEMPLATE, MEMORY_TEMPLATE, writeCheckpoint, writeMemory, loadCheckpoint, loadMemory, hasCheckpoint, ensureCheckpointTemplate, ensureMemoryTemplate } from '../checkpoint'
-import { checkpointPath, memoryPath, metaDir, ensureDir } from '../checkpoint-paths'
-import { buildSessionContext, buildRecallReminder, buildContextInheritance } from '../prompt'
-import { searchMemory, getRecentMemoryEntries } from '../memory'
-import { computeBoundary } from '../checkpoint'
 import { Database } from 'bun:sqlite'
+import { existsSync } from 'node:fs'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { CHECKPOINT_TEMPLATE, computeBoundary, ensureCheckpointTemplate, ensureMemoryTemplate, hasCheckpoint, loadCheckpoint, loadMemory, MEMORY_TEMPLATE, writeCheckpoint, writeMemory } from '../checkpoint'
+import { checkpointPath, ensureDir, memoryPath, metaDir } from '../checkpoint-paths'
+import { getRecentMemoryEntries, searchMemory } from '../memory'
+import { buildContextInheritance, buildRecallReminder, buildSessionContext } from '../prompt'
+import { SessionManager } from '../session'
 
 const TEST_DB = join(tmpdir(), `licode-session-test-${Date.now()}.db`)
 const TEST_DATA_DIR = join(tmpdir(), `licode-session-data-${Date.now()}`)
@@ -23,8 +22,8 @@ beforeAll(async () => {
 afterAll(async () => {
   manager.close()
   await rm(TEST_DB, { force: true }).catch(() => {})
-  await rm(TEST_DB + '-wal', { force: true }).catch(() => {})
-  await rm(TEST_DB + '-shm', { force: true }).catch(() => {})
+  await rm(`${TEST_DB}-wal`, { force: true }).catch(() => {})
+  await rm(`${TEST_DB}-shm`, { force: true }).catch(() => {})
   await rm(TEST_DATA_DIR, { recursive: true, force: true }).catch(() => {})
 })
 
@@ -47,8 +46,8 @@ describe('SessionManager', () => {
   it('should get session', () => {
     const session = manager.getSession(sessionId)
     expect(session).not.toBeNull()
-    expect(session!.id).toBe(sessionId)
-    expect(session!.title).toBe('Test Session')
+    expect(session?.id).toBe(sessionId)
+    expect(session?.title).toBe('Test Session')
   })
 
   it('should list sessions', () => {
@@ -59,8 +58,8 @@ describe('SessionManager', () => {
   it('should update session', () => {
     const updated = manager.updateSession(sessionId, { title: 'Updated Title', status: 'running' })
     expect(updated).not.toBeNull()
-    expect(updated!.title).toBe('Updated Title')
-    expect(updated!.status).toBe('running')
+    expect(updated?.title).toBe('Updated Title')
+    expect(updated?.status).toBe('running')
   })
 
   it('should add message', () => {
@@ -292,13 +291,13 @@ describe('Schema migration', () => {
       summary: { additions: 5, deletions: 2, files: ['a.ts'] },
       lastCheckpointMessageId: 'msg_x',
     })
-    expect(updated!.summary!.additions).toBe(5)
-    expect(updated!.lastCheckpointMessageId).toBe('msg_x')
+    expect(updated?.summary?.additions).toBe(5)
+    expect(updated?.lastCheckpointMessageId).toBe('msg_x')
 
     migrated.close()
     rm(oldDbPath, { force: true })
-    rm(oldDbPath + '-wal', { force: true })
-    rm(oldDbPath + '-shm', { force: true })
+    rm(`${oldDbPath}-wal`, { force: true })
+    rm(`${oldDbPath}-shm`, { force: true })
   })
 
   it('should be idempotent on new schema', () => {
@@ -309,8 +308,8 @@ describe('Schema migration', () => {
     m1.close()
     m2.close()
     rm(dbPath, { force: true })
-    rm(dbPath + '-wal', { force: true })
-    rm(dbPath + '-shm', { force: true })
+    rm(`${dbPath}-wal`, { force: true })
+    rm(`${dbPath}-shm`, { force: true })
   })
 })
 
@@ -333,8 +332,8 @@ describe('Context Inheritance', () => {
     expect(child.parentId).toBe(parent.id)
 
     const fetched = manager.getSession(child.id)
-    expect(fetched!.contextFrom).toBe(parent.id)
-    expect(fetched!.parentId).toBe(parent.id)
+    expect(fetched?.contextFrom).toBe(parent.id)
+    expect(fetched?.parentId).toBe(parent.id)
   })
 
   it('should get messages with context inheritance', () => {
@@ -343,7 +342,7 @@ describe('Context Inheritance', () => {
       directory: '/test/project',
     })
 
-    const msg1 = manager.addMessage({ sessionId: parent.id, role: 'user', content: 'First message' })
+    const _msg1 = manager.addMessage({ sessionId: parent.id, role: 'user', content: 'First message' })
     const msg2 = manager.addMessage({ sessionId: parent.id, role: 'user', content: 'Second message' })
 
     const child = manager.createSession({
@@ -353,7 +352,7 @@ describe('Context Inheritance', () => {
       contextWatermark: msg2.id,
     })
 
-    const childMsg = manager.addMessage({ sessionId: child.id, role: 'user', content: 'Child message' })
+    const _childMsg = manager.addMessage({ sessionId: child.id, role: 'user', content: 'Child message' })
 
     const inheritedMsgs = manager.getMessagesWithContext(child.id)
     expect(inheritedMsgs.length).toBe(3) // 2 parent + 1 child
@@ -372,15 +371,15 @@ describe('Context Inheritance', () => {
       summary: { additions: 100, deletions: 50, files: ['src/main.ts'] },
     })
 
-    expect(updated!.summary).toEqual({
+    expect(updated?.summary).toEqual({
       additions: 100,
       deletions: 50,
       files: ['src/main.ts'],
     })
 
     const fetched = manager.getSession(session.id)
-    expect(fetched!.summary!.additions).toBe(100)
-    expect(fetched!.summary!.files).toEqual(['src/main.ts'])
+    expect(fetched?.summary?.additions).toBe(100)
+    expect(fetched?.summary?.files).toEqual(['src/main.ts'])
   })
 
   it('should support lastCheckpointMessageId', () => {
@@ -392,22 +391,22 @@ describe('Context Inheritance', () => {
     const msg = manager.addMessage({ sessionId: session.id, role: 'user', content: 'test' })
 
     const updated = manager.updateSession(session.id, { lastCheckpointMessageId: msg.id })
-    expect(updated!.lastCheckpointMessageId).toBe(msg.id)
+    expect(updated?.lastCheckpointMessageId).toBe(msg.id)
 
     const fetched = manager.getSession(session.id)
-    expect(fetched!.lastCheckpointMessageId).toBe(msg.id)
+    expect(fetched?.lastCheckpointMessageId).toBe(msg.id)
   })
 
   it('should get last session', () => {
     const last = manager.getLastSession()
     expect(last).not.toBeNull()
-    expect(last!.id).toBeTruthy()
+    expect(last?.id).toBeTruthy()
   })
 
   it('should get last session by directory', () => {
     const last = manager.getLastSession('/test/project')
     expect(last).not.toBeNull()
-    expect(last!.directory).toBe('/test/project')
+    expect(last?.directory).toBe('/test/project')
   })
 })
 
@@ -432,7 +431,7 @@ describe('Checkpoint', () => {
     ensureCheckpointTemplate(cpPath)
     expect(existsSync(cpPath)).toBe(true)
 
-    const content = await import('fs').then(fs => fs.readFileSync(cpPath, 'utf-8'))
+    const content = await import('node:fs').then(fs => fs.readFileSync(cpPath, 'utf-8'))
     expect(content).toBe(CHECKPOINT_TEMPLATE)
   })
 
@@ -441,7 +440,7 @@ describe('Checkpoint', () => {
     ensureMemoryTemplate(mpPath)
     expect(existsSync(mpPath)).toBe(true)
 
-    const content = await import('fs').then(fs => fs.readFileSync(mpPath, 'utf-8'))
+    const content = await import('node:fs').then(fs => fs.readFileSync(mpPath, 'utf-8'))
     expect(content).toBe(MEMORY_TEMPLATE)
   })
 
@@ -602,7 +601,7 @@ describe('Memory', () => {
 
 describe('Checkpoint paths', () => {
   it('should generate correct paths', () => {
-    const sep = require('path').sep
+    const sep = require('node:path').sep
     const cp = checkpointPath('ses_123', TEST_DATA_DIR)
     expect(cp).toContain(`memory${sep}sessions${sep}ses_123${sep}checkpoint.md`)
 

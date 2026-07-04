@@ -1,7 +1,7 @@
-import { createOpenAI } from "@ai-sdk/openai"
 import { createAnthropic } from "@ai-sdk/anthropic"
-import { PROVIDER_PRIORITY, getModelConfig } from "./catalog"
-import { classifyError, getRetryStrategy, formatRetryMessage, waitAndRetry } from "./retry-strategy"
+import { createOpenAI } from "@ai-sdk/openai"
+import { getModelConfig, PROVIDER_PRIORITY } from "./catalog"
+import { classifyError, formatRetryMessage, getRetryStrategy, waitAndRetry } from "./retry-strategy"
 
 export interface ModelConfig {
   provider: string
@@ -21,7 +21,7 @@ export interface ModelConfig {
  */
 export function normalizeModelIdForCatalog(model: string): string {
   // 只剥最右一个 [xxx]（不允许内嵌方括号），避免 foo[bar][baz] 把整段吃掉
-  return model.replace(/\[[^\[\]]*\]$/, "").trim()
+  return model.replace(/\[[^[\]]*\]$/, "").trim()
 }
 
 /**
@@ -48,7 +48,7 @@ export function resolveContextWindow(rawModel: string): number | undefined {
  * - 用户随便加的 [xxx] 后缀都剥掉
  */
 function normalizeMiniMaxModel(model: string): string {
-  return model.replace(/\[[^\[\]]*\]$/, "").trim()
+  return model.replace(/\[[^[\]]*\]$/, "").trim()
 }
 
 function createModelForProvider(provider: string, config: ModelConfig) {

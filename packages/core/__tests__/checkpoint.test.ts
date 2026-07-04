@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { CheckpointManager } from '../checkpoint'
-import { rm, mkdir, readdir } from 'fs/promises'
-import { join } from 'path'
-import { tmpdir } from 'os'
 
 const TEST_DIR = join(tmpdir(), `licode-checkpoint-test-${Date.now()}`)
 
@@ -30,7 +30,7 @@ describe('CheckpointManager', () => {
 
     const restored = await manager.restore('session-1')
     expect(restored).not.toBeNull()
-    expect(restored!.version).toBe(1)
+    expect(restored?.version).toBe(1)
   })
 
   it('should increment version on multiple saves', async () => {
@@ -42,8 +42,8 @@ describe('CheckpointManager', () => {
     expect(v3.version).toBe(3)
 
     const restored = await manager.restore('session-2')
-    expect(restored!.version).toBe(3)
-    expect(restored!.phase).toBe('PLAN')
+    expect(restored?.version).toBe(3)
+    expect(restored?.phase).toBe('PLAN')
   })
 
   it('should return null for non-existent session', async () => {
@@ -64,10 +64,10 @@ describe('CheckpointManager', () => {
     await manager.save('session-ver', { phase: 'EXECUTE', context: {}, timestamp: Date.now() })
 
     const v1 = await manager.getVersion('session-ver', 1)
-    expect(v1!.phase).toBe('EXECUTE')
+    expect(v1?.phase).toBe('EXECUTE')
 
     const v2 = await manager.getVersion('session-ver', 2)
-    expect(v2!.phase).toBe('EXECUTE')
+    expect(v2?.phase).toBe('EXECUTE')
   })
 
   it('should delete session checkpoints', async () => {

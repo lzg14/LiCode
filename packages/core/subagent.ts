@@ -8,10 +8,10 @@
  * - 不实现 fork session，子 agent 共享父 session 消息上下文
  */
 
-import { generateText, tool, jsonSchema } from "ai"
+import { generateText, jsonSchema, tool } from "ai"
+import { z } from "zod"
 import { globalToolRegistry } from "../tools/registry"
 import { devLogger } from "./dev-logger"
-import { z } from "zod"
 
 /** 子 agent 输入 */
 export interface SubagentInput {
@@ -130,7 +130,7 @@ export class SubagentManager {
 
         // 收集文本输出
         if (result.text) {
-          accumulatedText += result.text + "\n"
+          accumulatedText += `${result.text}\n`
         }
 
         // 没有 tool calls 说明任务完成

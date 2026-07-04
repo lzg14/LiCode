@@ -1,18 +1,18 @@
-import { createSignal, createMemo, Show, For } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
-import { useTheme } from "../context/theme"
-import { useLoop } from "../context/loop"
-import { sidebarVisible, setSidebarVisible, modelPickerOpen, setModelPickerOpen } from "../context/shortcuts"
+import { createMemo, createSignal, For, Show } from "solid-js"
+import { loadAllSkills } from "../../skills/loader"
+import { HelpPanel } from "../component/help-panel"
 import { Logo } from "../component/logo"
 import { MessageList, QueueMessages } from "../component/message-list"
 import { Prompt, setPromptText } from "../component/prompt"
-import { StatusBar } from "../component/status-bar"
 import { Sidebar } from "../component/sidebar"
-import { HelpPanel } from "../component/help-panel"
-import { loadAllSkills } from "../../skills/loader"
+import { StatusBar } from "../component/status-bar"
+import { useLoop } from "../context/loop"
+import { modelPickerOpen, setModelPickerOpen, setSidebarVisible, sidebarVisible } from "../context/shortcuts"
+import { useTheme } from "../context/theme"
 
 export function Home() {
-  const { isProcessing, messages, run, compactSession, clearSession, currentModel, currentProvider, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults } = useLoop()
+  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)
@@ -97,7 +97,7 @@ export function Home() {
   }
   scanSkills()
 
-  const truncate = (s: string, n = 40) => s.length > n ? s.slice(0, n) + '…' : s
+  const truncate = (s: string, n = 40) => s.length > n ? `${s.slice(0, n)}…` : s
 
   const slashItems = createMemo(() => {
     const items: { type: string; label: string; desc: string }[] = [

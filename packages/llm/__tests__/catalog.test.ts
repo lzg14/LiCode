@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { listModelsByProvider, getModelConfig, MODEL_CATALOG, listModels, supportsFeature } from '../catalog'
+import { describe, expect, it } from 'vitest'
+import { getModelConfig, listModels, listModelsByProvider, MODEL_CATALOG, supportsFeature } from '../catalog'
 
 describe('catalog', () => {
   describe('listModelsByProvider', () => {

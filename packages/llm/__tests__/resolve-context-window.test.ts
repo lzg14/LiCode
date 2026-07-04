@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest"
-import { resolveContextWindow, normalizeModelIdForCatalog } from "../provider"
+import { describe, expect, it } from "vitest"
+import { normalizeModelIdForCatalog, resolveContextWindow } from "../provider"
 
 describe("normalizeModelIdForCatalog", () => {
   it("剥掉 [1M] 等后缀", () => {

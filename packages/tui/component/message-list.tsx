@@ -1,15 +1,15 @@
-import { For, Show, Switch, Match, createMemo, createSignal } from "solid-js"
 import type { SyntaxStyle } from "@opentui/core"
-import { useTheme } from "../context/theme"
-import { useLoop } from "../context/loop"
+import { createMemo, For, Show, } from "solid-js"
 import type { Message } from "../context/loop"
-import { Spinner } from "./spinner"
+import { useLoop } from "../context/loop"
+import { useTheme } from "../context/theme"
 import { createMarkdownSyntaxStyle } from "../util/syntax-style"
-import { ThinkingView } from "./thinking-view"
 import { deriveThinkingDisplay } from "../util/thinking-display"
 import { CollapsibleText } from "./collapsible-text"
+import { Spinner } from "./spinner"
+import { ThinkingView } from "./thinking-view"
 
-const MAX_VISIBLE_TOOLS = 3
+const _MAX_VISIBLE_TOOLS = 3
 
 function stripSystemTags(content: string): string {
   // 暂存 thinking 标签（交给 ThinkingView / deriveThinkingDisplay 处理）
@@ -125,7 +125,7 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
         <Show when={hasImages}>
           <box flexDirection="row" paddingLeft={2}>
             <text fg={textMuted()}>
-              {`📎 ${props.msg.images!.length} 张图片已附带`}
+              {`📎 ${props.msg.images?.length} 张图片已附带`}
             </text>
           </box>
         </Show>
@@ -341,14 +341,14 @@ export function MessageList() {
 }
 
 /** 从 idx 开始往前找连续 tool 消息的起始位置 */
-function findToolBatchStart(msgs: Message[], idx: number): number {
+function _findToolBatchStart(msgs: Message[], idx: number): number {
   let start = idx
   while (start > 0 && msgs[start - 1].role === "tool") start--
   return start
 }
 
 /** 从 idx 开始往后找连续 tool 消息的结束位置 */
-function findToolBatchEnd(msgs: Message[], idx: number): number {
+function _findToolBatchEnd(msgs: Message[], idx: number): number {
   let end = idx
   while (end < msgs.length - 1 && msgs[end + 1].role === "tool") end++
   return end

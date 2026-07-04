@@ -1,8 +1,8 @@
 import { createMemo } from "solid-js"
-import { useTheme } from "../context/theme"
-import { useLoop } from "../context/loop"
-import { globalToolRegistry } from "../../tools/registry"
 import { estimateCost, formatCost } from "../../llm/cost"
+import { globalToolRegistry } from "../../tools/registry"
+import { useLoop } from "../context/loop"
+import { useTheme } from "../context/theme"
 
 export function StatusBar() {
   const { textMuted } = useTheme()

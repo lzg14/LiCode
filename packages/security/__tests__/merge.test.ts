@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { mergeSecurityConfig, PLATFORM_DEFAULTS } from '../merge'
 
 describe('mergeSecurityConfig', () => {

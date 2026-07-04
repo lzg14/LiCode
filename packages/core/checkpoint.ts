@@ -3,8 +3,8 @@
  * 保存和恢复会话状态，支持会话中断后恢复
  */
 
-import * as fs from 'fs/promises'
-import * as path from 'path'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
 import { devLogger } from './dev-logger'
 
 export interface SessionCheckpoint {

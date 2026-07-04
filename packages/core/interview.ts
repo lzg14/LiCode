@@ -1,4 +1,4 @@
-import { LoopContext } from './loop'
+import type { LoopContext } from './loop'
 
 /**
  * Interview 追问机制

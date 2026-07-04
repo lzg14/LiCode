@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { CoreLoop } from '../loop'
+import { existsSync } from 'node:fs'
+import { rm, } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { SessionManager } from '../../session/session'
-import { join } from 'path'
-import { tmpdir } from 'os'
-import { rm, unlink } from 'fs/promises'
-import { existsSync } from 'fs'
+import { CoreLoop } from '../loop'
 
 const TEST_DIR = join(tmpdir(), `licode-loop-test-${Date.now()}`)
 const TEST_DB = join(TEST_DIR, 'licode-sessions.db')
@@ -118,8 +118,8 @@ describe('compactSession', () => {
     const loop = createLoop()
     const result = await loop.compactSession(sessionId)
     expect(result).not.toBeNull()
-    expect(result!.saved).toBe(0)
-    expect(result!.summary).toContain('未达压缩阈值')
+    expect(result?.saved).toBe(0)
+    expect(result?.summary).toContain('未达压缩阈值')
   })
 })
 
@@ -136,6 +136,6 @@ describe('checkpoint', () => {
 
     const restored = await (loop as any).checkpointManager.restore('test-session')
     expect(restored).not.toBeNull()
-    expect(restored!.phase).toBe('EXECUTE')
+    expect(restored?.phase).toBe('EXECUTE')
   })
 })

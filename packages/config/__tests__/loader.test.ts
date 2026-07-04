@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ConfigLoader } from '../loader'
-import { writeFile, rm, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { tmpdir } from 'os'
 
 const TEST_DIR = join(tmpdir(), `licode-config-test-${Date.now()}`)
 const TEST_CONFIG = join(TEST_DIR, 'licode.config.json')
@@ -75,6 +75,7 @@ describe('ConfigLoader', () => {
     const configPath = join(TEST_DIR, 'env-config.json')
 
     await writeFile(configPath, JSON.stringify({
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: test fixture for env var replacement
       llm: { provider: 'anthropic', model: '${TEST_API_KEY}' },
       security: { commandWhitelist: [], allowedPaths: [], deniedPaths: [] },
       memory: { path: './mem.json' },

@@ -1,13 +1,13 @@
-import { readFile, writeFile, stat, readdir, mkdir, unlink, copyFile, rename } from 'fs/promises'
-import { existsSync, readFileSync, unlinkSync } from 'fs'
-import { exec, execFile } from 'child_process'
-import { promisify } from 'util'
+import { exec, execFile } from 'node:child_process'
+import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { copyFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { dirname, extname, join, resolve } from 'node:path'
+import { promisify } from 'node:util'
 import { glob } from 'glob'
-import { join, dirname, resolve, extname } from 'path'
 // import { Database } from 'bun:sqlite'  // moved to dynamic import
 import { z } from 'zod'
-import { globalToolRegistry } from './registry'
 import { getSecurityLayer } from '../security'
+import { globalToolRegistry } from './registry'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -256,7 +256,8 @@ export function registerBuiltinTools(): void {
       // fallback: grep (unix) 或 findstr (windows)
       try {
         if (process.platform === 'win32') {
-          const { stdout } = await execAsync(`findstr /S /N "${pattern}" ${cwd}\\*`, { maxBuffer: 1024 * 1024 })
+          const winPath = cwd.replace(/\//g, '\\')
+          const { stdout } = await execFileAsync('findstr', ['/S', '/N', pattern, `${winPath}\\*`], { maxBuffer: 1024 * 1024 })
           const lines = (stdout || '').split('\n').filter(Boolean).slice(0, maxResults)
           return { success: true, output: lines.join('\n') || '未找到匹配' }
         } else {
@@ -308,7 +309,12 @@ export function registerBuiltinTools(): void {
     inputSchema: z.object({ name: z.string().optional() }),
     handler: async ({ name }) => {
       if (name) return { success: true, output: process.env[name] ?? `${name} 不存在` }
-      return { success: true, output: Object.entries(process.env).map(([k, v]) => `${k}=${v}`).join('\n') }
+      const sensitivePatterns = [/api_key/i, /token/i, /secret/i, /password/i, /auth/i]
+      const filtered = Object.entries(process.env)
+        .filter(([k]) => !sensitivePatterns.some(p => p.test(k)))
+        .map(([k, v]) => `${k}=${v}`)
+        .join('\n')
+      return { success: true, output: filtered || '无环境变量' }
     },
   })
 
@@ -355,8 +361,10 @@ export function registerBuiltinTools(): void {
     }),
     handler: async ({ filter, limit }) => {
       try {
-        const cmd = filter ? `tasklist /FI "IMAGENAME eq ${filter}*" /FO CSV /NH` : 'tasklist /FO CSV /NH'
-        const { stdout } = await execAsync(cmd, { timeout: 10000 })
+        const args = filter
+          ? ['tasklist', '/FI', `IMAGENAME eq ${filter}*`, '/FO', 'CSV', '/NH']
+          : ['tasklist', '/FO', 'CSV', '/NH']
+        const { stdout } = await execFileAsync('tasklist', args, { timeout: 10000 })
         const lines = stdout.trim().split('\n').filter(Boolean)
         const result = limit ? lines.slice(0, limit) : lines.slice(0, 50)
         return { success: true, output: result.join('\n') || '无匹配进程' }
@@ -390,8 +398,8 @@ export function registerBuiltinTools(): void {
     handler: async ({ path, select }) => {
       try {
         const absPath = resolve(path)
-        const cmd = select ? `explorer /select,"${absPath}"` : `explorer "${absPath}"`
-        await execAsync(cmd, { timeout: 3000 })
+        const args = select ? ['/select,', absPath] : [absPath]
+        await execFileAsync('explorer', args, { timeout: 3000 })
         return { success: true, output: `已在资源管理器中打开: ${absPath}` }
       } catch (e) { return { success: false, error: String(e) } }
     },
@@ -405,8 +413,11 @@ export function registerBuiltinTools(): void {
     }),
     handler: async ({ url }) => {
       try {
-        const cmd = process.platform === 'win32' ? `start "" "${url}"` : `open "${url}"`
-        await execAsync(cmd, { timeout: 3000 })
+        if (process.platform === 'win32') {
+          await execFileAsync('cmd.exe', ['/c', 'start', '', url], { timeout: 3000 })
+        } else {
+          await execFileAsync('open', [url], { timeout: 3000 })
+        }
         return { success: true, output: `已在浏览器中打开: ${url}` }
       } catch (e) { return { success: false, error: String(e) } }
     },
@@ -421,7 +432,25 @@ export function registerBuiltinTools(): void {
     }),
     handler: async ({ args, timeout }, ctx) => {
       try {
-        const { stdout, stderr } = await execAsync(`gh ${args}`, { cwd: ctx.cwd, timeout: (timeout ?? 30) * 1000 })
+        // 简单的参数分割：按空格分割，支持双引号内的空格
+        const argsArray: string[] = []
+        let current = ''
+        let inQuote = false
+        for (const char of args) {
+          if (char === '"') {
+            inQuote = !inQuote
+          } else if (char === ' ' && !inQuote) {
+            if (current) {
+              argsArray.push(current)
+              current = ''
+            }
+          } else {
+            current += char
+          }
+        }
+        if (current) argsArray.push(current)
+        
+        const { stdout, stderr } = await execFileAsync('gh', argsArray, { cwd: ctx.cwd, timeout: (timeout ?? 30) * 1000 })
         const output = stdout || stderr || '命令执行完成（无输出）'
         return { success: true, output }
       } catch (e) {
@@ -452,8 +481,11 @@ export function registerBuiltinTools(): void {
     inputSchema: z.object({ cwd: z.string().optional(), file: z.string().optional(), staged: z.boolean().optional() }),
     handler: async ({ cwd, file, staged }, ctx) => {
       try {
-        const cmd = (staged ? 'git diff --staged' : 'git diff') + (file ? ` -- ${file}` : '')
-        const { stdout } = await execAsync(cmd, { cwd: cwd ?? ctx.cwd })
+        const args = staged ? ['diff', '--staged'] : ['diff']
+        if (file) {
+          args.push('--', file)
+        }
+        const { stdout } = await execFileAsync('git', args, { cwd: cwd ?? ctx.cwd })
         return { success: true, output: stdout || '无变更' }
       } catch (e) { return { success: false, error: String(e) } }
     },
@@ -573,8 +605,8 @@ export function registerBuiltinTools(): void {
     inputSchema: z.object({ cwd: z.string().optional(), package: z.string().optional(), dev: z.boolean().optional() }),
     handler: async ({ cwd, package: pkg, dev }, ctx) => {
       try {
-        const cmd = pkg ? `bun add ${dev ? '-D ' : ''}${pkg}` : 'bun install'
-        const { stdout, stderr } = await execAsync(cmd, { cwd: cwd ?? ctx.cwd, timeout: 120_000 })
+        const args = pkg ? ['add', ...(dev ? ['-D'] : []), pkg] : ['install']
+        const { stdout, stderr } = await execFileAsync('bun', args, { cwd: cwd ?? ctx.cwd, timeout: 120_000 })
         return { success: true, output: stdout || stderr || '完成' }
       } catch (e) { return { success: false, error: String(e) } }
     },
@@ -779,8 +811,8 @@ export function registerBuiltinTools(): void {
         if (range) {
           const rangeMatch = range.match(/^(\d+)-(\d+)$/)
           if (rangeMatch) {
-            const start = parseInt(rangeMatch[1]) - 1
-            const end = parseInt(rangeMatch[2])
+            const start = parseInt(rangeMatch[1], 10) - 1
+            const end = parseInt(rangeMatch[2], 10)
             const all = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' })
             data = all.slice(start, end)
           } else {
@@ -803,10 +835,10 @@ export function registerBuiltinTools(): void {
         })
         const pad = (s: string, w: number) => s.slice(0, w).padEnd(w)
         const lines: string[] = []
-        lines.push('| ' + header.map((h, i) => pad(h, colWidths[i])).join(' | ') + ' |')
-        lines.push('| ' + colWidths.map(w => '-'.repeat(w)).join(' | ') + ' |')
+        lines.push(`| ${header.map((h, i) => pad(h, colWidths[i])).join(' | ')} |`)
+        lines.push(`| ${colWidths.map(w => '-'.repeat(w)).join(' | ')} |`)
         for (const row of rows) {
-          lines.push('| ' + header.map((_, i) => pad(String(row[i] ?? ''), colWidths[i])).join(' | ') + ' |')
+          lines.push(`| ${header.map((_, i) => pad(String(row[i] ?? ''), colWidths[i])).join(' | ')} |`)
         }
         return { success: true, output: lines.join('\n') }
       } catch (e) {
@@ -940,7 +972,7 @@ export async function readClipboardImage(): Promise<{ data: string; mime: string
   }
 
   if (platform === 'darwin') {
-    const tmpfile = join((await import('os')).tmpdir(), 'licode-clipboard.png')
+    const tmpfile = join((await import('node:os')).tmpdir(), 'licode-clipboard.png')
     try {
       await promisify(exec)(
         `osascript -e 'set imageData to the clipboard as "PNGf"' -e 'set fileRef to open for access POSIX file "${tmpfile}" with write permission' -e 'set eof fileRef to 0' -e 'write imageData to fileRef' -e 'close access fileRef'`,

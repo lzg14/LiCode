@@ -1,4 +1,4 @@
-import { createContext, useContext, type ParentProps, Show } from "solid-js"
+import { createContext, type ParentProps, Show, useContext } from "solid-js"
 import { createStore } from "solid-js/store"
 import { SplitBorder } from "../component/border"
 import { useTheme } from "../context/theme"

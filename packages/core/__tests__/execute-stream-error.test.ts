@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
-import { execute, type ExecuteContext } from '../phases/execute'
-import { existsSync, rmSync, mkdirSync, writeFileSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { type ExecuteContext, execute } from '../phases/execute'
 
 // 必须先 import builtin，registerBuiltinTools
 import '../../tools/builtin'
@@ -19,7 +19,7 @@ vi.mock('ai', () => {
   }
 })
 
-const mockStreamText = (...args: any[]) => (globalThis as any).__mockStreamTextImpl__?.(...args)
+const _mockStreamText = (...args: any[]) => (globalThis as any).__mockStreamTextImpl__?.(...args)
 ;(globalThis as any).__mockStreamText__ = (...args: any[]) => (globalThis as any).__mockStreamTextImpl__?.(...args)
 
 beforeAll(() => {

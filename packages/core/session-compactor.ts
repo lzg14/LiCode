@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'fs'
-import { join } from 'path'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { devLogger } from './dev-logger'
 
 /**
@@ -173,12 +173,12 @@ export class SessionCompactor {
     if (!existsSync(dir)) return null
 
     // 找最新的 summary-vN.md
-    let latestVersion = 0
+    let _latestVersion = 0
     let latestPath = ''
     for (let v = 1; ; v++) {
       const p = join(dir, `summary-v${v}.md`)
       if (existsSync(p)) {
-        latestVersion = v
+        _latestVersion = v
         latestPath = p
       } else {
         break

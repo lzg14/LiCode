@@ -1,5 +1,5 @@
 import type { SecurityConfig } from './index'
-import { getDefaultWhitelist, BLOCKED_COMMANDS } from './whitelist'
+import { BLOCKED_COMMANDS, getDefaultWhitelist } from './whitelist'
 
 export function getDefaultDeniedPaths(): string[] {
   return process.platform === 'win32'

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { SessionCompactor, type CompactionConfig } from '../session-compactor'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { type CompactionConfig, SessionCompactor } from '../session-compactor'
 
 const DEFAULT_CONFIG: CompactionConfig = {
   maxMessages: 200,

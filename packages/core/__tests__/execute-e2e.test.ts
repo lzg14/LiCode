@@ -1,9 +1,8 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
-import { execute, type ExecuteContext } from '../phases/execute'
-import { globalToolRegistry } from '../../tools/registry'
-import { existsSync, rmSync, mkdirSync, writeFileSync } from 'fs'
-import { join } from 'path'
-import { tmpdir } from 'os'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { type ExecuteContext, execute } from '../phases/execute'
 
 // 确保工具已注册（导入 builtin 会注册）
 import '../../tools/builtin'

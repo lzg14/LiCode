@@ -1,9 +1,9 @@
-import { TextareaRenderable } from "@opentui/core"
+import type { TextareaRenderable } from "@opentui/core"
 import { createEffect, createSignal } from "solid-js"
-import { useTheme } from "../../context/theme"
+import { readClipboardImage } from "../../../tools/builtin"
 import { useHistory } from "../../context/history"
 import { useLoop } from "../../context/loop"
-import { readClipboardImage } from "../../../tools/builtin"
+import { useTheme } from "../../context/theme"
 import { copyToClipboard, readFromClipboard } from "../../util/clipboard"
 
 export interface PromptProps {
