@@ -116,9 +116,15 @@ export class CoreLoop {
    * 返回原始 AI SDK ModelMessage 格式的 session 消息,
    * 包含完整的 tool-call / tool-result parts。
    * TUI 用它重建 tool 消息高亮显示。
+   *
+   * options.limit: 只取最新的 N 条，避免长会话启动 TUI 时一次性加载整个 history 进内存。
+   * 默认 200（够 TUI 渲染最近上下文；要看更早的可以 /compact 触发压缩后再看）。
    */
-  getSessionModelMessages(sessionId: string): Array<{ role: string; content: any[] }> {
-    return this.sessionManager.getMessagesAsModelMessages(sessionId)
+  getSessionModelMessages(
+    sessionId: string,
+    options: { limit?: number } = { limit: 200 },
+  ): Array<{ role: string; content: any[] }> {
+    return this.sessionManager.getMessagesAsModelMessages(sessionId, options)
   }
 
   /**

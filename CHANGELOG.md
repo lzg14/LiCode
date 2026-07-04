@@ -8,6 +8,18 @@
 ## [Unreleased]
 
 ### 修复
+- **内存泄漏 4 个根因修复**：
+  - `subagent.ts` race timer 永不 clearTimeout → 每个 subagent 调用泄漏一个 timeoutMs 长寿闭包
+  - `Memory.entries` 永久累积 + `cleanup()` 从不被调用 → 长期运行后 Map 单调增长；新增 `hardCap` (默认 1000) 自动淘汰最旧
+  - `appendMessageWithParts` 把完整 part 对象写到 `parts.metadata.raw` → 同一份数据在 SQLite 存 3 份；去掉冗余，parts 表保留专门字段（tool_name/tool_call_id/args/result）
+  - `getMessagesAsModelMessages` 加可选 `limit` 参数，SQLite 层就裁剪，避免长会话每次 turn 加载整个 history；TUI 重建默认传 limit=200
+- **加载过期 memory 文件不再入内存**：`Memory.loadFromDir` 用文件 mtimeMs 作为 updatedAt 并按 `maxAgeMs` (默认 30 天) 过滤；过期文件保留在磁盘上由显式 `cleanup()` 删除
+
+### 测试
+- **subagent clearTimeout 回归测试**：验证 spawn 完成后 race timer 必须 clearTimeout
+- **memory eviction 回归测试**：3 个用例覆盖过期文件不入内存、store 超过 hardCap 淘汰最旧、加载时按 mtime 限制数量
+- **session metadata 冗余回归测试**：验证 parts.metadata 不再包含完整原始对象
+- **session limit 选项测试**：3 个用例验证 getMessagesAsModelMessages limit 选项
 - **builtin.ts 5 个 bug 修复**：删除重复 datetime 注册、codesearch 添加 grep/findstr fallback、grep findstr 路径修复、readClipboardImage 使用动态 import、apply_patch 使用 ctx.cwd
 - **subagent 工具"结果丢失"修复**：`subagent.ts` 内部循环构造 tool-result 漏 `type: "tool-result"` 字段，AI SDK v6 zod schema 校验失败，子 agent 第二轮 generateText 拿不到工具结果，accumulatedText 为空返回 `(无输出)`。主循环 `execute.ts` 早就写对了 type，只有 subagent 漏写
 - **streaming 重复输出修复**：移除 streamText 完成后重复调用 onStreamText

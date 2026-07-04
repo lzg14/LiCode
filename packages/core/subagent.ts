@@ -84,6 +84,16 @@ export class SubagentManager {
     this.running++
     const start = Date.now()
 
+    // race timer 句柄：每个 iteration 注册一次，必须在退出时 clearTimeout
+    // 否则 setTimeout 闭包 → reject → outer scope 整条引用链会存活到 timeoutMs 之后才被 GC
+    let raceTimer: ReturnType<typeof setTimeout> | null = null
+    const clearRaceTimer = (): void => {
+      if (raceTimer !== null) {
+        clearTimeout(raceTimer)
+        raceTimer = null
+      }
+    }
+
     try {
       const timeout = input.timeoutMs ?? this.options.timeoutMs
       const allowedTools = this.buildToolsWithExecute(input.tools, ctx.cwd)
@@ -98,6 +108,7 @@ export class SubagentManager {
 
       while (iteration < MAX_TOOL_ITERATIONS) {
         iteration++
+        raceTimer = null
 
         const result = await Promise.race([
           generateText({
@@ -107,10 +118,15 @@ export class SubagentManager {
             tools: allowedTools,
             temperature: 0.7,
           }),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Subagent timeout after ${timeout}ms`)), timeout)
-          ),
+          new Promise<never>((_, reject) => {
+            raceTimer = setTimeout(
+              () => reject(new Error(`Subagent timeout after ${timeout}ms`)),
+              timeout,
+            )
+          }),
         ])
+        // race 已 resolve，timer 不再需要，立刻清掉避免闭包存活到 timeoutMs
+        clearRaceTimer()
 
         // 收集文本输出
         if (result.text) {
@@ -183,6 +199,8 @@ export class SubagentManager {
         durationMs: Date.now() - start,
       }
     } finally {
+      // 双保险：抛错 / 早退 / 中断路径都清理 race timer
+      clearRaceTimer()
       this.running--
       const next = this.queue.shift()
       if (next) next()
