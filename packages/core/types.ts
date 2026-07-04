@@ -1,3 +1,5 @@
+import type { SecurityConfig } from '../security/index'
+
 // 基础类型
 export type SessionId = string & { readonly _brand: 'SessionId' }
 export type UserId = string & { readonly _brand: 'UserId' }
@@ -58,12 +60,6 @@ export interface LLMConfig {
   apiKeyEnv?: string
   apiKey?: string
   baseUrl?: string
-}
-
-export interface SecurityConfig {
-  commandWhitelist: string[]
-  allowedPaths: string[]
-  deniedPaths: string[]
 }
 
 export interface MemoryConfig {

@@ -9,9 +9,9 @@
  */
 
 import { generateText, jsonSchema, tool } from "ai"
-import { z } from "zod"
 import { globalToolRegistry } from "../tools/registry"
 import { devLogger } from "./dev-logger"
+import { zodToJsonSchema } from "./utils"
 
 /** 子 agent 输入 */
 export interface SubagentInput {
@@ -43,12 +43,6 @@ export interface SubagentOptions {
   maxConcurrent: number
   timeoutMs: number
   blockedTools: string[]
-}
-
-function zodToJsonSchema(schema: any): any {
-  const raw: any = z.toJSONSchema(schema, { target: "draft-7" })
-  delete raw.$schema
-  return raw
 }
 
 /**

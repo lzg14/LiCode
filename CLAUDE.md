@@ -22,7 +22,7 @@
 | TUI | SolidJS + @opentui/core + @opentui/solid |
 | LLM SDK | `ai` (v6) + @ai-sdk/anthropic / openai |
 | Schema | Zod 4 |
-| 数据库 | SQLite（bun:sqlite，会话 + FTS5 记忆）|
+| 数据库 | SQLite（bun:sqlite，会话）+ 基于文件系统的记忆存储 |
 | 测试 | Vitest |
 
 **TypeScript 关键配置**：
@@ -46,7 +46,7 @@ D:\ProjectFile\licode\
 │   ├── llm/               # Provider 抽象
 │   ├── security/          # 命令白名单 + 路径校验 + 危险命令拦截
 │   ├── skills/            # Skill 系统（loader 待补）
-│   ├── memory/            # FTS5 记忆
+│   ├── memory/            # 基于文件系统的记忆存储
 │   ├── workflow/          # Workflow 模板（.prompt.md）
 │   ├── integration/       # MCP / Git / 数据库集成
 │   ├── cli/               # 入口（仅调 runTUI）
@@ -109,6 +109,8 @@ docs/plans/<topic>-plan.md
 
 **当前位置**：
 - `production-gaps-2026-q3.md` — 生产差距评估（当前 roadmap）
+
+**已归档**（在 `docs/plans/archive/`）：
 - `claude-code-skills-integration.md` — Skill 集成计划
 - `slash-menu-simplification.md` — `/` 菜单精简计划
 - `workflow-system.md` — Workflow 设计（早期）
@@ -173,7 +175,7 @@ git worktree add ../licode-<feature>-<agent> -b feature/<feature>
 
 ```ts
 // packages/core/types.ts
-export type Phase = 'EXECUTE' | 'DONE'
+export type Phase = 'EXECUTE' | 'VERIFY' | 'DONE'
 ```
 
 LLM 自己判断用什么工具，Core Loop 不强制阶段。
@@ -194,7 +196,7 @@ LLM 自己判断用什么工具，Core Loop 不强制阶段。
 `packages/session/session.ts` 用 SQLite：
 
 - 历史消息带 tool-call/tool-result parts
-- 自动压缩（30/100 条限制）
+- 自动压缩（1000 条限制）
 - 跨启动恢复最近 session
 
 ### TUI
@@ -204,7 +206,7 @@ LLM 自己判断用什么工具，Core Loop 不强制阶段。
 - `home.tsx` 是主路由
 - `context/loop.tsx` 是核心状态
 - `context/todos.ts` 是规划状态
-- `/` 斜杠命令菜单**只列 skills**（详见 `slash-menu-simplification.md`）
+- `/` 斜杠命令菜单包含：`/clear`、`/compact`、`/help`、`/loop` 和所有 skills（详见 `slash-menu-simplification.md`）
 
 ---
 
@@ -237,7 +239,7 @@ whenToUse: <何时用>
 | 自动 git push | 禁止，必须用户确认 |
 | 自动 git commit | 允许 |
 | 推送前 lint | 全局规则说 `ruff check src/`，但本项目是 TS，**改为 `bunx tsc --noEmit --skipLibCheck`** |
-| 长对话压缩 | 自动触发，30 条 / 100 条阈值，详见 `session-compactor.ts` |
+| 长对话压缩 | 自动触发，1000 条阈值，详见 `session-compactor.ts` |
 | 工作树管理 | 用 `git-worktrees` skill（全局） |
 
 ---
@@ -280,6 +282,6 @@ whenToUse: <何时用>
 | [README.md](../README.md) | 用户面向的项目介绍 |
 | [CHANGELOG.md](../CHANGELOG.md) | 版本变更记录 |
 | [docs/plans/productization-plan.md](./plans/productization-plan.md) | 5 阶段产品化计划 |
-| [docs/plans/claude-code-skills-integration.md](./plans/claude-code-skills-integration.md) | Skill 集成 |
-| [docs/plans/slash-menu-simplification.md](./plans/slash-menu-simplification.md) | `/` 菜单精简 |
+| [docs/plans/claude-code-skills-integration.md](./plans/archive/claude-code-skills-integration.md) | Skill 集成（已归档） |
+| [docs/plans/slash-menu-simplification.md](./plans/archive/slash-menu-simplification.md) | `/` 菜单精简（已归档） |
 | 全局 [CLAUDE.md](file:///C:/Users/lzg14/.claude/CLAUDE.md) | 全局规则 |

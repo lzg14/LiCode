@@ -1,7 +1,5 @@
-export type { AuthConfig } from './auth'
-export { AuthManager } from './auth'
 export { getModelConfig, listModels, MODEL_CATALOG, supportsFeature } from './catalog'
 export type { CostEstimate } from './cost'
-export { calculateCost, estimateCost, formatCost } from './cost'
+export { estimateCost, formatCost } from './cost'
 export { createModel, type ModelConfig } from './provider'
 export * from './types'

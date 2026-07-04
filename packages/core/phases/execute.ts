@@ -2,12 +2,12 @@ import { existsSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { jsonSchema, streamText, tool } from "ai"
-import { z } from "zod"
 import { globalToolRegistry } from "../../tools/registry"
 import { buildProjectRole, detectProject } from "../detect-project"
 import { devLogger } from "../dev-logger"
 import type { Timer } from "../perf"
 import { type SubagentInput, SubagentManager } from "../subagent"
+import { zodToJsonSchema } from "../utils"
 
 /**
  * 加载项目配置文件（.licode.md / LICODE.md）
@@ -288,12 +288,6 @@ export function findValidStart(msgs: Array<{ role: string; content: any[] }>): n
     }
   }
   return 0
-}
-
-function zodToJsonSchema(schema: any): any {
-  const raw: any = z.toJSONSchema(schema, { target: 'draft-7' })
-  delete raw.$schema
-  return raw
 }
 
 export async function execute(ctx: ExecuteContext): Promise<string> {

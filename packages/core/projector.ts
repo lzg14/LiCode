@@ -110,13 +110,8 @@ export class Projector {
    */
   projectPhaseChange(phase: string): ProjectedMessage {
     const phaseNames: Record<string, string> = {
-      OBSERVE: '观察',
-      THINK: '思考',
-      PLAN: '规划',
-      BUILD: '构建',
       EXECUTE: '执行',
       VERIFY: '验证',
-      LEARN: '学习',
       DONE: '完成',
     }
 

@@ -262,6 +262,3 @@ export function setSecurityLayer(instance: SecurityLayer): void {
 export function getSecurityLayer(): SecurityLayer {
   return _activeSecurityLayer
 }
-
-// 向后兼容的单例 export（deprecated，优先用 getSecurityLayer()）
-export const securityLayer = _activeSecurityLayer

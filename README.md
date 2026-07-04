@@ -60,7 +60,8 @@ licode/
 │   ├── llm/            # LLM Provider（Anthropic/OpenAI/DeepSeek/MiniMax）
 │   ├── security/       # 安全层（命令白名单、路径限制、危险命令拦截）
 │   ├── skills/         # 技能系统（兼容 Claude Code skills）
-│   ├── memory/         # 记忆系统（FTS5、recall）
+│   ├── memory/         # 记忆系统（基于文件系统的记忆存储）
+│   ├── cli/            # CLI 入口
 │   └── integration/    # 外部集成（MCP、Git）
 ├── docs/               # 设计文档
 └── package.json
@@ -142,6 +143,8 @@ bun test --watch
 | `/skill list` | 列出可用技能 |
 | `/compact` | 压缩对话历史 |
 | `/clear` | 开新会话 |
+| `/help` | 查看所有快捷键 |
+| `/loop` | 定时重复执行 prompt |
 
 ---
 

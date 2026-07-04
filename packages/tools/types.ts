@@ -12,6 +12,8 @@ export type ToolResult<T = unknown> = {
   success: boolean
   output?: T
   error?: string
+  diff?: string
+  imageData?: { base64: string; mimeType: string }
 }
 
 export interface ToolDefinition {
@@ -24,6 +26,30 @@ export interface ToolDefinition {
 }
 
 export type ToolName =
-  | 'read' | 'write' | 'edit' | 'glob' | 'grep'
-  | 'bash' | 'skill' | 'webfetch' | 'websearch' | 'codesearch'
-  | 'format' | 'lint' | 'database_query' | 'apply_patch'
+  // 文件操作
+  | 'read' | 'write' | 'edit' | 'list_directory' | 'create_directory'
+  | 'delete_file' | 'move_file' | 'copy_file'
+  // 搜索
+  | 'glob' | 'grep' | 'codesearch'
+  // 系统
+  | 'stat' | 'bash' | 'env_vars' | 'datetime' | 'system_info'
+  // Windows 系统
+  | 'process_list' | 'kill_process' | 'open_explorer' | 'open_url' | 'gh'
+  // Git
+  | 'git_status' | 'git_diff' | 'git_log' | 'git_commit'
+  // Web
+  | 'webfetch' | 'websearch'
+  // 开发工具
+  | 'run_tests' | 'install_deps' | 'format' | 'lint'
+  // 技能
+  | 'skill'
+  // 数据库
+  | 'database_query'
+  // 补丁
+  | 'apply_patch'
+  // Excel
+  | 'excel_read' | 'excel_write'
+  // 图片
+  | 'read_image'
+  // 其他
+  | 'todo_write' | 'todo_read'

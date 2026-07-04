@@ -27,8 +27,25 @@
   - **markdown 永远 `streaming={true}` + `conceal={true}`**：避免 streaming 切换到 false 触发 finalize 整 viewport 重绘；消除"非高亮 → 高亮"切换
   - **PendingStreamView 合并显示**：text 段 + pending 合并成单一 markdown 组件，thinking 段用 `CollapsibleText maxLines=5` 灰色折叠（恢复 fbc5161 行为）；删除 streamingSegments 独立 For 渲染，避免 markdown 频繁 mount
   - **ScrollBox 改回 mimocode 风格**：`paddingRight: 1` + 滚动条 `visible: true`（之前自创的 `paddingRight: 0` + 滚动条 hidden 反而引入问题）
+- **ToolName 类型更新**：扩展 ToolName 类型覆盖全部 39 个工具，确保类型安全
+- **SecurityConfig 重复定义合并**：消除 SecurityConfig 接口的重复定义，统一到一处
+- **zodToJsonSchema 重复消除**：移除重复的 zodToJsonSchema 实现，统一使用单一来源
+- **Projector 残留阶段名清理**：清理 Projector 中残留的七阶段名称引用
+
+
+
+### 安全
+- **bun 加入白名单**：BASE_WHITELIST 添加 bun/bunx
+- **whitelist-bunx 测试**：新增 bunx 命令白名单测试
+- **命令注入漏洞修复**：将 7 处 execAsync 调用改为 execFileAsync，防止命令注入攻击
+- **路径遍历漏洞修复**：checkPath 函数添加 path.resolve 规范化路径，防止路径遍历
+- **敏感信息泄露修复**：env_vars 工具过滤敏感环境变量（如 API_KEY、SECRET 等）
+- **API Key 持久化防护**：save() 方法过滤 apiKey 字段，防止密钥意外写入会话存储
 
 ### 测试
+- **stream-accumulator 测试**：16 个用例覆盖跨 chunk 标签、thinking/system-reminder 闭合
+- **thinking-display 测试**：14 个用例覆盖 4 种状态转换
+- **help-content 测试**：验证帮助数据结构
 - **resolveContextWindow 单元测试**：7 个用例覆盖 MiniMax-M3 / MiniMax-M3[1M] / 未注册模型查表行为
 - **session-compactor unknownModelThreshold 回归测试**：3 个用例验证未注册模型走更紧兜底、contextWindow 已知仍走 80%、maxTokens 不会拉大兜底
 - **subagent clearTimeout 回归测试**：验证 spawn 完成后 race timer 必须 clearTimeout
@@ -42,15 +59,6 @@
 - **queued 消息颜色**：从灰色改为蓝色更醒目
 - **PageUp/PageDown/Home/End 滚动**：启用 scrollbox 内置快捷键
 - **ESC 中断**：流式输出时 ESC 正确处理 AbortError
-
-### 安全
-- **bun 加入白名单**：BASE_WHITELIST 添加 bun/bunx
-- **whitelist-bunx 测试**：新增 bunx 命令白名单测试
-
-### 测试
-- **stream-accumulator 测试**：16 个用例覆盖跨 chunk 标签、thinking/system-reminder 闭合
-- **thinking-display 测试**：14 个用例覆盖 4 种状态转换
-- **help-content 测试**：验证帮助数据结构
 
 ### 重构
 - **streamText 流式输出**：generateText 改 streamText，支持逐 chunk 回调
@@ -71,6 +79,8 @@
 - **移除 .licode/tui.json**
 - **移动计划文件到 docs/plans/**
 - **删除 ENV_X220.md**
+- **删除 4 个未使用的文件**：清理 429 行死代码，包括 packages/audit/ 下的文件
+- **清理未使用的导出和依赖**：移除未被引用的导出和多余的依赖声明
 
 ## [0.3.0] - 2026-06-23
 

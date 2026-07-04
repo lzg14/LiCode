@@ -1,11 +1,6 @@
 import type { SecurityConfig } from './index'
+import { getDefaultDeniedPaths } from './index'
 import { BLOCKED_COMMANDS, getDefaultWhitelist } from './whitelist'
-
-export function getDefaultDeniedPaths(): string[] {
-  return process.platform === 'win32'
-    ? ['C:\\Windows', 'C:\\Program Files']
-    : ['/etc', '/sys', '/proc']
-}
 
 const DEFAULT_SENSITIVE_PATTERNS = [
   'password', 'api_key', 'apikey', 'secret', 'token', 'private_key',

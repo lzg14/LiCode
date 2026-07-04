@@ -7,18 +7,15 @@
       "dependencies": {
         "@ai-sdk/anthropic": "^3.0.85",
         "@ai-sdk/openai": "^3.0.73",
-        "@ai-sdk/provider": "^3.0.10",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@opentui/core": "^0.4.2",
         "@opentui/solid": "^0.4.2",
         "ai": "^6.0.208",
-        "chalk": "^5.3.0",
         "glob": "^11.0.0",
         "simple-git": "^3.36.0",
         "solid-js": "^1.9.12",
         "xlsx": "^0.18.5",
         "zod": "^4.4.3",
-        "zod-to-json-schema": "^3.25.2",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.2",
@@ -340,8 +337,6 @@
     "cfb": ["cfb@1.2.2", "", { "dependencies": { "adler-32": "~1.3.0", "crc-32": "~1.2.0" } }, "sha512-KfdUZsSOw19/ObEWasvBP/Ac4reZvAGauZhs6S/gqNhXhI7cKwvlH7ulj+dOEYnca4bm4SGo8C1bTAQvnTjgQA=="],
 
     "chai": ["chai@5.3.3", "", { "dependencies": { "assertion-error": "^2.0.1", "check-error": "^2.1.1", "deep-eql": "^5.0.1", "loupe": "^3.1.0", "pathval": "^2.0.0" } }, "sha512-4zNhdJD/iOjSH0A05ea+Ke6MU5mmpQcbQsSOkgdaUMJ9zTlDTD/GYlwohmIE2u0gaxHYiVHEn1Fw9mZ/ktJWgw=="],
-
-    "chalk": ["chalk@5.6.2", "", {}, "sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA=="],
 
     "check-error": ["check-error@2.1.3", "", {}, "sha512-PAJdDJusoxnwm1VwW07VWwUN1sl7smmC3OKggvndJFadxxDRyFJBX/ggnu/KE4kQAB7a3Dp8f/YXC1FlUprWmA=="],
 

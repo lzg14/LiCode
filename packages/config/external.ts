@@ -2,32 +2,6 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-export interface ExternalSource {
-  type: 'claude-code' | 'opencode' | 'hermes'
-  path: string
-  exists: boolean
-}
-
-export function discoverExternalSources(home: string): ExternalSource[] {
-  return [
-    {
-      type: 'claude-code',
-      path: join(home, '.claude', 'settings.json'),
-      exists: existsSync(join(home, '.claude', 'settings.json')),
-    },
-    {
-      type: 'opencode',
-      path: join(home, '.opencode'),
-      exists: existsSync(join(home, '.opencode')),
-    },
-    {
-      type: 'hermes',
-      path: join(home, '.hermes'),
-      exists: existsSync(join(home, '.hermes')),
-    },
-  ]
-}
-
 export interface ClaudeCodeConfig {
   apiKey: string
   baseUrl: string
