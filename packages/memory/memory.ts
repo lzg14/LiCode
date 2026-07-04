@@ -1,24 +1,44 @@
-import { readFile, writeFile, access, mkdir, readdir, unlink } from 'fs/promises'
+import { readFile, writeFile, access, mkdir, readdir, unlink, stat } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
 import type { MemoryEntry, MemorySearchResult } from './schema'
 
-const MEMORY_BASE = join(homedir(), '.licode', 'memory')
+const DEFAULT_MEMORY_BASE = join(homedir(), '.licode', 'memory')
+const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+const DEFAULT_HARD_CAP = 1000
+
+export interface MemoryConfig {
+  /** 记忆存储根目录；默认 ~/.licode/memory */
+  baseDir?: string
+  /** 加载时跳过超过此 mtime 的文件；默认 30 天 */
+  maxAgeMs?: number
+  /** 内存中 entry 数量上限，超过按 updatedAt 淘汰最旧；默认 1000 */
+  hardCap?: number
+}
 
 export class Memory {
   private entries: Map<string, MemoryEntry> = new Map()
   private initialized = false
+  private baseDir: string
+  private maxAgeMs: number
+  private hardCap: number
 
-  constructor(private projectPath?: string) {}
+  constructor(private projectPath?: string, config: MemoryConfig = {}) {
+    this.baseDir = config.baseDir ?? DEFAULT_MEMORY_BASE
+    this.maxAgeMs = config.maxAgeMs ?? DEFAULT_MAX_AGE_MS
+    this.hardCap = config.hardCap ?? DEFAULT_HARD_CAP
+  }
 
   private async ensureInit(): Promise<void> {
     if (this.initialized) return
     this.initialized = true
-    await this.loadFromDir(join(MEMORY_BASE, 'global'))
+    await this.loadFromDir(join(this.baseDir, 'global'))
     if (this.projectPath) {
       const projectId = Buffer.from(this.projectPath).toString('base64').slice(0, 16)
-      await this.loadFromDir(join(MEMORY_BASE, 'projects', projectId))
+      await this.loadFromDir(join(this.baseDir, 'projects', projectId))
     }
+    // 加载后立即按 hardCap 裁剪，防止磁盘上有大量历史 entry 时一次性吃光内存
+    this.enforceHardCap()
   }
 
   private async loadFromDir(dir: string): Promise<void> {
@@ -29,24 +49,51 @@ export class Memory {
     }
 
     try {
-      const globalDir = join(MEMORY_BASE, 'global')
+      const globalDir = join(this.baseDir, 'global')
       const isGlobal = dir === globalDir
       const files = await readdir(dir)
+      const now = Date.now()
       for (const file of files.filter(f => f.endsWith('.md'))) {
-        const content = await readFile(join(dir, file), 'utf-8')
+        const fullPath = join(dir, file)
+        // 用文件 mtime 作为 updatedAt，确保 maxAgeMs 过滤对磁盘文件有效
+        let mtimeMs = now
+        try {
+          const s = await stat(fullPath)
+          mtimeMs = s.mtimeMs
+        } catch {
+          // stat 失败就当最新，跳过
+          mtimeMs = now
+        }
+        // 过期文件不入内存（保留在磁盘，由 cleanup() 显式删除）
+        if (now - mtimeMs > this.maxAgeMs) continue
+
+        const content = await readFile(fullPath, 'utf-8')
         const id = file.replace('.md', '')
         this.entries.set(id, {
           id,
           scope: isGlobal ? 'global' : 'project',
           type: 'memory',
           content,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
+          createdAt: mtimeMs,
+          updatedAt: mtimeMs,
           accessCount: 0,
         })
       }
     } catch (e) {
       process.stderr.write(`[Memory] loadFromDir failed for ${dir}: ${e}\n`)
+    }
+  }
+
+  /**
+   * 强制把 entries 数量限制在 hardCap 以内：按 updatedAt 升序淘汰最旧的。
+   * 注意：只清理内存层；磁盘文件由显式 cleanup() 删除。
+   */
+  private enforceHardCap(): void {
+    if (this.entries.size <= this.hardCap) return
+    const sorted = Array.from(this.entries.values()).sort((a, b) => a.updatedAt - b.updatedAt)
+    const toDrop = sorted.slice(0, this.entries.size - this.hardCap)
+    for (const entry of toDrop) {
+      this.entries.delete(entry.id)
     }
   }
 
@@ -65,6 +112,8 @@ export class Memory {
     }
 
     this.entries.set(id, fullEntry)
+    // store 后立即裁剪，防止长期运行进程内 map 单调增长
+    this.enforceHardCap()
     await this.persist(fullEntry)
 
     return id
@@ -74,12 +123,12 @@ export class Memory {
     let dir: string
 
     if (entry.scope === 'global') {
-      dir = join(MEMORY_BASE, 'global')
+      dir = join(this.baseDir, 'global')
     } else if (entry.scope === 'project' && this.projectPath) {
       const projectId = Buffer.from(this.projectPath).toString('base64').slice(0, 16)
-      dir = join(MEMORY_BASE, 'projects', projectId)
+      dir = join(this.baseDir, 'projects', projectId)
     } else {
-      dir = join(MEMORY_BASE, 'sessions')
+      dir = join(this.baseDir, 'sessions')
     }
 
     try {
@@ -148,12 +197,12 @@ export class Memory {
     // 同时删除持久化文件
     let dir: string
     if (entry.scope === 'global') {
-      dir = join(MEMORY_BASE, 'global')
+      dir = join(this.baseDir, 'global')
     } else if (entry.scope === 'project' && this.projectPath) {
       const projectId = Buffer.from(this.projectPath).toString('base64').slice(0, 16)
-      dir = join(MEMORY_BASE, 'projects', projectId)
+      dir = join(this.baseDir, 'projects', projectId)
     } else {
-      dir = join(MEMORY_BASE, 'sessions')
+      dir = join(this.baseDir, 'sessions')
     }
 
     const filePath = join(dir, `${id}.md`)
@@ -167,9 +216,10 @@ export class Memory {
   }
 
   /**
-   * 过期清理
+   * 过期清理：删除内存和磁盘上都过期的 entry。
+   * 默认 maxAgeMs = 30 天。
    */
-  async cleanup(maxAgeMs: number = 30 * 24 * 60 * 60 * 1000): Promise<number> {
+  async cleanup(maxAgeMs: number = this.maxAgeMs): Promise<number> {
     await this.ensureInit()
     const now = Date.now()
     let count = 0

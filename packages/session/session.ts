@@ -476,6 +476,9 @@ export class SessionManager {
     this.db.run('UPDATE sessions SET updated_at = ? WHERE id = ?', [now, input.sessionId])
 
     // 同时把每个 part 也写到 parts 表，方便精细查询
+    // 注意：不要在 metadata 里存完整原始对象（metadata: { raw: c }），
+    // 否则 messages.content 已经存了完整 JSON，parts.metadata 再存一份就是三倍冗余，
+    // 大对象（tool 输入/输出几 KB）会让 SQLite 文件和内存放大数倍。
     const createdParts: Part[] = []
     for (const c of input.content) {
       if (!c || typeof c !== 'object') continue
@@ -489,7 +492,9 @@ export class SessionManager {
         toolCallId: c.toolCallId,
         args: toolArgs,
         result: toolResult,
-        metadata: { raw: c },
+        // metadata 留空 —— parts 表已有专门字段（tool_name / tool_call_id / args / result），
+        // 完整原始对象在 messages.content 的 JSON 里，避免重复存储
+        metadata: undefined,
       })
       createdParts.push(part)
     }
@@ -523,11 +528,42 @@ export class SessionManager {
   }
 
   /**
-   * 读取 session 的所有 messages，重建 AI SDK ModelMessage[] 格式。
+   * 读取 session 的 messages，重建 AI SDK ModelMessage[] 格式。
    * 用作 generateText 的 messages 参数，可直接交给 LLM。
+   *
+   * options.limit: 只取最新的 N 条（SQLite 层就限制，避免加载整个 history）。
+   * 不传则返回所有消息（向后兼容）。
    */
-  getMessagesAsModelMessages(sessionId: string): Array<{ role: string; content: any[] }> {
-    const messages = this.getMessages(sessionId)
+  getMessagesAsModelMessages(
+    sessionId: string,
+    options: { limit?: number } = {},
+  ): Array<{ role: string; content: any[] }> {
+    let messages: Message[]
+    if (options.limit !== undefined) {
+      // 直接从 SQLite 取最新的 N 条（ORDER DESC + LIMIT），再 reverse 回时间正序
+      // 避免长会话把整个 history 加载进内存再裁剪
+      const rows = this.db.query(
+        `SELECT * FROM messages WHERE session_id = ?
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT ?`,
+      ).all(sessionId, options.limit) as any[]
+      messages = rows.reverse().map((row) => ({
+        id: row.id,
+        sessionId: row.session_id,
+        role: row.role,
+        content: row.content,
+        agent: row.agent,
+        model: row.model,
+        tokenUsage: row.token_input > 0 ? {
+          input: row.token_input,
+          output: row.token_output,
+        } : undefined,
+        cost: row.cost,
+        createdAt: row.created_at,
+      }))
+    } else {
+      messages = this.getMessages(sessionId)
+    }
     return messages.map(m => {
       // 优先尝试 parse message.content 为 JSON（这是 appendMessageWithParts 写入的格式）
       try {
