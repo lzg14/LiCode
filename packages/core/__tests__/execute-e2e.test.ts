@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest'
 import { execute, type ExecuteContext } from '../phases/execute'
 import { globalToolRegistry } from '../../tools/registry'
 import { existsSync, rmSync, mkdirSync, writeFileSync } from 'fs'
@@ -10,14 +10,27 @@ import '../../tools/builtin'
 
 const TEST_DIR = join(tmpdir(), `licode-e2e-test-${Date.now()}`)
 
-// Mock generateText 来模拟 LLM
+// Mock generateText / streamText 来模拟 LLM
 // 必须在 import execute 之前，vitest 会 hoist 到文件顶部
 const mockGenerateText = vi.hoisted(() => vi.fn())
+const mockStreamText = vi.hoisted(() => vi.fn())
 vi.mock('ai', () => ({
   generateText: mockGenerateText,
+  streamText: mockStreamText,
   tool: (def: any) => def,
   jsonSchema: (schema: any) => schema,
 }))
+
+// 让 streamText 返回一个看起来像真实 streamText 的对象
+// execute.ts 会消费 fullStream（async iterable）+ usage（promise）+ finishReason（promise）
+const streamTextResponse = (text: string, toolCalls: any[] = []) => ({
+  fullStream: (async function* () {
+    if (text) yield { type: 'text-delta', text }
+    for (const tc of toolCalls) yield { type: 'tool-call', ...tc }
+  })(),
+  usage: Promise.resolve({ inputTokens: 10, outputTokens: 5, totalTokens: 15 }),
+  finishReason: Promise.resolve(toolCalls.length > 0 ? 'tool-calls' : 'stop'),
+})
 
 beforeAll(() => {
   if (!existsSync(TEST_DIR)) mkdirSync(TEST_DIR, { recursive: true })
@@ -32,13 +45,13 @@ afterAll(() => {
 })
 
 describe('execute E2E', () => {
+  beforeEach(() => {
+    mockGenerateText.mockReset()
+    mockStreamText.mockReset()
+  })
+
   it('LLM 返回纯文本 — 直接输出', async () => {
-    mockGenerateText.mockReturnValueOnce({
-      text: '直接回复',
-      toolCalls: [],
-      usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-      finishReason: 'stop',
-    })
+    mockStreamText.mockReturnValueOnce(streamTextResponse('直接回复'))
 
     const ctx: ExecuteContext = {
       model: { modelId: 'mock-model', provider: 'mock-provider' },
@@ -60,19 +73,11 @@ describe('execute E2E', () => {
   })
 
   it('LLM 返回 tool-call → 执行工具 → 继续 → 最终返回文本', async () => {
-    mockGenerateText
-      .mockReturnValueOnce({
-        text: 'I will read the file',
-        toolCalls: [{ toolName: 'read', input: { path: join(TEST_DIR, 'test.txt') }, toolCallId: 'tc1' }],
-        usage: { inputTokens: 50, outputTokens: 20, totalTokens: 70 },
-        finishReason: 'tool-calls',
-      })
-      .mockReturnValueOnce({
-        text: 'Here is the file content: mock file content',
-        toolCalls: [],
-        usage: { inputTokens: 30, outputTokens: 10, totalTokens: 40 },
-        finishReason: 'stop',
-      })
+    mockStreamText
+      .mockReturnValueOnce(streamTextResponse('I will read the file', [
+        { toolName: 'read', input: { path: join(TEST_DIR, 'test.txt') }, toolCallId: 'tc1' },
+      ]))
+      .mockReturnValueOnce(streamTextResponse('Here is the file content: mock file content'))
 
     const ctx: ExecuteContext = {
       model: { modelId: 'mock-model', provider: 'mock-provider' },

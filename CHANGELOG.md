@@ -9,6 +9,7 @@
 
 ### 修复
 - **builtin.ts 5 个 bug 修复**：删除重复 datetime 注册、codesearch 添加 grep/findstr fallback、grep findstr 路径修复、readClipboardImage 使用动态 import、apply_patch 使用 ctx.cwd
+- **subagent 工具"结果丢失"修复**：`subagent.ts` 内部循环构造 tool-result 漏 `type: "tool-result"` 字段，AI SDK v6 zod schema 校验失败，子 agent 第二轮 generateText 拿不到工具结果，accumulatedText 为空返回 `(无输出)`。主循环 `execute.ts` 早就写对了 type，只有 subagent 漏写
 - **streaming 重复输出修复**：移除 streamText 完成后重复调用 onStreamText
 - **slash 命令修复**：Tab 选择后按 return 正确执行
 - **queued 消息颜色**：从灰色改为蓝色更醒目

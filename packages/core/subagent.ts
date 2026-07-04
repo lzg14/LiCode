@@ -129,6 +129,7 @@ export class SubagentManager {
             try {
               const execResult = await globalToolRegistry.execute(tc.toolName, tc.input as Record<string, unknown>, { cwd: ctx.cwd })
               return {
+                type: "tool-result" as const,
                 toolCallId: tc.toolCallId,
                 toolName: tc.toolName,
                 output: {
@@ -141,6 +142,7 @@ export class SubagentManager {
             } catch (e) {
               const err = e instanceof Error ? e.message : String(e)
               return {
+                type: "tool-result" as const,
                 toolCallId: tc.toolCallId,
                 toolName: tc.toolName,
                 output: { type: "text" as const, value: `Error: ${err}` },
