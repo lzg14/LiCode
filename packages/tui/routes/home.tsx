@@ -296,9 +296,12 @@ export function Home() {
             scrollY={true}
             stickyScroll={true}
             stickyStart="bottom"
+            // 完全照搬 mimocode 配置（避免 licode 自创配置引入回归）
+            // 关键差异：paddingRight: 1、滚动条 visible
             viewportOptions={{
               paddingRight: 1,
             }}
+            verticalScrollbarOptions={{ visible: true }}
           >
             <MessageList />
           </scrollbox>

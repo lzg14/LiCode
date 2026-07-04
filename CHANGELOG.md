@@ -18,6 +18,11 @@
   - `appendMessageWithParts` 把完整 part 对象写到 `parts.metadata.raw` → 同一份数据在 SQLite 存 3 份；去掉冗余，parts 表保留专门字段（tool_name/tool_call_id/args/result）
   - `getMessagesAsModelMessages` 加可选 `limit` 参数，SQLite 层就裁剪，避免长会话每次 turn 加载整个 history；TUI 重建默认传 limit=200
 - **加载过期 memory 文件不再入内存**：`Memory.loadFromDir` 用文件 mtimeMs 作为 updatedAt 并按 `maxAgeMs` (默认 30 天) 过滤；过期文件保留在磁盘上由显式 `cleanup()` 删除
+- **TUI 消息显示闪烁 + 切换跳变修复**（根因：markdown 组件 mount 触发 stickyScroll 整 viewport 重绘 + 流式闭合段与最终消息视觉不一致）：
+  - **syntaxStyle 提升到顶层**：`MessageList` 顶层 `createMemo` sharedSyntaxStyle，所有 markdown 共享避免每实例 createMemo 重建；`MarkdownText` / `ThinkingView` 加可选 `syntaxStyle` prop
+  - **markdown 永远 `streaming={true}` + `conceal={true}`**：避免 streaming 切换到 false 触发 finalize 整 viewport 重绘；消除"非高亮 → 高亮"切换
+  - **PendingStreamView 合并显示**：text 段 + pending 合并成单一 markdown 组件，thinking 段用 `CollapsibleText maxLines=5` 灰色折叠（恢复 fbc5161 行为）；删除 streamingSegments 独立 For 渲染，避免 markdown 频繁 mount
+  - **ScrollBox 改回 mimocode 风格**：`paddingRight: 1` + 滚动条 `visible: true`（之前自创的 `paddingRight: 0` + 滚动条 hidden 反而引入问题）
 
 ### 测试
 - **resolveContextWindow 单元测试**：7 个用例覆盖 MiniMax-M3 / MiniMax-M3[1M] / 未注册模型查表行为

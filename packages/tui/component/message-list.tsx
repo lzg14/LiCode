@@ -1,4 +1,5 @@
 import { For, Show, Switch, Match, createMemo, createSignal } from "solid-js"
+import type { SyntaxStyle } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useLoop } from "../context/loop"
 import type { Message } from "../context/loop"
@@ -27,9 +28,10 @@ function stripSystemTags(content: string): string {
 
   return processed.replace(/\n{3,}/g, "\n\n").trim()
 }
-function MarkdownText(props: { content: string; streaming?: boolean }) {
+function MarkdownText(props: { content: string; streaming?: boolean; syntaxStyle?: SyntaxStyle }) {
   const { primary, warning, success, info, text, textMuted, background, border } = useTheme()
-  const syntaxStyle = createMemo(() => createMarkdownSyntaxStyle({
+  // 兜底：如果调用方没传 syntaxStyle，自己 memo 一个（保留向后兼容）
+  const fallbackSyntaxStyle = createMemo(() => createMarkdownSyntaxStyle({
     primary: primary(), warning: warning(), success: success(),
     info: info(), text: text(), textMuted: textMuted(), border: border(),
   }))
@@ -37,7 +39,7 @@ function MarkdownText(props: { content: string; streaming?: boolean }) {
     <markdown
       content={props.content}
       streaming={props.streaming ?? false}
-      syntaxStyle={syntaxStyle()}
+      syntaxStyle={props.syntaxStyle ?? fallbackSyntaxStyle()}
       conceal={true}
       fg={text()}
       bg={background()}
@@ -49,8 +51,27 @@ function MarkdownText(props: { content: string; streaming?: boolean }) {
  * PendingStreamView - 渲染未闭合的 streaming 内容
  * streaming 中的 thinking 内容始终灰色 + 可折叠
  */
-function PendingStreamView() {
-  const { pendingText, streamMode } = useLoop()
+function PendingStreamView(props: { syntaxStyle?: SyntaxStyle }) {
+  const { pendingText, streamMode, streamingSegments } = useLoop()
+  const { textMuted } = useTheme()
+
+  // 已闭合的 thinking 段累积（折叠显示前 5 行，让用户看到"在思考"）
+  const thinkingText = createMemo(() => {
+    return streamingSegments()
+      .filter((s) => s.kind === 'thinking')
+      .map((s) => s.text)
+      .join('\n\n')
+  })
+
+  // 合并已闭合的 text 段 + 未闭合的 pending text，让用户看到的内容一直是一个 markdown 组件
+  // 这样不会有"非高亮 → 高亮"切换，也没有 markdown 组件频繁 mount 引发闪烁
+  const mergedText = createMemo(() => {
+    const closed = streamingSegments()
+      .filter((s) => s.kind === 'text')
+      .map((s) => s.text)
+      .join('')
+    return closed + pendingText()
+  })
 
   return (
     <box flexDirection="column">
@@ -59,9 +80,15 @@ function PendingStreamView() {
           <Spinner>思考中</Spinner>
         </box>
       </Show>
-      <Show when={streamMode() !== 'in-thinking' && pendingText()}>
+      {/* thinking 内容用灰色折叠框显示（fbc5161 历史设计），maxLines=5 避免长文占屏 */}
+      <Show when={thinkingText()}>
+        <box marginBottom={1} paddingLeft={1}>
+          <CollapsibleText content={thinkingText()} maxLines={5} fg={textMuted()} />
+        </box>
+      </Show>
+      <Show when={streamMode() !== 'in-thinking' && mergedText()}>
         <box marginBottom={1}>
-          <MarkdownText content={pendingText()} streaming={true} />
+          <MarkdownText content={mergedText()} streaming={true} syntaxStyle={props.syntaxStyle} />
         </box>
       </Show>
     </box>
@@ -82,7 +109,7 @@ function beijingTime(ts: number): string {
   return cst.toISOString().slice(11, 19)
 }
 
-function MessageItem(props: { msg: Message }) {
+function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
   const { primary, text, textMuted, error, success, warning, info } = useTheme()
 
   if (props.msg.role === "user") {
@@ -116,7 +143,9 @@ function MessageItem(props: { msg: Message }) {
         <Show when={isLong}>
           <text fg={textMuted()}>{`  (共 ${lineCount} 行)`}</text>
         </Show>
-        <ThinkingView display={display} streaming={false} />
+        {/* 完全照搬 mimocode：markdown 组件永远 streaming={true}
+            避免 streaming 切换到 false 触发 finalize 操作的整 viewport 重绘（闪烁） */}
+        <ThinkingView display={display} streaming={true} syntaxStyle={props.syntaxStyle} />
         <Show when={props.msg.duration !== undefined}>
           <text fg={textMuted()}>{`  ${props.msg.duration}s`}</text>
         </Show>
@@ -214,13 +243,20 @@ export function QueueMessages() {
 
 export function MessageList() {
   const { messages, streamingSegments, pendingText, isProcessing, toolCallExpanded, toggleToolCallExpanded, streamMode } = useLoop()
-  const { text, textMuted } = useTheme()
+  const { primary, warning, success, info, text, textMuted, background, border } = useTheme()
+
+  // 共享 syntaxStyle：所有 MarkdownText 实例共享同一个，避免每实例 createMemo 重建
+  // 见 docs/plans/archive/scroll-smooth-and-thinking-flash.md 方案 5
+  const sharedSyntaxStyle = createMemo(() => createMarkdownSyntaxStyle({
+    primary: primary(), warning: warning(), success: success(),
+    info: info(), text: text(), textMuted: textMuted(), border: border(),
+  }))
 
   // 预处理：识别 tool 批次并折叠显示
   const processedMessages = createMemo(() => {
     const allMsgs = messages()
     const result: Array<{ type: 'msg'; msg: Message } | { type: 'tool-batch'; batchId: number; count: number; tools: Message[] }> = []
-    
+
     let i = 0
     while (i < allMsgs.length) {
       const msg = allMsgs[i]
@@ -228,19 +264,19 @@ export function MessageList() {
         i++
         continue
       }
-      
+
       // 检测 tool 批次
       if (msg.role === 'tool') {
         const batchId = msg.toolBatch ?? 0
         const batchTools: Message[] = [msg]
-        
+
         // 收集同一批次的所有 tool 消息
         let j = i + 1
         while (j < allMsgs.length && allMsgs[j].role === 'tool' && (allMsgs[j].toolBatch ?? 0) === batchId) {
           batchTools.push(allMsgs[j])
           j++
         }
-        
+
         // 如果批次有多个 tool，折叠显示
         if (batchTools.length > 1 && batchId > 0) {
           result.push({ type: 'tool-batch', batchId, count: batchTools.length, tools: batchTools })
@@ -275,37 +311,22 @@ export function MessageList() {
                 </box>
                 <Show when={isExpanded}>
                   <For each={item.tools}>
-                    {(tool) => <MessageItem msg={tool} />}
+                    {(tool) => <MessageItem msg={tool} syntaxStyle={sharedSyntaxStyle()} />}
                   </For>
                 </Show>
               </box>
             )
           }
-          return <MessageItem msg={item.msg} />
+          return <MessageItem msg={item.msg} syntaxStyle={sharedSyntaxStyle()} />
         }}
       </For>
 
-      {/* 流式内容：已闭合的段 */}
-      <For each={streamingSegments()}>
-        {(seg) => {
-          if (seg.kind === 'thinking') {
-            // thinking 内容不显示，只在流式过程中显示思考指示器
-            return null
-          }
-          if (seg.kind === 'system-reminder') {
-            return null
-          }
-          return (
-            <box marginBottom={1}>
-              <MarkdownText content={seg.text} />
-            </box>
-          )
-        }}
-      </For>
-
-      {/* 流式内容：未闭合的 pending 文本 */}
+      {/* 流式内容：只显示未闭合的 pending 文本（实时 markdown 渲染）
+          已闭合的段不渲染，回合完成时通过 addMessage 一次性渲染到最终消息
+          这样用户看到的内容一直是 pendingText 的 markdown（统一视觉）
+          避免"非高亮 → 高亮"切换 + 避免 markdown 组件频繁 mount 引发整 viewport 重绘 */}
       <Show when={pendingText() || streamMode() === 'in-thinking'}>
-        <PendingStreamView />
+        <PendingStreamView syntaxStyle={sharedSyntaxStyle()} />
       </Show>
 
       <Show when={isProcessing() && messages().length === 0 && streamingSegments().length === 0 && !pendingText()}>
