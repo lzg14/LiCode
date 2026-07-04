@@ -449,19 +449,21 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       })
 
       // 手动消费流，触发 streaming 回调
-      let streamedText = ''
-      let streamedToolCalls: any[] = []
+      // **关键**：text 和 toolCalls 不能从 fullStream 累积 —— fullStream 是 ReadableStream
+      // 在某些 runtime (Bun + 全双工 stream) 下会抛 TypeError: pipeThrough is not a function，
+      // 一旦抛错累积就被截断 / tool-call 丢失，结果是 silent failure。
+      // 改用 AI SDK v6 提供的 promise 路径（result.text / result.toolCalls），
+      // 这两个 promise 不依赖 fullStream 的可消费性。
       let chunkCount = 0
       let aborted = false
       try {
         for await (const chunk of streamResult.fullStream) {
           chunkCount++
           if (chunk.type === 'text-delta') {
-            streamedText += chunk.text
+            // 仅触发流式 callback（用户即时看到），不依赖累积得到最终文本
             ctx.onStreamText?.(chunk.text)
-          } else if (chunk.type === 'tool-call') {
-            streamedToolCalls.push(chunk)
           }
+          // tool-call 不在这里收集 —— 用 await streamResult.toolCalls
         }
       } catch (streamError: any) {
         // 检查是否是 abort 错误
@@ -469,7 +471,9 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
           aborted = true
           devLogger.info('STREAM', 'Stream aborted by user')
         } else {
-          devLogger.error('STREAM', `stream consumption failed: ${streamError}`)
+          // stream 解析失败不再静默：warn + 继续走 promise 路径拿完整结果
+          // 避免 LLM 实际生成 tool-call 但被吞、用户看到"什么都没做"
+          devLogger.warn('STREAM', `stream consumption failed (will fall back to promise path): ${streamError?.message ?? streamError}`)
         }
       }
 
@@ -478,11 +482,28 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         return "已取消当前执行"
       }
 
+      // 用 promise 路径拿最终结果 —— 不依赖 fullStream 消费成功
+      // cast 成 Promise<any> 避开 AI SDK v6 的 PromiseLike<T> 联合类型推导问题
+      const safeAwait = async (p: any, fallback: any, label: string): Promise<any> => {
+        try {
+          return await p
+        } catch (e: any) {
+          devLogger.warn('STREAM', `result.${label} promise rejected: ${e?.message ?? e}`)
+          return fallback
+        }
+      }
+      const [finalText, finalToolCalls, usage, finishReason]: [string, any[], any, string] = await Promise.all([
+        safeAwait(streamResult.text, '', 'text'),
+        safeAwait(streamResult.toolCalls, [], 'toolCalls'),
+        safeAwait(streamResult.usage, { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, 'usage'),
+        safeAwait(streamResult.finishReason, 'unknown', 'finishReason'),
+      ])
+
       const resolvedResult = {
-        text: streamedText || undefined,
-        toolCalls: streamedToolCalls.length > 0 ? streamedToolCalls : undefined,
-        usage: await streamResult.usage,
-        finishReason: await streamResult.finishReason,
+        text: finalText || undefined,
+        toolCalls: finalToolCalls.length > 0 ? finalToolCalls : undefined,
+        usage,
+        finishReason,
       }
       const duration = Date.now() - startTime
       if (resolvedResult.usage) {
@@ -502,18 +523,18 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
         toolCalls: resolvedResult.toolCalls?.map((tc: any) => ({ tool: tc.toolName, input: tc.input })),
       }, duration)
 
-      // 有 tool calls：文本通过 onIntermediateText 保存
+      // 文本处理：
+      // - 工具调用轮的说明文本：作为中间轮收尾（让 UI 显示），调 onIntermediateText
+      // - 纯文本轮（首轮或 tool-call 后的最终回复）：不调 onIntermediateText，
+      //   否则它会把"最终回复"当"中间轮"收尾导致被吞
       if (resolvedResult.text) {
-        lastChunk = resolvedResult.text
         if (resolvedResult.toolCalls?.length) {
           hasToolCalls = true
+          lastChunk = resolvedResult.text
           ctx.onIntermediateText?.(resolvedResult.text)
-        } else if (hasToolCalls) {
-          ctx.onIntermediateText?.(resolvedResult.text)
-          fullText = resolvedResult.text
         } else {
-          // streaming 已经通过 onStreamText 发送了 delta，这里不再重复发送
           fullText = resolvedResult.text
+          lastChunk = resolvedResult.text
         }
       }
 
@@ -539,8 +560,9 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
           }
         }
 
-        // 如果之前有工具调用，最终文本已通过 onIntermediateText 保存，返回空避免重复
-        return hasToolCalls ? "" : fullText
+        // 关键修复：tool-call 后的纯文本就是最终回复，必须 return fullText
+        // 之前 return hasToolCases ? "" : fullText 会把最终回复当空字符串吞掉
+        return fullText || ''
       }
 
       // 有 tool calls：构建 assistant 消息 + 工具结果消息

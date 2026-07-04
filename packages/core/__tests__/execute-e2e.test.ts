@@ -11,12 +11,10 @@ import '../../tools/builtin'
 const TEST_DIR = join(tmpdir(), `licode-e2e-test-${Date.now()}`)
 
 // Mock generateText / streamText 来模拟 LLM
-// 必须在 import execute 之前，vitest 会 hoist 到文件顶部
-const mockGenerateText = vi.hoisted(() => vi.fn())
-const mockStreamText = vi.hoisted(() => vi.fn())
+// 通过 globalThis + vi.mock 避开 bun test runner 下 vi.hoisted 缺失的兼容问题
 vi.mock('ai', () => ({
-  generateText: mockGenerateText,
-  streamText: mockStreamText,
+  generateText: (...args: any[]) => (globalThis as any).__mockGenerateText__?.(...args),
+  streamText: (...args: any[]) => (globalThis as any).__mockStreamText__?.(...args),
   tool: (def: any) => def,
   jsonSchema: (schema: any) => schema,
 }))
@@ -28,6 +26,9 @@ const streamTextResponse = (text: string, toolCalls: any[] = []) => ({
     if (text) yield { type: 'text-delta', text }
     for (const tc of toolCalls) yield { type: 'tool-call', ...tc }
   })(),
+  text: Promise.resolve(text),
+  toolCalls: Promise.resolve(toolCalls),
+  toolResults: Promise.resolve([]),
   usage: Promise.resolve({ inputTokens: 10, outputTokens: 5, totalTokens: 15 }),
   finishReason: Promise.resolve(toolCalls.length > 0 ? 'tool-calls' : 'stop'),
 })
@@ -46,12 +47,12 @@ afterAll(() => {
 
 describe('execute E2E', () => {
   beforeEach(() => {
-    mockGenerateText.mockReset()
-    mockStreamText.mockReset()
+    delete (globalThis as any).__mockStreamTextImpl__
+    delete (globalThis as any).__mockGenerateTextImpl__
   })
 
   it('LLM 返回纯文本 — 直接输出', async () => {
-    mockStreamText.mockReturnValueOnce(streamTextResponse('直接回复'))
+    ;(globalThis as any).__mockStreamText__ = () => streamTextResponse('直接回复')
 
     const ctx: ExecuteContext = {
       model: { modelId: 'mock-model', provider: 'mock-provider' },
@@ -73,11 +74,14 @@ describe('execute E2E', () => {
   })
 
   it('LLM 返回 tool-call → 执行工具 → 继续 → 最终返回文本', async () => {
-    mockStreamText
-      .mockReturnValueOnce(streamTextResponse('I will read the file', [
+    let callIdx = 0
+    const responses = [
+      streamTextResponse('I will read the file', [
         { toolName: 'read', input: { path: join(TEST_DIR, 'test.txt') }, toolCallId: 'tc1' },
-      ]))
-      .mockReturnValueOnce(streamTextResponse('Here is the file content: mock file content'))
+      ]),
+      streamTextResponse('Here is the file content: mock file content'),
+    ]
+    ;(globalThis as any).__mockStreamText__ = () => responses[callIdx++]
 
     const ctx: ExecuteContext = {
       model: { modelId: 'mock-model', provider: 'mock-provider' },
@@ -86,7 +90,8 @@ describe('execute E2E', () => {
       history: [{ role: 'user', content: [{ type: 'text', text: '请读取 test.txt' }] }],
     }
     const result = await execute(ctx)
-    // 有工具调用时最终返回空（文本通过 onIntermediateText 保存）
-    expect(result).toBe('')
+    // 修复后：tool-call 后的最终纯文本必须 return，不能 return ''
+    expect(result).toBe('Here is the file content: mock file content')
+    expect(callIdx).toBe(2)
   })
 })

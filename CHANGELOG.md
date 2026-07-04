@@ -8,6 +8,10 @@
 ## [Unreleased]
 
 ### 修复
+- **streamText 解析失败吞 tool-call（最严重的 silent failure）**：
+  - 根因：AI SDK v6 的 `streamText` result 在 Bun + 全双工 stream 下 `fullStream` AsyncIterable 会抛 `TypeError: generatorStream.pipeThrough is not a function`，但 execute.ts 用 try/catch 吞掉 + 从 fullStream 累积 streamedToolCalls，导致 LLM 实际生成的 tool-call 全部丢失，user 看到"LLM 说要做但实际什么都没做"
+  - 修复：改用 AI SDK v6 的 promise 路径（`Promise.all([result.text, result.toolCalls, result.usage, result.finishReason])`）拿最终结果，fullStream 只用作流式 callback（`onStreamText`）；每个 promise 配 `safeAwait` helper 单独 catch，stream 失败也能拿到完整 tool-call 和文本
+  - 关联修复：`hasToolCases` 累积标志错位——tool-call 后的纯文本被当"中间文本"用 `return ""` 吞掉（`"return hasToolCases ? "" : fullText"`）。修：tool-call 后纯文本就是最终回复，必须 `return fullText`，不再调 `onIntermediateText`
 - **SessionCompactor 失效根因修复（MiniMax-M3[1M] 等带后缀模型）**：
   - **effectiveContextWindow 链路**：`createModel` 返回 `{ model, contextWindow }`，用原始 `config.model` 字符串查 catalog（不被 normalize 副作用影响）；TUI `LoopProvider` 加 `effectiveContextWindow` prop；`Sidebar` 优先用它替代 `getModelConfig(currentModel())`（`currentModel` 是被 normalize 剥后缀的 modelId，会让 MiniMax-M3[1M] 用户误报 128K 而不是 1M）
   - **fallback 阈值收紧**：`CompactionConfig` 新增 `unknownModelThreshold = 100_000`，未注册模型走 `Math.min(maxTokens, unknownModelThreshold)` 而不是单一的 `maxTokens=200_000`（之前 fallback 200K 让绝大多数模型永远触发不了压缩）

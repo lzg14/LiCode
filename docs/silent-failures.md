@@ -43,6 +43,7 @@
 | b | `packages/core/loop.ts` - Git 集成 | debug | Git 连接失败 → devLogger.debug | ✅ 合理：Git 是可选功能 |
 | c | `packages/core/loop.ts` - sessionCompactor | warn + visible | 后台压缩失败 → `devLogger.warn` + `onCompaction(error)` 回调 → TUI toast.error + sidebar `⚠` | ✅ 合理：压缩失败不影响当前对话，但用户应该知道历史未压缩、可能撞 contextWindow 硬上限（详见下方"扩展 d"） |
 | d | `packages/tui/util/selection.ts` - doCopy | visible | 用户复制错误 → toast.error | ✅ 合理：直接展示给用户 |
+| e | `packages/core/phases/execute.ts` - streamText fullStream catch | warn + visible（修复前 debug） | stream 解析失败（`pipeThrough is not a function`）→ 只 `devLogger.error`，streamedToolCalls 空 → tool-call 全丢 | ✅ 已修：改用 `result.text` / `result.toolCalls` / `result.usage` / `result.finishReason` promise 路径拿最终结果，fullStream 只用作流式 callback |
 
 ### 测试代码
 
@@ -117,4 +118,5 @@
 |---|---|---|
 | 2026-06-17 | 初始版本：新增 8 处生产 catch 清单 + console.* 收敛 + scope bug 修复 + reasoning 类型处理 | licode |
 | 2026-06-24 | 行号刷新为函数名定位，新增 4 处 catch，总数更新为 12 处 | licode |
+| 2026-07-04 | 新增 e 条目（streamText 解析失败吞 tool-call），关联 fix/stream-pipethrough-toolcall commit | Claude |
 | 2026-07-04 | c 行更新（sessionCompactor 升级为 warn + visible）；新增"扩展"章节 + d 条目（LLM 假装收口：hard-limit 信号缺失）；同步 review 检查清单加"非 catch 的 silent failure"项 | Claude |
