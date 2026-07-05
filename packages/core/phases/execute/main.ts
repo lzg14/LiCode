@@ -161,7 +161,22 @@ async function executeToolBatch(
       ctx.onSubagentStart?.(subagentId, tcInput.task as string)
       execResult = await subagentManager.spawn(
         { task: tcInput.task as string, tools: tcInput.tools as string[] | undefined, timeoutMs: tcInput.timeoutMs as number | undefined },
-        { model: ctx.model, system: subagentSystem, messages: msgs.filter(m => m.role === "user" || m.role === "assistant"), cwd: ctx.cwd ?? process.cwd() },
+        {
+          model: ctx.model,
+          system: subagentSystem,
+          // subagent 内部只传 user + assistant（filter tool 消息避免 context 爆炸）
+          // 同时清理 assistant.content 里的 tool-call parts —— AI SDK v6 看到 orphan tool-call
+          // 会抛 "Tool result is missing" 错误（之前 commit 5846d81 修复的"重复执行"没修这个）
+          messages: msgs
+            .filter(m => m.role === "user" || m.role === "assistant")
+            .map(m => {
+              if (m.role === "assistant" && Array.isArray(m.content)) {
+                return { ...m, content: m.content.filter((p: any) => p.type !== "tool-call") }
+              }
+              return m
+            }),
+          cwd: ctx.cwd ?? process.cwd(),
+        },
       )
       ctx.onSubagentEnd?.(subagentId, execResult?.success ?? false)
     } else {

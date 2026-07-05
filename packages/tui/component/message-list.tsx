@@ -322,7 +322,7 @@ export function MessageList() {
         </box>
       </Show>
 
-      <box height={1} />
+      <box height={2} />
     </box>
   )
 }

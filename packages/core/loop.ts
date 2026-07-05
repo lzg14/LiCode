@@ -317,16 +317,21 @@ export class CoreLoop {
     if (this.sessionCompactor.shouldCompact(history, ctx.sessionId, contextWindow)) {
       devLogger.debug('COMPACT', `History ${history.length} messages, triggering compaction`)
       const hasExisting = this.sessionCompactor.hasSummary(ctx.sessionId)
+      const trimAfter = () => {
+        // 压缩后从 SQLite 删除旧消息，只保留近 preserveRecent 条
+        // 防止下次加载时又看到 1000 条触发循环压缩
+        // 关键：两条路径（!hasExisting 同步 + hasExisting 异步）都必须 trim
+        this.sessionManager.trimOldMessages(ctx.sessionId, this.sessionCompactor.preserveRecent)
+      }
       if (!hasExisting) {
         const result = await this.sessionCompactor.compact(history, ctx.sessionId, this.llm)
         ctx.sessionSummary = result.summary
-        // 压缩后从 SQLite 删除旧消息，只保留近 preserveRecent 条
-        // 防止下次加载时又看到 1000 条触发循环压缩
-        this.sessionManager.trimOldMessages(ctx.sessionId, this.sessionCompactor.preserveRecent)
+        trimAfter()
         ctx.onCompaction?.(result.summary, result.originalCount, result.preservedCount)
       } else {
         ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
         this.sessionCompactor.compact(history, ctx.sessionId, this.llm).then((result) => {
+          trimAfter()
           ctx.onCompaction?.(result.summary, result.originalCount, result.preservedCount)
         }).catch((e) => {
           // 静默失败升级：warn 级让 dev 日志可见，并把错误回调给上层

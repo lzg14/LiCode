@@ -5,8 +5,8 @@ import { useLoop } from "../context/loop"
 import { useTheme } from "../context/theme"
 
 export function StatusBar() {
-  const { textMuted } = useTheme()
-  const { elapsed, isProcessing, currentModel, llmTokenUsage } = useLoop()
+  const { textMuted, success } = useTheme()
+  const { elapsed, isProcessing, currentModel, llmTokenUsage, subagentStatuses } = useLoop()
 
   const elapsedStr = () => {
     const secs = elapsed()
@@ -29,11 +29,20 @@ export function StatusBar() {
     return ` · ↑${(usage.input / 1000).toFixed(1)}K ↓${(usage.output / 1000).toFixed(1)}K`
   }
 
+  // L1: subagent 状态（底部常驻，F2 看详情）
+  const subagentStr = createMemo(() => {
+    const all = subagentStatuses()
+    if (all.length === 0) return ''
+    const running = all.filter((s) => s.status === 'running').length
+    const total = all.length
+    return ` · 🧠 ${running} running / ${total} total`
+  })
+
   return (
     <box width="100%" paddingX={1} paddingY={0}>
       <text fg={textMuted()}>
         {`${globalToolRegistry.list().length} tools · ${currentModel()}`}
-        {tokenStr()}{costStr()}
+        {subagentStr()}{tokenStr()}{costStr()}
         {isProcessing() ? ` · ${elapsedStr()}` : ""}
       </text>
     </box>

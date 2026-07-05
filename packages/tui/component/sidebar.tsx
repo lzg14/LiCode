@@ -108,21 +108,7 @@ export function Sidebar() {
         </box>
       </Show>
 
-      {/* L1: Subagent 状态 */}
-      <Show when={subagentStatuses().length > 0}>
-        <box flexDirection="column" gap={0} paddingTop={1}>
-          <text fg={primary()}>Subagents</text>
-          <box paddingLeft={1} flexDirection="row">
-            <text fg={textMuted()}>🧠 </text>
-            <text fg={success()}>
-              {subagentStatuses().filter(s => s.status === 'running').length} running
-            </text>
-            <Show when={subagentStatuses().filter(s => s.status !== 'running').length > 0}>
-              <text fg={textMuted()}> / {subagentStatuses().length} total</text>
-            </Show>
-          </box>
-        </box>
-      </Show>
+      {/* L1: Subagent 状态已移到 status bar（底部常驻），这里不重复显示 */}
 
       <Show when={msgCount() > 0}>
         <box flexDirection="column" gap={0} paddingTop={1}>
