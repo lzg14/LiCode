@@ -241,6 +241,7 @@ whenToUse: <何时用>
 | 推送前 lint | 全局规则说 `ruff check src/`，但本项目是 TS，**改为 `bunx tsc --noEmit --skipLibCheck`** |
 | 长对话压缩 | 自动触发，1000 条阈值，详见 `session-compactor.ts` |
 | 工作树管理 | 用 `git-worktrees` skill（全局） |
+| **工程根不要建临时目录** | 不允许在仓库根新增 `_chg/` / `.mimicode/` / `.audit/` 等一次性工作目录。需要 subagent 工作脚本/临时日志/迁移工具的统一写到 `V:\`（全局 CLAUDE.md 已有此约束） |
 
 ---
 
