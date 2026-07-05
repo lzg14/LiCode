@@ -39,33 +39,51 @@ async function callLLM(
   ctx.onLLMCall?.()
   const startTime = Date.now()
 
+  // 60 秒超时自动 abort，防止 LLM API 卡死导致 TUI 永远 "等待响应中"
+  const timeoutMs = 60_000
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs)
+
+  // 合并用户 abort + 超时 abort
+  const combinedSignal = ctx.signal
+    ? AbortSignal.any([ctx.signal, timeoutController.signal])
+    : timeoutController.signal
+
   const streamResult = streamText({
     model: ctx.model,
     system,
     messages: msgs as any,
     tools,
     temperature: 0.7,
-    abortSignal: ctx.signal,
+    abortSignal: combinedSignal,
   })
 
   // 消费流（触发 token 生成）
   let aborted = false
+  let timedOut = false
   try {
     for await (const chunk of streamResult.fullStream) {
+      clearTimeout(timeoutId)
       if (chunk.type === 'text-delta') {
         ctx.onStreamText?.(chunk.text)
       }
     }
   } catch (streamError: any) {
+    clearTimeout(timeoutId)
     if (streamError?.name === 'AbortError' || ctx.signal?.aborted) {
       aborted = true
       devLogger.info('STREAM', 'Stream aborted by user')
+    } else if (timeoutController.signal.aborted) {
+      timedOut = true
+      devLogger.warn('STREAM', `LLM call timed out after ${timeoutMs}ms`)
     } else {
       devLogger.warn('STREAM', `stream consumption failed: ${streamError?.message ?? streamError}`)
     }
   }
+  clearTimeout(timeoutId)
 
   if (aborted) return null
+  if (timedOut) return { result: { text: undefined, usage: {} as any, finishReason: 'timeout' }, duration: Date.now() - startTime }
 
   const safeAwait = async <T>(p: PromiseLike<T> | undefined, fallback: T, label: string): Promise<T> => {
     try { return p !== undefined ? await p : fallback }
@@ -275,6 +293,11 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       const llmResponse = await callLLM(msgs, ctx, tools, buildSystem(ctx, projectConfig, intelligenceHints))
       if (!llmResponse) return "已取消当前执行"
       const { result } = llmResponse
+
+      // 超时处理
+      if (result.finishReason === 'timeout') {
+        return "LLM 调用超时（60 秒），请检查网络连接或 provider 配置"
+      }
 
       if (result.text) {
         if (result.toolCalls?.length) {
