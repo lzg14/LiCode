@@ -1,6 +1,6 @@
 {
   "name": "licode",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Terminal-native AI coding agent — SolidJS + @opentui + multi-provider + persistent sessions",
   "type": "module",
   "license": "MIT",
