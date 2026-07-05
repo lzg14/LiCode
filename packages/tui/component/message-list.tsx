@@ -180,7 +180,7 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
   return null
 }
 
-function formatToolArgs(toolName: string, args: Record<string, unknown>): string {
+export function formatToolArgs(toolName: string, args: Record<string, unknown>): string {
   if (!args) return ""
   
   if (toolName === "read" && args.path) return args.path as string

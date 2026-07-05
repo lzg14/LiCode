@@ -3,37 +3,18 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { SCHEMA } from './schema'
 import type { Message, Part, PartType, Session, SessionStatus, SessionSummary } from './types'
+import { inferPartType } from './helpers'
+import { migrate } from './migration'
+import {
+  getSession, listSessions, getLastSession,
+  insertSession, updateSessionFields, deleteSessionCascade,
+  getMessages, getMessage, searchMessages, getMessagesAsModelMessages,
+  insertMessage, touchSession,
+  getParts, insertPart,
+  getSessionStats,
+} from './query-builder'
 
 export type { Message, Part, PartType, Session, SessionStatus, SessionSummary }
-
-interface SessionRow {
-  id: string
-  title: string
-  directory: string
-  parent_id: string | null
-  context_from: string | null
-  context_watermark: string | null
-  status: string
-  model: string | null
-  provider: string | null
-  token_input: number | null
-  token_output: number | null
-  cost: number | null
-  summary_additions: number | null
-  summary_deletions: number | null
-  summary_files: string | null
-  last_checkpoint_message_id: string | null
-  created_at: number
-  updated_at: number
-  completed_at: number | null
-}
-
-const SESSION_STATUSES: readonly SessionStatus[] = ['idle', 'running', 'blocked', 'completed', 'failed']
-
-/** SQLite 没 enum 约束，DB 里的 status 可能是任意字符串。运行时验证兜底 */
-function parseSessionStatus(raw: string): SessionStatus {
-  return (SESSION_STATUSES as readonly string[]).includes(raw) ? (raw as SessionStatus) : 'failed'
-}
 
 export class SessionManager {
   private db: Database
@@ -48,40 +29,7 @@ export class SessionManager {
     this.db.exec('PRAGMA journal_mode = WAL')
     this.db.exec('PRAGMA foreign_keys = ON')
     this.db.exec(SCHEMA)
-    this.migrate()
-  }
-
-  /**
-   * Schema 迁移：检查现有表，缺失列就 ALTER TABLE 加上。
-   * 用 PRAGMA table_info 检查列是否存在。
-   * 新表（刚 CREATE 完）已经有全部列，迁移是 no-op。
-   */
-  private migrate(): void {
-    const columns = (this.db.query(`PRAGMA table_info(sessions)`).all() as any[]).map(c => c.name)
-
-    const expected: Array<{ name: string; type: string; default?: string }> = [
-      { name: 'context_from', type: 'TEXT' },
-      { name: 'context_watermark', type: 'TEXT' },
-      { name: 'summary_additions', type: 'INTEGER', default: '0' },
-      { name: 'summary_deletions', type: 'INTEGER', default: '0' },
-      { name: 'summary_files', type: 'TEXT' },
-      { name: 'last_checkpoint_message_id', type: 'TEXT' },
-    ]
-
-    for (const col of expected) {
-      if (!columns.includes(col.name)) {
-        const def = col.default !== undefined ? ` DEFAULT ${col.default}` : ''
-        try {
-          this.db.exec(`ALTER TABLE sessions ADD COLUMN ${col.name} ${col.type}${def}`)
-        } catch (e) {
-          // 如果列已存在（race condition），忽略
-          const msg = e instanceof Error ? e.message : String(e)
-          if (!msg.includes('duplicate column')) {
-            throw e
-          }
-        }
-      }
-    }
+    migrate(this.db)
   }
 
   createSession(input: {
@@ -93,11 +41,9 @@ export class SessionManager {
     model?: string
     provider?: string
   }): Session {
-    const id = `ses_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const now = Date.now()
-
     const session: Session = {
-      id,
+      id: `ses_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       title: input.title ?? `New session - ${new Date().toISOString()}`,
       directory: input.directory,
       parentId: input.parentId,
@@ -110,26 +56,12 @@ export class SessionManager {
       updatedAt: now,
     }
 
-    this.db.run(
-      `INSERT INTO sessions (id, title, directory, parent_id, context_from, context_watermark, status, model, provider, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [session.id, session.title, session.directory, session.parentId ?? null,
-       session.contextFrom ?? null, session.contextWatermark ?? null,
-       session.status, session.model ?? null, session.provider ?? null,
-       session.createdAt, session.updatedAt]
-    )
-
+    insertSession(this.db, session)
     return session
   }
 
   getSession(id: string): Session | null {
-    const row = this.db.query(
-      'SELECT * FROM sessions WHERE id = ?'
-    ).get(id) as SessionRow | null
-
-    if (!row) return null
-
-    return this.rowToSession(row)
+    return getSession(this.db, id)
   }
 
   listSessions(options: {
@@ -138,105 +70,17 @@ export class SessionManager {
     limit?: number
     offset?: number
   } = {}): Session[] {
-    let sql = 'SELECT * FROM sessions WHERE 1=1'
-    const params: any[] = []
-
-    if (options.directory) {
-      sql += ' AND directory = ?'
-      params.push(options.directory)
-    }
-
-    if (options.parentId) {
-      sql += ' AND parent_id = ?'
-      params.push(options.parentId)
-    }
-
-    sql += ' ORDER BY updated_at DESC'
-
-    if (options.limit) {
-      sql += ' LIMIT ?'
-      params.push(options.limit)
-    }
-
-    if (options.offset) {
-      sql += ' OFFSET ?'
-      params.push(options.offset)
-    }
-
-    const rows = this.db.query(sql).all(...params) as SessionRow[]
-    return rows.map(row => this.rowToSession(row))
+    return listSessions(this.db, options)
   }
 
   updateSession(id: string, updates: Partial<Pick<Session, 'title' | 'status' | 'model' | 'provider' | 'tokenUsage' | 'cost' | 'summary' | 'lastCheckpointMessageId'>>): Session | null {
-    const session = this.getSession(id)
-    if (!session) return null
-
-    const now = Date.now()
-    const sets: string[] = ['updated_at = ?']
-    const params: any[] = [now]
-
-    if (updates.title !== undefined) {
-      sets.push('title = ?')
-      params.push(updates.title)
-    }
-
-    if (updates.status !== undefined) {
-      sets.push('status = ?')
-      params.push(updates.status)
-      if (updates.status === 'completed' || updates.status === 'failed') {
-        sets.push('completed_at = ?')
-        params.push(now)
-      }
-    }
-
-    if (updates.model !== undefined) {
-      sets.push('model = ?')
-      params.push(updates.model)
-    }
-
-    if (updates.provider !== undefined) {
-      sets.push('provider = ?')
-      params.push(updates.provider)
-    }
-
-    if (updates.tokenUsage) {
-      sets.push('token_input = ?', 'token_output = ?')
-      params.push(updates.tokenUsage.input, updates.tokenUsage.output)
-    }
-
-    if (updates.cost !== undefined) {
-      sets.push('cost = ?')
-      params.push(updates.cost)
-    }
-
-    if (updates.summary) {
-      sets.push('summary_additions = ?', 'summary_deletions = ?', 'summary_files = ?')
-      params.push(updates.summary.additions, updates.summary.deletions,
-        JSON.stringify(updates.summary.files))
-    }
-
-    if (updates.lastCheckpointMessageId !== undefined) {
-      sets.push('last_checkpoint_message_id = ?')
-      params.push(updates.lastCheckpointMessageId)
-    }
-
-    params.push(id)
-
-    this.db.run(
-      `UPDATE sessions SET ${sets.join(', ')} WHERE id = ?`,
-      params
-    )
-
-    return this.getSession(id)
+    if (!getSession(this.db, id)) return null
+    updateSessionFields(this.db, id, updates)
+    return getSession(this.db, id)
   }
 
   deleteSession(id: string): boolean {
-    this.db.run(
-      'DELETE FROM parts WHERE message_id IN (SELECT id FROM messages WHERE session_id = ?)',
-      [id]
-    )
-    this.db.run('DELETE FROM messages WHERE session_id = ?', [id])
-    this.db.run('DELETE FROM sessions WHERE id = ?', [id])
+    deleteSessionCascade(this.db, id)
     return true
   }
 
@@ -249,11 +93,9 @@ export class SessionManager {
     tokenUsage?: Message['tokenUsage']
     cost?: number
   }): Message {
-    const id = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const now = Date.now()
-
     const message: Message = {
-      id,
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       sessionId: input.sessionId,
       role: input.role,
       content: input.content,
@@ -264,112 +106,42 @@ export class SessionManager {
       createdAt: now,
     }
 
-    this.db.run(
-      `INSERT INTO messages (id, session_id, role, content, agent, model, token_input, token_output, cost, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [message.id, message.sessionId, message.role, message.content,
-       message.agent ?? null, message.model ?? null,
-       message.tokenUsage?.input ?? 0, message.tokenUsage?.output ?? 0,
-       message.cost ?? 0, message.createdAt]
-    )
-
-    this.db.run('UPDATE sessions SET updated_at = ? WHERE id = ?', [now, input.sessionId])
-
+    insertMessage(this.db, message)
+    touchSession(this.db, input.sessionId, now)
     return message
   }
 
   getMessages(sessionId: string, options: { limit?: number; before?: number } = {}): Message[] {
-    let sql = 'SELECT * FROM messages WHERE session_id = ?'
-    const params: any[] = [sessionId]
-
-    if (options.before) {
-      sql += ' AND created_at < ?'
-      params.push(options.before)
-    }
-
-    sql += ' ORDER BY created_at ASC, rowid ASC'
-
-    if (options.limit) {
-      sql += ' LIMIT ?'
-      params.push(options.limit)
-    }
-
-    const rows = this.db.query(sql).all(...params) as any[]
-
-    return rows.map(row => ({
-      id: row.id,
-      sessionId: row.session_id,
-      role: row.role,
-      content: row.content,
-      agent: row.agent,
-      model: row.model,
-      tokenUsage: row.token_input > 0 ? {
-        input: row.token_input,
-        output: row.token_output,
-      } : undefined,
-      cost: row.cost,
-      createdAt: row.created_at,
-    }))
+    return getMessages(this.db, sessionId, options)
   }
 
   getMessage(id: string): Message | null {
-    const row = this.db.query('SELECT * FROM messages WHERE id = ?').get(id) as any
-    if (!row) return null
-
-    return {
-      id: row.id,
-      sessionId: row.session_id,
-      role: row.role,
-      content: row.content,
-      agent: row.agent,
-      model: row.model,
-      tokenUsage: row.token_input > 0 ? {
-        input: row.token_input,
-        output: row.token_output,
-      } : undefined,
-      cost: row.cost,
-      createdAt: row.created_at,
-    }
+    return getMessage(this.db, id)
   }
 
-  /**
-   * 获取消息，支持 contextFrom/contextWatermark 上下文继承。
-   * 如果当前会话有 contextFrom，会先加载父会话的消息（截止到 contextWatermark），
-   * 再加上当前会话自己的消息。
-   */
+  /** 获取消息，支持 contextFrom/contextWatermark 上下文继承 */
   getMessagesWithContext(sessionId: string): Message[] {
     const session = this.getSession(sessionId)
     if (!session) return []
 
     let result: Message[] = []
-
     if (session.contextFrom) {
       const parentMsgs = this.getMessages(session.contextFrom)
       if (session.contextWatermark) {
         const idx = parentMsgs.findIndex(m => m.id === session.contextWatermark)
-        if (idx >= 0) {
-          result = parentMsgs.slice(0, idx + 1)
-        } else {
-          result = parentMsgs
-        }
+        result = idx >= 0 ? parentMsgs.slice(0, idx + 1) : parentMsgs
       } else {
         result = parentMsgs
       }
     }
 
-    const ownMsgs = this.getMessages(sessionId)
-    result.push(...ownMsgs)
+    result.push(...this.getMessages(sessionId))
     return result
   }
 
   /**
    * 把 AI SDK 格式的消息（含完整 parts）持久化到 messages + parts 表。
-   * 用于 execute.ts 每次 generateText 之后调用，把完整 LLM 对话历史存下来。
-   *
-   * content 数组是 AI SDK ModelMessage 格式：
-   *   [{ type: "text", text: "..." }]
-   *   [{ type: "text", text: "..." }, { type: "tool-call", toolCallId, toolName, input }]
-   *   [{ type: "tool-result", toolCallId, toolName, output: { type: "text", value: "..." } }]
+   * content 数组是 AI SDK ModelMessage 格式。
    */
   appendMessageWithParts(input: {
     sessionId: string
@@ -380,125 +152,56 @@ export class SessionManager {
     tokenUsage?: Message['tokenUsage']
     cost?: number
   }): { message: Message; parts: Part[] } {
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const now = Date.now()
-
-    // 主 message.content 用 JSON 序列化整个 parts 数组（方便 getMessages 直接拿完整）
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const contentJson = JSON.stringify(input.content)
 
-    this.db.run(
-      `INSERT INTO messages (id, session_id, role, content, agent, model, token_input, token_output, cost, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        messageId, input.sessionId, input.role, contentJson,
-        input.agent ?? null, input.model ?? null,
-        input.tokenUsage?.input ?? 0, input.tokenUsage?.output ?? 0,
-        input.cost ?? 0, now,
-      ],
-    )
-    this.db.run('UPDATE sessions SET updated_at = ? WHERE id = ?', [now, input.sessionId])
+    insertMessage(this.db, {
+      id: messageId,
+      sessionId: input.sessionId,
+      role: input.role,
+      content: contentJson,
+      agent: input.agent,
+      model: input.model,
+      tokenUsage: input.tokenUsage,
+      cost: input.cost,
+      createdAt: now,
+    })
+    touchSession(this.db, input.sessionId, now)
 
-    // 同时把每个 part 也写到 parts 表，方便精细查询
-    // 注意：不要在 metadata 里存完整原始对象（metadata: { raw: c }），
-    // 否则 messages.content 已经存了完整 JSON，parts.metadata 再存一份就是三倍冗余，
-    // 大对象（tool 输入/输出几 KB）会让 SQLite 文件和内存放大数倍。
     const createdParts: Part[] = []
     for (const c of input.content) {
       if (!c || typeof c !== 'object') continue
       const toolArgs = c.input ?? c.args
       const toolResult = c.output?.value ?? c.result ?? (typeof c.output === 'string' ? c.output : undefined)
-      const part = this.addPart({
+      createdParts.push(this.addPart({
         messageId,
-        type: this.inferPartType(c.type),
+        type: inferPartType(c.type),
         content: c.text ?? JSON.stringify(toolArgs ?? c.output ?? c),
         toolName: c.toolName,
         toolCallId: c.toolCallId,
         args: toolArgs,
         result: toolResult,
-        // metadata 留空 —— parts 表已有专门字段（tool_name / tool_call_id / args / result），
-        // 完整原始对象在 messages.content 的 JSON 里，避免重复存储
         metadata: undefined,
-      })
-      createdParts.push(part)
+      }))
     }
 
     return {
       message: {
-        id: messageId,
-        sessionId: input.sessionId,
-        role: input.role,
-        content: contentJson,
-        agent: input.agent,
-        model: input.model,
-        tokenUsage: input.tokenUsage,
-        cost: input.cost,
-        createdAt: now,
+        id: messageId, sessionId: input.sessionId, role: input.role,
+        content: contentJson, agent: input.agent, model: input.model,
+        tokenUsage: input.tokenUsage, cost: input.cost, createdAt: now,
       },
       parts: createdParts,
     }
   }
 
-  /** AI SDK type → PartType 映射 */
-  private inferPartType(t: string): PartType {
-    switch (t) {
-      case 'text': return 'text'
-      case 'reasoning': return 'reasoning'
-      case 'tool-call': return 'tool-call'
-      case 'tool-result': return 'tool-result'
-      case 'file': return 'file'
-      default: return 'text'
-    }
-  }
-
-  /**
-   * 读取 session 的 messages，重建 AI SDK ModelMessage[] 格式。
-   * 用作 generateText 的 messages 参数，可直接交给 LLM。
-   *
-   * options.limit: 只取最新的 N 条（SQLite 层就限制，避免加载整个 history）。
-   * 不传则返回所有消息（向后兼容）。
-   */
+  /** 读取 session 的 messages，重建 AI SDK ModelMessage[] 格式 */
   getMessagesAsModelMessages(
     sessionId: string,
     options: { limit?: number } = {},
   ): Array<{ role: string; content: any[] }> {
-    let messages: Message[]
-    if (options.limit !== undefined) {
-      // 直接从 SQLite 取最新的 N 条（ORDER DESC + LIMIT），再 reverse 回时间正序
-      // 避免长会话把整个 history 加载进内存再裁剪
-      const rows = this.db.query(
-        `SELECT * FROM messages WHERE session_id = ?
-         ORDER BY created_at DESC, rowid DESC
-         LIMIT ?`,
-      ).all(sessionId, options.limit) as any[]
-      messages = rows.reverse().map((row) => ({
-        id: row.id,
-        sessionId: row.session_id,
-        role: row.role,
-        content: row.content,
-        agent: row.agent,
-        model: row.model,
-        tokenUsage: row.token_input > 0 ? {
-          input: row.token_input,
-          output: row.token_output,
-        } : undefined,
-        cost: row.cost,
-        createdAt: row.created_at,
-      }))
-    } else {
-      messages = this.getMessages(sessionId)
-    }
-    return messages.map(m => {
-      // 优先尝试 parse message.content 为 JSON（这是 appendMessageWithParts 写入的格式）
-      try {
-        const parsed = JSON.parse(m.content)
-        if (Array.isArray(parsed)) {
-          return { role: m.role, content: parsed }
-        }
-      } catch {
-        // 不是 JSON（旧数据或纯文本），按纯文本处理
-      }
-      return { role: m.role, content: [{ type: 'text', text: m.content }] }
-    })
+    return getMessagesAsModelMessages(this.db, sessionId, options)
   }
 
   addPart(input: {
@@ -511,11 +214,8 @@ export class SessionManager {
     result?: string
     metadata?: Record<string, unknown>
   }): Part {
-    const id = `prt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    const now = Date.now()
-
     const part: Part = {
-      id,
+      id: `prt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       messageId: input.messageId,
       type: input.type,
       content: input.content,
@@ -524,40 +224,15 @@ export class SessionManager {
       args: input.args,
       result: input.result,
       metadata: input.metadata,
-      createdAt: now,
+      createdAt: Date.now(),
     }
 
-    this.db.run(
-      `INSERT INTO parts (id, message_id, type, content, tool_name, tool_call_id, args, result, metadata, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [part.id, part.messageId, part.type, part.content,
-       part.toolName ?? null, part.toolCallId ?? null,
-       part.args ? JSON.stringify(part.args) : null,
-       part.result ?? null,
-       part.metadata ? JSON.stringify(part.metadata) : null,
-       part.createdAt]
-    )
-
+    insertPart(this.db, part)
     return part
   }
 
   getParts(messageId: string): Part[] {
-    const rows = this.db.query(
-      'SELECT * FROM parts WHERE message_id = ? ORDER BY created_at ASC'
-    ).all(messageId) as any[]
-
-    return rows.map(row => ({
-      id: row.id,
-      messageId: row.message_id,
-      type: row.type,
-      content: row.content,
-      toolName: row.tool_name,
-      toolCallId: row.tool_call_id,
-      args: row.args ? JSON.parse(row.args) : undefined,
-      result: row.result,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-      createdAt: row.created_at,
-    }))
+    return getParts(this.db, messageId)
   }
 
   getSessionStats(sessionId: string): {
@@ -566,102 +241,18 @@ export class SessionManager {
     cost: number
     duration: number
   } {
-    const session = this.getSession(sessionId)
-    if (!session) {
-      return { messageCount: 0, tokenUsage: { input: 0, output: 0, total: 0 }, cost: 0, duration: 0 }
-    }
-
-    const stats = this.db.query(
-      `SELECT 
-        COUNT(*) as message_count,
-        SUM(token_input) as token_input,
-        SUM(token_output) as token_output,
-        SUM(cost) as total_cost
-       FROM messages WHERE session_id = ?`
-    ).get(sessionId) as any
-
-    const duration = session.completedAt
-      ? session.completedAt - session.createdAt
-      : Date.now() - session.createdAt
-
-    return {
-      messageCount: stats?.message_count ?? 0,
-      tokenUsage: {
-        input: stats?.token_input ?? 0,
-        output: stats?.token_output ?? 0,
-        total: (stats?.token_input ?? 0) + (stats?.token_output ?? 0),
-      },
-      cost: stats?.total_cost ?? 0,
-      duration,
-    }
+    return getSessionStats(this.db, sessionId)
   }
 
   searchMessages(sessionId: string, query: string, limit = 10): Message[] {
-    const rows = this.db.query(
-      `SELECT * FROM messages 
-       WHERE session_id = ? AND content LIKE ? 
-       ORDER BY created_at DESC LIMIT ?`
-    ).all(sessionId, `%${query}%`, limit) as any[]
-
-    return rows.map(row => ({
-      id: row.id,
-      sessionId: row.session_id,
-      role: row.role,
-      content: row.content,
-      agent: row.agent,
-      model: row.model,
-      tokenUsage: row.token_input > 0 ? {
-        input: row.token_input,
-        output: row.token_output,
-      } : undefined,
-      cost: row.cost,
-      createdAt: row.created_at,
-    }))
+    return searchMessages(this.db, sessionId, query, limit)
   }
 
   getLastSession(directory?: string): Session | null {
-    let sql = 'SELECT * FROM sessions WHERE 1=1'
-    const params: any[] = []
-    if (directory) {
-      sql += ' AND directory = ?'
-      params.push(directory)
-    }
-    sql += ' ORDER BY updated_at DESC LIMIT 1'
-    const row = this.db.query(sql).get(...params) as SessionRow | null
-    return row ? this.rowToSession(row) : null
+    return getLastSession(this.db, directory)
   }
 
   close(): void {
     this.db.close()
-  }
-
-  private rowToSession(row: SessionRow): Session {
-    const summaryFiles = row.summary_files ? (JSON.parse(row.summary_files) as string[]) : undefined
-    return {
-      id: row.id,
-      title: row.title,
-      directory: row.directory,
-      parentId: row.parent_id ?? undefined,
-      contextFrom: row.context_from ?? undefined,
-      contextWatermark: row.context_watermark ?? undefined,
-      status: parseSessionStatus(row.status),
-      model: row.model ?? undefined,
-      provider: row.provider ?? undefined,
-      tokenUsage: (row.token_input ?? 0) > 0 ? {
-        input: row.token_input ?? 0,
-        output: row.token_output ?? 0,
-        total: (row.token_input ?? 0) + (row.token_output ?? 0),
-      } : undefined,
-      cost: row.cost ?? undefined,
-      summary: (row.summary_additions ?? 0) > 0 || (row.summary_deletions ?? 0) > 0 || summaryFiles ? {
-        additions: row.summary_additions ?? 0,
-        deletions: row.summary_deletions ?? 0,
-        files: summaryFiles ?? [],
-      } : undefined,
-      lastCheckpointMessageId: row.last_checkpoint_message_id ?? undefined,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      completedAt: row.completed_at ?? undefined,
-    }
   }
 }
