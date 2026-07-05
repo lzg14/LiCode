@@ -47,3 +47,9 @@ git-restore.txt
 # Subagent 工作脚本（一次性审计/迁移/rebump 工具，跑完不入版本管理）
 /_chg/
 /.mimicode/
+
+# Type-check / test 输出（调试一次性产物，不入版本管理）
+*.out
+
+# Manual test/debug runner 脚本（cmd/bat，跑完不入版本管理）
+run*.bat

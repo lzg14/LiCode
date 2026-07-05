@@ -7,8 +7,29 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-05
+
+### Added
+- **Introspection M2 实现 + Memory store v2**（`691a60c`）：Memory store 升级到 v2（AnyMemoryEntry / writeRaw generic / safeFileId 解决 Windows 文件名禁用字符）；新建 `packages/core/intelligence/` 模块（types / recorder / adapter / registry / fallback / index + 4 个 decision handler + 4 个 decisions 单测 + adapter/registry/fallback/recorder 单测 共 11 个测试）
+- **Introspection M5 集成**（`dda972b`）：`execute/main.ts` 集成 `IntelligenceAdapter`——`beforeExecute` 拼接 augmented prompt + `afterExecute` 记录 decision 事件到 Memory v2；`loop.ts` 把 `memory` + `modelInfo` 透传给 execute，`execute/context.ts` 接收对应字段
+- **Subagent 状态展示 L1+L2**（`12eec7e`）：TUI subagent 任务在侧栏 / Status 区域显示运行时状态（running / done / failed）+ startTime/endTime；`ExecuteContext` 加 `onSubagentStart` / `onSubagentEnd` 钩子
+- **侧栏累计 token + 压缩摘要 markdown 渲染**（`6d4b1fb`）：`/tokens` 命令显示会话累计 token；`/compress` 输出由 JSON 改为可读 markdown
+- **Introspection M1/M4 spike + eval 框架 + M2 spec**（`092ffe2`）：`verifyProject` / `verbosity` 等 4 个决策的 spike 实现 + `evals/` 评估脚本
+- **docs(plans): 智能增强计划 v2 + hardware-adaptive 架构设计**（`93c1bbb` + `e86c4e1`）：10 章节补充 + 3 个 M 合并/推迟 + hardware-aware model fallback 设计
+
+### Changed
+- **docs: 工程根禁止建临时目录**（`6963ac8`）：`.gitignore` 收 `.mimocode/`，docs/README 警示
+
 ### Fixed
-- **subagent 工具"结果丢失"根因修复**：`buildToolsWithExecute` 给 tool 传 `execute` 函数时，AI SDK v6 会自动执行 + 自动 push tool-result 到 messages；但 subagent 内部循环又手动执行 + 手动 push tool-result → **同一工具被执行两次 + messages 中同 toolCallId 有两条 tool-result** → 第二次 `generateText` 解析失败 → 返回空 text → break → `(无输出)`。修复：buildToolsWithExecute 不传 `execute` 函数，让 subagent 真的手动控制（手动执行 + 手动 push tool-result 仍是单一来源）
+- **subagent 工具"结果丢失"根因修复**（`5846d81`）：`buildToolsWithExecute` 给 tool 传 `execute` 函数时，AI SDK v6 会自动执行 + 自动 push tool-result 到 messages；但 subagent 内部循环又手动执行 + 手动 push tool-result → **同一工具被执行两次 + messages 中同 toolCallId 有两条 tool-result** → 第二次 `generateText` 解析失败 → 返回空 text → break → `(无输出)`。修复：buildToolsWithExecute 不传 `execute` 函数，让 subagent 真的手动控制（手动执行 + 手动 push tool-result 仍是单一来源）
+- **subagent 工具 "Tool result is missing" 二次修复**（`f9c28c2`）：`execute/main.ts` 传 subagent 的 messages 过滤 role 时，**未清理 assistant.content 里的 tool-call parts**——AI SDK v6 看到 orphan tool-call（没对应 tool-result）抛 `MissingToolResultsError`。修复：filter 完 role 后再 `.map` 清理 assistant.content 里的 `tool-call` parts
+- **SyntaxStyle 资源耗尽崩溃**（`f9c28c2`）：`thinking-view.tsx` 的 `MarkdownTextInline` 用 `const fallbackSyntaxStyle = createMarkdownSyntaxStyle(...)` 每次 mount 都新建 SyntaxStyle → n 个 message 累积 n 个 native handle → opentui `createSyntaxStyle` 返 null → 抛 `Failed to create SyntaxStyle` → ErrorBoundary 触发 → 整个 message-list 渲染崩溃 → TUI 卡死。修复：`createMemo` 懒求值 + 顶层 `sharedSyntaxStyle` 共享
+- **SessionCompactor 循环触发压缩**（`f9c28c2`）：`hasSummary` 路径漏调 `trimOldMessages`——SQLite 持续累积 → 下次 limit 1000 加载又看到 1000+ 条 → 又触发压缩。修复：抽 `trimAfter()` 函数，两条路径（同步/异步）都调
+- **Subagent 状态展示 status bar 常驻**（`f9c28c2`）：从 sidebar 移到 status bar 底部常驻，sidebar 不再重复显示
+- **压缩后从 SQLite 删除旧消息，防止循环压缩**（`11cad9b`）：`SessionCompactor` 在压缩完成后从 SQLite 物理删除已被摘要替代的旧消息，而不是仅写摘要不删 SQLite（之前每次 turn 都触发压缩）
+
+### Tests
+- **subagent 状态跟踪测试**（`2e1c335`）：覆盖 `ExecuteContext.onSubagentStart/End` 状态机的 running → done / running → failed 转移；`loop.test.ts` 补 `task` / `endTime` 字段（`6d1cd33`）配合类型一致性
 
 ## [0.4.0] - 2026-07-05
 
