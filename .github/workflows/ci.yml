@@ -32,7 +32,14 @@ jobs:
         run: bun run lint && bun run format:check
 
       - name: Test
-        run: bun test --run
+        run: bun test --run --coverage --coverage-reporter=lcov --coverage-dir=./coverage
+
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage/lcov.info
 
       - name: Build (smoke)
         run: bun run build

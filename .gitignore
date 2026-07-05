@@ -34,5 +34,10 @@ vitest-*.log
 # Biome 运行产物
 biome-*.txt
 
+# Test coverage 报告（每次跑测试都会重新生成，不入 git）
+coverage/
+*.lcov
+*.lcov.info
+
 # Git 操作日志
 git-restore.txt
