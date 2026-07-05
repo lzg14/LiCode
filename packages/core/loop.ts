@@ -320,6 +320,9 @@ export class CoreLoop {
       if (!hasExisting) {
         const result = await this.sessionCompactor.compact(history, ctx.sessionId, this.llm)
         ctx.sessionSummary = result.summary
+        // 压缩后从 SQLite 删除旧消息，只保留近 preserveRecent 条
+        // 防止下次加载时又看到 1000 条触发循环压缩
+        this.sessionManager.trimOldMessages(ctx.sessionId, this.sessionCompactor.preserveRecent)
         ctx.onCompaction?.(result.summary, result.originalCount, result.preservedCount)
       } else {
         ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined

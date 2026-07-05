@@ -67,6 +67,10 @@ export class SessionCompactor {
     this.config = { ...DEFAULT_CONFIG, ...config }
   }
 
+  get preserveRecent(): number {
+    return this.config.preserveRecent
+  }
+
   // ─── 公开方法 ─────────────────────────────────────────
 
   /**

@@ -11,7 +11,7 @@ import {
   getMessages, getMessage, searchMessages, getMessagesAsModelMessages,
   insertMessage, touchSession,
   getParts, insertPart,
-  getSessionStats,
+  getSessionStats, trimOldMessages,
 } from './query-builder'
 
 export type { Message, Part, PartType, Session, SessionStatus, SessionSummary }
@@ -82,6 +82,11 @@ export class SessionManager {
   deleteSession(id: string): boolean {
     deleteSessionCascade(this.db, id)
     return true
+  }
+
+  /** 压缩后裁剪旧消息：删除除最近 keepCount 条以外的所有消息 */
+  trimOldMessages(sessionId: string, keepCount: number): number {
+    return trimOldMessages(this.db, sessionId, keepCount)
   }
 
   addMessage(input: {

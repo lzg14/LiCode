@@ -140,6 +140,25 @@ export function deleteSessionCascade(db: Database, id: string): void {
   db.run('DELETE FROM sessions WHERE id = ?', [id])
 }
 
+/**
+ * 压缩后裁剪旧消息：删除 session 中除最近 keepCount 条以外的所有消息
+ */
+export function trimOldMessages(db: Database, sessionId: string, keepCount: number): number {
+  // 找到要保留的最早消息 ID
+  const keepOldest = db.query(
+    'SELECT id FROM messages WHERE session_id = ? ORDER BY created_at DESC LIMIT 1 OFFSET ?'
+  ).get(sessionId, keepCount - 1) as { id: string } | null
+
+  if (!keepOldest) return 0 // 消息数 <= keepCount，无需删除
+
+  // 删除比它更早的消息及其 parts
+  db.run('DELETE FROM parts WHERE message_id IN (SELECT id FROM messages WHERE session_id = ? AND created_at < ?)',
+    [sessionId, (db.query('SELECT created_at FROM messages WHERE id = ?').get(keepOldest.id) as any)?.created_at])
+  const result = db.run('DELETE FROM messages WHERE session_id = ? AND created_at < ?',
+    [sessionId, (db.query('SELECT created_at FROM messages WHERE id = ?').get(keepOldest.id) as any)?.created_at])
+  return result.changes
+}
+
 // ── Message reads ──
 
 export function getMessages(
