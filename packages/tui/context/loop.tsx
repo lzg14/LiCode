@@ -150,6 +150,17 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     inputQueue.length = 0
     setPendingCount(0)
   }
+  // 进程级 Ctrl+C 处理：LLM 卡死时 TUI 事件循环被阻塞，useKeyboard 收不到 ESC
+  // SIGINT 不经过 TUI 事件循环，直接 abort 当前操作
+  const originalSigint = process.listeners('SIGINT').slice()
+  process.removeAllListeners('SIGINT')
+  process.on('SIGINT', () => {
+    abort()
+    // 恢复原始处理器
+    for (const handler of originalSigint) {
+      process.on('SIGINT', handler as any)
+    }
+  })
   let activeModel: any = props.model
   // 工具调用轮次上限确认机制
   let confirmResolve: ((value: boolean) => void) | null = null
