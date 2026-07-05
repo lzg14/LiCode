@@ -27,6 +27,10 @@
   - **markdown 永远 `streaming={true}` + `conceal={true}`**：避免 streaming 切换到 false 触发 finalize 整 viewport 重绘；消除"非高亮 → 高亮"切换
   - **PendingStreamView 合并显示**：text 段 + pending 合并成单一 markdown 组件，thinking 段用 `CollapsibleText maxLines=5` 灰色折叠（恢复 fbc5161 行为）；删除 streamingSegments 独立 For 渲染，避免 markdown 频繁 mount
   - **ScrollBox 改回 mimocode 风格**：`paddingRight: 1` + 滚动条 `visible: true`（之前自创的 `paddingRight: 0` + 滚动条 hidden 反而引入问题）
+- **SessionCompactor 循环触发压缩修复**（根因：loop.ts 加载 history 不传 limit）：
+  - **根因**：`getMessagesAsModelMessages(sessionId)` 不传 limit → 加载完整 SQLite 历史（807 条）→ `shouldCompact` 看到 808 一直触发；压缩只写摘要不删 SQLite → 下次还是 808 → 又触发。每次 turn 都压缩且压缩后历史涨到 808 又压缩
+  - **修复**：`loop.ts:304` 调 `getMessagesAsModelMessages(ctx.sessionId, { limit: 1000 })`，SQLite 层就裁剪到最近 1000 条；`shouldCompact` 看到的 msgCount 不再是完整历史
+  - **配套调阈值**：`maxMessages: 200 → 1000`（触发阈值放宽）；`preserveRecent: 30 → 100`（压缩后保留更多上下文）；`execute.ts` 的 `PRESERVE_RECENT` 同步 `30/100 → 100/200`
 - **ToolName 类型更新**：扩展 ToolName 类型覆盖全部 39 个工具，确保类型安全
 - **SecurityConfig 重复定义合并**：消除 SecurityConfig 接口的重复定义，统一到一处
 - **zodToJsonSchema 重复消除**：移除重复的 zodToJsonSchema 实现，统一使用单一来源
