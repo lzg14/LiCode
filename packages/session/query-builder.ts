@@ -1,4 +1,4 @@
-import { Database } from 'bun:sqlite'
+import type { Database } from 'bun:sqlite'
 import type { SessionRow } from './helpers'
 import { rowToSession, rowToMessage, rowToPart } from './helpers'
 import type { Message, Part, PartType, Session, SessionSummary } from './types'

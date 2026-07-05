@@ -1,4 +1,4 @@
-import { Database } from 'bun:sqlite'
+import type { Database } from 'bun:sqlite'
 
 export function migrate(db: Database): void {
   const columns = (db.query(`PRAGMA table_info(sessions)`).all() as any[]).map(c => c.name)
