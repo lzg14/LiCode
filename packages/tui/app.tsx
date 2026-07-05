@@ -109,6 +109,7 @@ function App() {
   })
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: @opentui/core <box> 是 TUI 元素，不是 HTML 元素
     <box
       flexDirection="column"
       height="100%"

@@ -44,8 +44,8 @@ function registerWebsearch(registry: ToolRegistry): void {
         }
         const results: string[] = []
         const algoRe = /<li[^>]+class="[^"]*\bb_algo\b[^"]*"[^>]*>[\s\S]*?<h2[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h2>/gi
-        let match
-        while ((match = algoRe.exec(html)) !== null && results.length < numResults) {
+        let match = algoRe.exec(html)
+        while (match !== null && results.length < numResults) {
           const rawHref = match[1]
           const title = match[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
           let href = rawHref
@@ -56,12 +56,15 @@ function registerWebsearch(registry: ToolRegistry): void {
           if (title && href && /^https?:\/\//i.test(href)) {
             results.push(`[${title}](${href})`)
           }
+          match = algoRe.exec(html)
         }
         if (results.length === 0) {
           const fallbackRe = /<h2[^>]*>\s*<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>\s*<\/h2>/gi
-          while ((match = fallbackRe.exec(html)) !== null && results.length < numResults) {
-            const title = match[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
-            if (title && match[1]) results.push(`[${title}](${match[1]})`)
+          let fbMatch = fallbackRe.exec(html)
+          while (fbMatch !== null && results.length < numResults) {
+            const title = fbMatch[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+            if (title && fbMatch[1]) results.push(`[${title}](${fbMatch[1]})`)
+            fbMatch = fallbackRe.exec(html)
           }
         }
         return { success: true, output: results.join('\n') || '未找到结果' }

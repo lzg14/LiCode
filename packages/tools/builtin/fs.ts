@@ -65,7 +65,9 @@ function registerWrite(registry: ToolRegistry): void {
           }
         } else {
           diff.push(`@@ -0,0 +1,${content.split('\n').length} @@`)
-          content.split('\n').forEach((line: string) => diff.push(`+${line}`))
+          content.split('\n').forEach((line: string) => {
+            diff.push(`+${line}`)
+          })
         }
 
         return { success: true, output: `已写入 ${path}`, diff: diff.join('\n') }

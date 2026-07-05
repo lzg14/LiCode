@@ -23,7 +23,8 @@ function stripSystemTags(content: string): string {
   // 剥离所有剩余 HTML/XML 标签（<tool_call>、<mimimax:tool_call> 等）
   processed = processed.replace(/<[^>]*>/g, "")
 
-  // 恢复 thinking 标签
+  // 恢复 thinking 标签（用 \x00 当 placeholder sentinels；故意用控制字符）
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: \x00 是 thinking 块占位符的 sentinel
   processed = processed.replace(/\x00THINK(\d+)\x00/g, (_, i) => preserved[+i] ?? "")
 
   return processed.replace(/\n{3,}/g, "\n\n").trim()
