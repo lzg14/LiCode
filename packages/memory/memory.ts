@@ -1,7 +1,7 @@
 import { readFile, writeFile, access, mkdir, readdir, unlink, stat } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
-import type { MemoryEntry, MemorySearchResult } from './schema'
+import type { AnyMemoryEntry, MemoryEntry, MemorySearchResult } from './schema'
 
 const DEFAULT_MEMORY_BASE = join(homedir(), '.licode', 'memory')
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
@@ -17,7 +17,7 @@ export interface MemoryConfig {
 }
 
 export class Memory {
-  private entries: Map<string, MemoryEntry> = new Map()
+  private entries: Map<string, AnyMemoryEntry> = new Map()
   private initialized = false
   private baseDir: string
   private maxAgeMs: number
@@ -69,6 +69,11 @@ export class Memory {
 
         const content = await readFile(fullPath, 'utf-8')
         const id = file.replace('.md', '')
+        // 不要覆盖已有的 v2 entry（type=tool-stats/user-pref/error-pattern）—
+        // loadFromDir 只能补齐 v1 legacy 'memory' entries。
+        // 同一进程内 writeRaw 已经把 v2 entries 放到 Map，用旧 type 反向覆盖会丢类型。
+        if (this.entries.has(id)) continue
+        // v1 旧 entry（loadFromDir 只扫 global/project，v1 type 都是 'memory'）
         this.entries.set(id, {
           id,
           scope: isGlobal ? 'global' : 'project',
@@ -119,6 +124,47 @@ export class Memory {
     return id
   }
 
+  /**
+   * 写入 v2 schema 的 entry（v2 智能增强 plan §4.M4）
+   * 与 store 的区别：接受 AnyMemoryEntry（包含 tool-stats / user-pref / error-pattern），
+   * caller 自己管理 id 唯一性（recorder 用 `tool-stats:<projectId>:<tool>` 模式）。
+   *
+   * 设计：upsert 语义（id 存在则覆盖），方便 recorder 累加统计。
+   * 内部仍走 enforceHardCap + persist。
+   *
+   * 签名说明：用 generic 而不是 `Omit<AnyMemoryEntry, ...>`，因为后者会把 union
+   * 拆成 Omit<MemoryEntry> | Omit<ToolStatsEntry> | ...，传入字段会被严格检查
+   * 命中每个分支的字段集。generic 让 caller 显式指定 T 即可，TS 不会跨分支报错。
+   */
+  async writeRaw<T extends AnyMemoryEntry = AnyMemoryEntry>(
+    entry: Omit<T, 'createdAt' | 'updatedAt' | 'accessCount'> & { id: string },
+  ): Promise<string> {
+    await this.ensureInit()
+    const existing = this.entries.get(entry.id)
+    const now = Date.now()
+    const fullEntry = {
+      ...entry,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      accessCount: existing?.accessCount ?? 0,
+    } as AnyMemoryEntry
+
+    this.entries.set(entry.id, fullEntry)
+    this.enforceHardCap()
+    // persist 内部已处理 scope 分支（global / project / session）
+    // v2 entries 用 'project' 或 'global' scope
+    await this.persist(fullEntry as MemoryEntry)
+    return entry.id
+  }
+
+  /**
+   * 把 id 中 Windows 禁用的字符替换为 `-`（`: * ? " < > |` 等）
+   * in-memory id 不变；只在写磁盘文件名时调用。
+   */
+  private safeFileId(id: string): string {
+    return id.replace(/[:*?"<>|]/g, '-')
+  }
+
   private async persist(entry: MemoryEntry): Promise<void> {
     let dir: string
 
@@ -133,7 +179,13 @@ export class Memory {
 
     try {
       await mkdir(dir, { recursive: true })
-      await writeFile(join(dir, `${entry.id}.md`), entry.content)
+      // v2 entries（tool-stats / user-pref / error-pattern）的 content 为空
+      // 仍写空文件占位（保持 id 稳定，cleanup 不误删）
+      const fileContent = entry.content ?? ''
+      // Windows 文件名禁止 `: * ? " < > |`；持久化时 sanitize 兼容所有平台。
+      // in-memory id 保持原值，不影响 list/search/delete 行为。
+      const safeId = this.safeFileId(entry.id)
+      await writeFile(join(dir, `${safeId}.md`), fileContent)
     } catch (e) {
       console.warn(`[Memory] persist failed:`, e)
     }
@@ -148,16 +200,19 @@ export class Memory {
     const q = query.toLowerCase()
 
     for (const [id, entry] of this.entries.entries()) {
-      const content = entry.content.toLowerCase()
+      // v2 entries (tool-stats / user-pref / error-pattern) 的 content 为空，
+      // 跳过 keyword 搜索（结构化数据本来就不该 keyword 搜）
+      const rawContent = entry.content ?? ''
+      const content = rawContent.toLowerCase()
       let score = 0
 
       // 简单的 BM25-like 评分
-      if (content.includes(q)) score += 10
-      if (content.startsWith(q)) score += 5
+      if (content && content.includes(q)) score += 10
+      if (content && content.startsWith(q)) score += 5
       if (entry.accessCount > 0) score += entry.accessCount
 
       if (score > 0) {
-        results.push({ id, content: entry.content, score })
+        results.push({ id, content: rawContent, score })
       }
     }
 
@@ -178,7 +233,7 @@ export class Memory {
   /**
    * 获取所有记忆
    */
-  list(scope?: 'global' | 'project' | 'session'): MemoryEntry[] {
+  list(scope?: 'global' | 'project' | 'session'): AnyMemoryEntry[] {
     return Array.from(this.entries.values())
       .filter(e => !scope || e.scope === scope)
       .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -205,7 +260,7 @@ export class Memory {
       dir = join(this.baseDir, 'sessions')
     }
 
-    const filePath = join(dir, `${id}.md`)
+    const filePath = join(dir, `${this.safeFileId(id)}.md`)
     try {
       await unlink(filePath)
     } catch {
@@ -250,7 +305,7 @@ export class Memory {
         } else {
           dir = join(this.baseDir, 'sessions')
         }
-        return unlink(join(dir, `${id}.md`))
+        return unlink(join(dir, `${this.safeFileId(id)}.md`))
       })
     )
 

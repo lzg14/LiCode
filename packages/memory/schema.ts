@@ -23,6 +23,7 @@ export interface MemorySearchResult {
 // 1. 向后兼容 — 旧 MemoryEntry 完全不动
 // 2. 不新建 ~/.licode/learning/ 目录 — 复用 packages/memory
 // 3. type 字段扩展为 discriminated union
+// 4. v2 entries 也带 optional content（兼容 v1 markdown 持久化）
 // ============================================================
 
 /** 基础字段（所有 v2 entries 共享）*/
@@ -34,6 +35,8 @@ export interface MemoryEntryBase {
   accessCount: number
   projectId?: string
   tags?: string[]
+  /** 兼容 v1 markdown 持久化（v2 entries 通常为空，结构化字段已足够）*/
+  content?: string
 }
 
 // ===== M4: 工具调用统计 =====
