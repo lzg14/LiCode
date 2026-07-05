@@ -44,3 +44,4 @@ git-restore.txt
 
 # Subagent 工作脚本（一次性审计/迁移/rebump 工具，跑完不入版本管理）
 /_chg/
+/.mimicode/
