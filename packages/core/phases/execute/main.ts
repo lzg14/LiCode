@@ -5,12 +5,20 @@ import { buildProjectRole, detectProject } from "../../detect-project"
 import { devLogger } from "../../dev-logger"
 import { type SubagentInput, SubagentManager } from "../../subagent"
 import { zodToJsonSchema } from "../../utils"
+import {
+  IntelligenceAdapter,
+  defaultRegistry,
+  type ToolCallEvent,
+} from "../../intelligence"
 import type { ExecuteContext, MessageContent } from "./context"
 import { SYSTEM_PROMPT } from "./prompts"
 import { loadProjectConfig } from "./load-config"
 import { findValidStart } from "./helpers"
 
 const MAX_ITERATIONS = 100
+
+// v2 §4.M5: 决策整合 adapter（per-execute 实例，避免跨 session 污染）
+const intelligenceAdapter = new IntelligenceAdapter({ registry: defaultRegistry() })
 
 // ─── LLM 调用 + 流消费 ──────────────────────────────────
 
@@ -101,6 +109,15 @@ async function callLLM(
 }
 
 // ─── 工具执行 ───────────────────────────────────────────
+//
+// v2 §4.M5 集成：返回 events 给 caller 调 afterExecute。
+// 这里不直接调 recorder，因为 executeToolBatch 是纯函数（v2 §2.5），
+// 让 caller 决定何时 record（一次 / 分批 / 失败回滚）
+
+interface ToolBatchResult {
+  results: ToolResultPart[]
+  events: ToolCallEvent[]
+}
 
 async function executeToolBatch(
   toolCalls: DynamicToolCall[],
@@ -108,16 +125,18 @@ async function executeToolBatch(
   subagentManager: SubagentManager,
   subagentSystem: string,
   ctx: ExecuteContext,
-): Promise<ToolResultPart[]> {
+): Promise<ToolBatchResult> {
   devLogger.info('PARALLEL', `Executing ${toolCalls.length} tool(s)`)
   const toolBatch = msgs.filter(m => m.role === 'tool').length + 1
 
-  return Promise.all(toolCalls.map(async (tc) => {
+  const results = await Promise.all(toolCalls.map(async (tc): Promise<{ result: ToolResultPart; event: ToolCallEvent }> => {
     devLogger.logToolCall(tc.toolName, tc.input)
     const tcInput = tc.input as Record<string, unknown>
     ctx.onToolCall?.(tc.toolName, tcInput, toolBatch)
     const toolId = ctx.timer?.start(`tool.${tc.toolName}`)
+    const startTime = Date.now()
     let execResult: ToolResult | undefined
+    let errorMessage: string | undefined
 
     if (tc.toolName === "subagent") {
       execResult = await subagentManager.spawn(
@@ -129,35 +148,65 @@ async function executeToolBatch(
         execResult = await globalToolRegistry.execute(tc.toolName, tcInput, { cwd: ctx.cwd })
       } catch (toolError: any) {
         execResult = { success: false, error: `工具执行异常: ${toolError?.message ?? toolError}` }
+        errorMessage = toolError?.message ?? String(toolError)
       }
     }
 
+    const durationMs = Date.now() - startTime
+    const success = execResult?.success ?? false
+    const timeout = execResult?.error?.toLowerCase().includes('timeout') ?? false
+    const event: ToolCallEvent = {
+      tool: tc.toolName,
+      success,
+      durationMs,
+      timeout,
+      ...(errorMessage ? { errorMessage } : {}),
+    }
+
     devLogger.logToolCall(tc.toolName, tc.input, execResult)
-    if (toolId) ctx.timer?.end(toolId, { success: execResult?.success ?? false })
+    if (toolId) ctx.timer?.end(toolId, { success })
     ctx.onToolResult?.(execResult)
     return {
-      type: "tool-result" as const,
-      toolCallId: tc.toolCallId,
-      toolName: tc.toolName,
-      output: {
-        type: "text",
-        value: execResult?.success
-          ? `OK: ${execResult.output ?? '(无输出)'}`
-          : `Error: ${execResult?.error ?? '未知错误'}`,
+      result: {
+        type: "tool-result" as const,
+        toolCallId: tc.toolCallId,
+        toolName: tc.toolName,
+        output: {
+          type: "text",
+          value: execResult?.success
+            ? `OK: ${execResult.output ?? '(无输出)'}`
+            : `Error: ${execResult?.error ?? '未知错误'}`,
+        },
       },
+      event,
     }
   }))
+
+  return {
+    results: results.map((r) => r.result),
+    events: results.map((r) => r.event),
+  }
 }
 
 // ─── 构建 system prompt ─────────────────────────────────
+//
+// v2 §4.M5: 追加 augmentedPrompt.systemHints（来自 M5 adapter beforeExecute）
+// 顺序：SYSTEM_PROMPT → projectConfig → activeSkill → intelligenceAdapter hints
 
-function buildSystem(ctx: ExecuteContext, projectConfig: string): string {
+function buildSystem(
+  ctx: ExecuteContext,
+  projectConfig: string,
+  intelligenceHints: string,
+): string {
   const projectInfo = detectProject(ctx.cwd ?? process.cwd())
   const projectRole = buildProjectRole(projectInfo)
   let sys = SYSTEM_PROMPT.replace('你是一个名为 licode 的 AI 助手，专注于代码开发。', projectRole)
   if (projectConfig) sys += `\n\n## 项目配置\n\n${projectConfig}`
   if (ctx.activeSkillInstructions) {
     sys += `\n\n## 当前激活技能: ${ctx.activeSkill ?? "?"}\n\n${ctx.activeSkillInstructions}\n\n请严格遵循上述技能的指令与规则。`
+  }
+  if (intelligenceHints) {
+    sys += `\n\n${intelligenceHints}`
   }
   return sys
 }
@@ -188,6 +237,25 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
     }),
   })
 
+  // v2 §4.M5: beforeExecute → 收集 4 类信号 → 输出 AugmentedPrompt
+  let intelligenceHints = ""
+  if (ctx.memory && ctx.sessionId && ctx.cwd) {
+    try {
+      const augmented = await intelligenceAdapter.beforeExecute({
+        cwd: ctx.cwd,
+        sessionId: ctx.sessionId,
+        userInput: ctx.userInput,
+        modelInfo: ctx.modelInfo ?? { modelId: 'unknown', provider: 'unknown' },
+        memory: ctx.memory,
+        executeContext: ctx,
+      })
+      intelligenceHints = augmented.systemHints
+    } catch (e) {
+      // 整体失败不 crash，hints 留空（走原 LLM 行为）
+      devLogger.warn('EXEC', `intelligenceAdapter.beforeExecute failed: ${e}`)
+    }
+  }
+
   // 构建初始消息列表
   const msgs = buildInitialMessages(ctx)
   let fullText = ""
@@ -201,7 +269,7 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
 
     try {
       const projectConfig = await loadProjectConfig(ctx.cwd)
-      const llmResponse = await callLLM(msgs, ctx, tools, buildSystem(ctx, projectConfig))
+      const llmResponse = await callLLM(msgs, ctx, tools, buildSystem(ctx, projectConfig, intelligenceHints))
       if (!llmResponse) return "已取消当前执行"
       const { result } = llmResponse
 
@@ -231,9 +299,20 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
       msgs.push({ role: "assistant", content: assistantContent })
       persistContent(ctx, 'assistant', assistantContent)
 
-      const toolResults = await executeToolBatch(result.toolCalls, msgs, subagentManager, subagentSystem, ctx)
-      msgs.push({ role: "tool", content: toolResults })
-      persistContent(ctx, 'tool', toolResults)
+      const batch = await executeToolBatch(result.toolCalls, msgs, subagentManager, subagentSystem, ctx)
+      msgs.push({ role: "tool", content: batch.results })
+      persistContent(ctx, 'tool', batch.results)
+
+      // v2 §4.M5: afterExecute → recorder 写入 M4 tool-stats
+      if (ctx.memory && ctx.sessionId && ctx.cwd && batch.events.length > 0) {
+        await intelligenceAdapter.afterExecute({
+          cwd: ctx.cwd,
+          sessionId: ctx.sessionId,
+          userInput: ctx.userInput,
+          modelInfo: ctx.modelInfo ?? { modelId: 'unknown', provider: 'unknown' },
+          memory: ctx.memory,
+        }, batch.events)
+      }
 
     } catch (e) {
       devLogger.logException('execute.generateText', e, { iteration, messageCount: msgs.length })

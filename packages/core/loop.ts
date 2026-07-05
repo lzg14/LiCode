@@ -342,6 +342,16 @@ export class CoreLoop {
     // 直接执行，让 LLM 自己决定用什么工具、做什么
     // ctx.model 字段类型签名是 Record<string, unknown>；execute 期望 LanguageModel，运行时
     // 实际存的就是 CreateModelResult.model，这里 cast 让两边对齐
+    //
+    // v2 §4.M5 集成：把 Memory + modelInfo 传给 execute，让 IntelligenceAdapter
+    // 能读取 M4 user-pref/tool-stats、写入新事件
+    const modelInfo = (ctx.model && typeof ctx.model === 'object')
+      ? {
+          modelId: (ctx.model as { modelId?: string }).modelId ?? 'unknown',
+          provider: (ctx.model as { provider?: string }).provider ?? 'unknown',
+        }
+      : { modelId: 'unknown', provider: 'unknown' }
+
     const aiResponse = await execute({
       model: ctx.model as unknown as Parameters<typeof execute>[0]['model'],
       userInput: ctx.userInput,
@@ -361,6 +371,8 @@ export class CoreLoop {
       onConfirmContinue: ctx.onConfirmContinue,
       signal: ctx.signal,
       timer,
+      memory: this.memory,
+      modelInfo,
     })
 
     // VERIFY 阶段：检查交付物

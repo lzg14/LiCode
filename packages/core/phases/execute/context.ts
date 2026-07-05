@@ -1,6 +1,7 @@
 import type { LanguageModel } from "ai"
 import type { ImagePart, TextPart } from "@ai-sdk/provider-utils"
 import type { SessionManager } from "../../../session/session"
+import type { Memory } from "../../../memory/memory"
 import type { Timer } from "../../perf"
 
 import type { ToolCallPart, ToolResultPart } from "@ai-sdk/provider-utils"
@@ -30,4 +31,8 @@ export interface ExecuteContext {
   activeSkill?: string | null
   activeSkillInstructions?: string | null
   timer?: Timer
+  /** v2 智能增强 §4.M5: Memory 实例（adpter 读写 M4 schema 用） */
+  memory?: Memory
+  /** v2 智能增强 §4.M5: 模型信息（adpter 调试 / metrics 用） */
+  modelInfo?: { modelId: string; provider: string }
 }
