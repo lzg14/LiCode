@@ -5,7 +5,7 @@ import { useLoop } from "../context/loop"
 import { useTheme } from "../context/theme"
 import { todos } from "../context/todos"
 
-const VERSION = "0.2.0"
+const VERSION = "0.4.0"
 
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning, error } = useTheme()

@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### Added
+### Changed
+### Fixed
+### Removed
+
+## [0.4.0] - 2026-07-05
+
+
 ### 修复
 - **streamText 解析失败吞 tool-call（最严重的 silent failure）**：
   - 根因：AI SDK v6 的 `streamText` result 在 Bun + 全双工 stream 下 `fullStream` AsyncIterable 会抛 `TypeError: generatorStream.pipeThrough is not a function`，但 execute.ts 用 try/catch 吞掉 + 从 fullStream 累积 streamedToolCalls，导致 LLM 实际生成的 tool-call 全部丢失，user 看到"LLM 说要做但实际什么都没做"
@@ -84,8 +92,7 @@
 - **移动计划文件到 docs/plans/**
 - **删除 ENV_X220.md**
 - **删除 4 个未使用的文件**：清理 429 行死代码，包括 packages/audit/ 下的文件
-- **清理未使用的导出和依赖**：移除未被引用的导出和多余的依赖声明
-- **session.ts `?? 0` 死代码清理**（`22c8986`）：`row.created_at ?? 0` / `row.updated_at ?? 0` 在 `rowToSession` 是死代码（schema 是 NOT NULL），移除后类型推断出 `number` 强类型
+- **- **session.ts `?? 0` 死代码清理**（`22c8986`）：`row.created_at ?? 0` / `row.updated_at ?? 0` 在 `rowToSession` 是死代码（schema 是 NOT NULL），移除后类型推断出 `number` 强类型
 - **SessionStatus type guard**（`22c8986`）：加 `SESSION_STATUSES` 常量 + `parseSessionStatus(raw)`，DB 写入的 status 字符串读出时验证，落到 `unknown → failed` 兜底
 - **execute phases 类型严格化**（`22c8986`）：移除 `(ctx.model as { modelId?: string })?.modelId` 冗余断言；新增 `ModelMessage` 类型；`helpers.ts` 把 `content: any[]` 替换为 `content: MessageContent[]`
 
@@ -115,6 +122,11 @@
 
 ### 文档
 - **v0.3.1 improvement audit §12 实施状态追踪**（`5032a77`）：原 audit（2026-07-04 14:00 起草）6 小时内被多 agent 完成 7 项（T01/T02/T05/T06/T07/T12/T13），追写 §12 标注 ✅/⏳ 状态 + sprint 对比 + 显式记下 T11 与 25cccb4 的设计方向冲突
+
+
+### 工程（unreleased 续）
+- **TUI home.tsx 智能 stickyScroll 去重**（`1a87656`）：合并 `5a27feb` + `eebdf42` 时 `checkAtBottom` 函数和 `const [stickyEnabled, setStickyEnabled] = createSignal(true)` 各被声明了两次（biome `noRedeclare` 编译错）。删除旧版（带 `return atBottom` boolean 返回）+ 重复 declare 后保留最简版（无返回值箭头函数 + 信号），下游 4 处 `setTimeout(checkAtBottom, 50)` + `stickyScroll={stickyEnabled()}` 使用不受影响
+
 
 ## [0.3.0] - 2026-06-23
 

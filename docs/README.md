@@ -1,6 +1,6 @@
 # licode 设计文档
 
-**licode** - Terminal-native AI coding agent（v0.3.0）
+**licode** - Terminal-native AI coding agent（v0.4.0）
 
 > 本文档索引只列**当前活跃**的内容。已完成或过期的文档移至 `archive/` 目录，详见 [archive/README.md](./archive/README.md)。
 
