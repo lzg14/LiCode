@@ -17,6 +17,8 @@ Thumbs.db
 
 # User data
 memory/
+# 但 packages/memory/ 是代码目录，需要 allow
+!packages/memory/
 tsc-result*.txt
 test-results/
 

@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { getAdaptiveConfig } from './adaptive'
 import { DEFAULT_CONFIG } from './defaults'
 import { importClaudeCodeConfig } from './external'
+import { getHardwareProfile } from './hardware'
 import { type Config, ConfigSchema, type PROVIDERS } from './schema'
 
 /**
@@ -82,16 +84,27 @@ export class ConfigLoader {
     if (process.env.LICODE_PROVIDER) this.config.llm.provider = process.env.LICODE_PROVIDER as Config['llm']['provider']
     if (process.env.LICODE_API_KEY) this.config.llm.apiKey = process.env.LICODE_API_KEY
 
+    // M1 智能增强：硬件自适应日志（v0.4.1 spike）
+    // 详细设计: docs/plans/intelligence-enhancement-plan.md §4.M1
+    // 硬编码值替换在 v0.4.5 Phase 3 灰度阶段做。
+    const profile = getHardwareProfile()
+    const adaptive = getAdaptiveConfig()
+    process.stderr.write(
+      `[config] Hardware: ${profile.cpu.cores} cores, ${profile.memory.totalGB}GB RAM, ${profile.isSSD ? 'SSD' : 'HDD'}${profile.isContainer ? ' (container)' : ''}\n` +
+        `[config] Hardware tier: ${profile.hardwareTier}\n` +
+        `[config] Adaptive: maxConcurrent=${adaptive.subagent.maxConcurrent}, temperature=${adaptive.llm.temperature}, maxMessages=${adaptive.compaction.maxMessages}, ioStrategy=${adaptive.disk.ioStrategy}\n`,
+    )
+
     return this.config
   }
 
   save(path: string, config: Config): void {
     const dir = dirname(path)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-    
+
     // 深拷贝配置，避免修改原始对象
     const configCopy = structuredClone(config)
-    
+
     // 递归删除所有 apiKey 字段
     const removeApiKey = (obj: unknown): void => {
       if (typeof obj !== 'object' || obj === null) return
@@ -108,7 +121,7 @@ export class ConfigLoader {
         }
       }
     }
-    
+
     removeApiKey(configCopy)
     writeFileSync(path, JSON.stringify(configCopy, null, 2), 'utf-8')
   }
