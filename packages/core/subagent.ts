@@ -132,7 +132,7 @@ export class SubagentManager {
           break
         }
 
-        // 执行工具调用
+        // 手动执行工具调用（tools 没 execute 函数，subagent 自己控制）
         const toolResults = await Promise.all(
           result.toolCalls.map(async (tc: any) => {
             devLogger.debug("SUBAGENT-TOOL", `${tc.toolName}`, tc.input)
@@ -231,7 +231,13 @@ export class SubagentManager {
     }
   }
 
-  /** 构建带 execute 的工具列表 */
+  /** 构建工具列表（不带 execute，让 subagent 手动执行）
+   * 关键：tools 不能有 execute 函数 —— 否则 AI SDK v6 会自动执行 + 自动 push tool-result
+   * 而 subagent 自己也手动执行 + 手动 push → 重复执行 + 重复 push → 第二次 generateText
+   * 解析失败 → "(无输出)"
+   *
+   * 修复 commit 06078f3 后仍有此问题：让 subagent 真的手动控制工具执行
+   */
   private buildToolsWithExecute(allowed?: string[], cwd?: string): Record<string, any> {
     const allTools = globalToolRegistry.list()
     const blocked = new Set(this.options.blockedTools)
@@ -247,18 +253,7 @@ export class SubagentManager {
       tools[t.name] = tool({
         description: t.description,
         inputSchema: jsonSchema(jsonSchemaDef),
-        // AI SDK v6: execute 函数让 generateText 自动执行工具
-        execute: async (args: Record<string, unknown>) => {
-          try {
-            const result = await globalToolRegistry.execute(t.name, args, { cwd: cwd ?? process.cwd() })
-            return result.success
-              ? `OK: ${result.output ?? "(无输出)"}`
-              : `Error: ${result.error ?? "未知错误"}`
-          } catch (e) {
-            const err = e instanceof Error ? e.message : String(e)
-            return `Error: ${err}`
-          }
-        },
+        // 注意：不传 execute 函数 —— 让 subagent 自己执行工具
       } as any)
     }
 

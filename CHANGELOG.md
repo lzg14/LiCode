@@ -7,10 +7,8 @@
 
 ## [Unreleased]
 
-### Added
-### Changed
 ### Fixed
-### Removed
+- **subagent 工具"结果丢失"根因修复**：`buildToolsWithExecute` 给 tool 传 `execute` 函数时，AI SDK v6 会自动执行 + 自动 push tool-result 到 messages；但 subagent 内部循环又手动执行 + 手动 push tool-result → **同一工具被执行两次 + messages 中同 toolCallId 有两条 tool-result** → 第二次 `generateText` 解析失败 → 返回空 text → break → `(无输出)`。修复：buildToolsWithExecute 不传 `execute` 函数，让 subagent 真的手动控制（手动执行 + 手动 push tool-result 仍是单一来源）
 
 ## [0.4.0] - 2026-07-05
 
