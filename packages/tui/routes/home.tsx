@@ -19,7 +19,7 @@ const BUILTIN_COMMANDS: { type: string; label: string; desc: string }[] = [
 ]
 
 export function Home() {
-  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults } = useLoop()
+  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)
@@ -178,13 +178,32 @@ export function Home() {
       }
       return
     }
-    // Esc 停止所有循环
+    // Esc 停止所有循环 或 中断正在运行的 LLM 调用
+    // 修复：之前只在 scheduler 有任务时 stopLoops，等待 LLM 响应时 ESC 完全无效
+    // 根因：prompt 的 TextareaRenderable 默认 keyBindings 没有 ESC 绑定，但 useKeyboard
+    // 也只在 stopLoops 分支处理 ESC，没考虑 abort 当前 LLM 调用
     if (evt.name === "escape" && !modelPickerOpen() && !slashOpen()) {
       if (scheduler.hasTasks()) {
         evt.preventDefault()
         stopLoops()
         return
       }
+      if (isProcessing()) {
+        evt.preventDefault()
+        abort()
+        addMessage({ role: "system", content: "已取消当前执行" })
+        return
+      }
+    }
+    // Ctrl+D 中断正在运行的 LLM 调用（兜底：prompt 的 TextareaRenderable 默认 keyBindings
+    // 把 Ctrl+D 绑到 "delete" action，光标处删除字符，不冒泡到 useKeyboard，所以
+    // 等待 LLM 时焦点在 prompt，Ctrl+D 被 prompt 内部吞掉。这条全局 handler 走不到，
+    // 仅在焦点不在 prompt 时（如思考完成后用户点击别处）才生效）
+    if (evt.ctrl && evt.name === "d" && isProcessing()) {
+      evt.preventDefault()
+      abort()
+      addMessage({ role: "system", content: "已取消当前执行" })
+      return
     }
     if (evt.ctrl && evt.name === "b") {
       evt.preventDefault()

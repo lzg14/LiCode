@@ -168,6 +168,14 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
 
   if (props.msg.role === "system") {
     const isError = props.msg.content.startsWith('错误:') || props.msg.content.startsWith('Error:')
+    // 压缩摘要用 markdown 渲染（有标题、列表等格式）
+    if (props.msg.compaction) {
+      return (
+        <box flexDirection="column" marginBottom={1}>
+          <MarkdownText content={props.msg.content} syntaxStyle={props.syntaxStyle} />
+        </box>
+      )
+    }
     return (
       <box marginBottom={0}>
         <box flexDirection="row">

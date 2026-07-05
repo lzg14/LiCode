@@ -10,7 +10,7 @@ const VERSION = "0.4.0"
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning, error } = useTheme()
   const config = useConfig()
-  const { isProcessing, messages, llmCallCount, llmTokenUsage, contextTokens, currentModel, effectiveContextWindow, compactionError, activeSkill, activeSkillInstructions } = useLoop()
+  const { isProcessing, messages, llmCallCount, llmTokenUsage, cumulativeTokens, contextTokens, currentModel, effectiveContextWindow, compactionError, activeSkill, activeSkillInstructions } = useLoop()
 
   const msgCount = createMemo(() => messages().length)
   const toolCallCount = createMemo(() => messages().filter((m) => m.role === "tool").length)
@@ -59,16 +59,18 @@ export function Sidebar() {
       <box flexDirection="column" gap={0} paddingTop={1}>
         <text fg={primary()}>Context</text>
         <box paddingLeft={1} flexDirection="row">
+          <text fg={textMuted()}>context </text>
+          <text fg={contextColor()}>
+            {(contextTokens() / 1000).toFixed(1)}K / {(maxContext() / 1000).toFixed(0)}K ({contextUsage().toFixed(0)}%)
+          </text>
+        </box>
+      </box>
+
+      <box flexDirection="column" gap={0} paddingTop={1}>
+        <text fg={primary()}>This Turn</text>
+        <box paddingLeft={1} flexDirection="row">
           <text fg={textMuted()}>LLM calls </text>
           <text fg={primary()}>{llmCallCount()}</text>
-        </box>
-        <box paddingLeft={1} flexDirection="row">
-          <text fg={textMuted()}>input </text>
-          <text fg={text()}>{(llmTokenUsage().input / 1000).toFixed(1)}K</text>
-        </box>
-        <box paddingLeft={1} flexDirection="row">
-          <text fg={textMuted()}>output </text>
-          <text fg={text()}>{(llmTokenUsage().output / 1000).toFixed(1)}K</text>
         </box>
         <box paddingLeft={1} flexDirection="row">
           <text fg={textMuted()}>total </text>
@@ -76,10 +78,26 @@ export function Sidebar() {
             {(llmTokenUsage().total / 1000).toFixed(1)}K
           </text>
         </box>
+      </box>
+
+      <box flexDirection="column" gap={0} paddingTop={1}>
+        <text fg={primary()}>Session</text>
         <box paddingLeft={1} flexDirection="row">
-          <text fg={textMuted()}>context </text>
-          <text fg={contextColor()}>
-            {(contextTokens() / 1000).toFixed(1)}K / {(maxContext() / 1000).toFixed(0)}K ({contextUsage().toFixed(0)}%)
+          <text fg={textMuted()}>turns </text>
+          <text fg={primary()}>{cumulativeTokens().turns}</text>
+        </box>
+        <box paddingLeft={1} flexDirection="row">
+          <text fg={textMuted()}>input </text>
+          <text fg={text()}>{(cumulativeTokens().input / 1000).toFixed(1)}K</text>
+        </box>
+        <box paddingLeft={1} flexDirection="row">
+          <text fg={textMuted()}>output </text>
+          <text fg={text()}>{(cumulativeTokens().output / 1000).toFixed(1)}K</text>
+        </box>
+        <box paddingLeft={1} flexDirection="row">
+          <text fg={textMuted()}>total </text>
+          <text fg={warning()}>
+            {(cumulativeTokens().total / 1000).toFixed(1)}K
           </text>
         </box>
       </box>

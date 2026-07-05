@@ -43,6 +43,8 @@ export interface Message {
   queued?: boolean
   /** 附带的图片列表（base64 + mimeType），用于 multimodal 消息 */
   images?: Array<{ base64: string; mimeType: string }>
+  /** 是否为压缩摘要消息（渲染为 markdown） */
+  compaction?: boolean
 }
 
 type AddMessageInput = {
@@ -57,6 +59,7 @@ type AddMessageInput = {
   diff?: string
   queued?: boolean
   images?: Message["images"]
+  compaction?: boolean
 }
 
 export interface LoopContext {
@@ -77,6 +80,7 @@ export interface LoopContext {
   toggleToolCallExpanded: () => void
   llmCallCount: Accessor<number>
   llmTokenUsage: Accessor<{ input: number; output: number; total: number }>
+  cumulativeTokens: Accessor<{ input: number; output: number; total: number; turns: number }>
   compactSession: () => Promise<void>
   listSkills: () => Promise<string[]>
   activeSkill: Accessor<string | null>
@@ -112,6 +116,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const toggleToolCallExpanded = () => setToolCallExpanded(prev => !prev)
   const [llmCallCount, setLlmCallCount] = createSignal(0)
   const [llmTokenUsage, setLlmTokenUsage] = createSignal({ input: 0, output: 0, total: 0 })
+  // 累计 token 用量（不随 turn 重置）
+  const [cumulativeTokens, setCumulativeTokens] = createSignal({ input: 0, output: 0, total: 0, turns: 0 })
   const [currentModel, setCurrentModel] = createSignal(props.model?.modelId ?? "unknown")
   const [currentProvider, setCurrentProvider] = createSignal(props.provider ?? "deepseek")
   const [effectiveContextWindow, _setEffectiveContextWindow] = createSignal<number | undefined>(props.effectiveContextWindow)
@@ -352,6 +358,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       duration: input.duration,
       queued: input.queued,
       images: input.images,
+      compaction: input.compaction,
     }
     setMessages((prev) => [...prev, msg])
   }
@@ -455,6 +462,13 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             output: usage.outputTokens,
             total: usage.inputTokens + usage.outputTokens,
           })
+          // 累计 token 用量
+          setCumulativeTokens(prev => ({
+            input: prev.input + usage.inputTokens,
+            output: prev.output + usage.outputTokens,
+            total: prev.total + usage.inputTokens + usage.outputTokens,
+            turns: prev.turns + 1,
+          }))
         },
         onStreamText: (delta: string) => {
           const { closed, pending, mode } = streamAccumulator.push(delta)
@@ -513,7 +527,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             return
           }
           setCompactionError(null)
-          addMessage({ role: "system", content: `🗜️ 已压缩对话历史：${originalCount} 条 → 保留 ${preservedCount} 条\n\n摘要预览：\n${summary.slice(0, 500)}${summary.length > 500 ? '...' : ''}` })
+          addMessage({ role: "system", content: `🗜️ 已压缩对话历史：${originalCount} 条 → 保留 ${preservedCount} 条\n\n${summary}`, compaction: true })
           const saved = originalCount - preservedCount
           toast.show({
             message: `已压缩 ${saved} 条历史，保留最近 ${preservedCount} 条`,
@@ -577,7 +591,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           // 显示摘要内容
           const tag = result.wasFallback ? '[规则提取]' : '[LLM 摘要]'
           const preview = result.summary.length > 200 ? `${result.summary.slice(0, 200)}...` : result.summary
-          addMessage({ role: "system", content: `🗜️ 已压缩 ${result.originalCount} 条 → 保留 ${result.preservedCount} 条\n\n${tag}\n${preview}` })
+          addMessage({ role: "system", content: `🗜️ 已压缩 ${result.originalCount} 条 → 保留 ${result.preservedCount} 条\n\n${tag}\n${result.summary}`, compaction: true })
         } else {
           addMessage({ role: "system", content: result.saved > 0 ? `压缩完成，节省 ${result.saved} 条消息` : "无需压缩" })
         }
@@ -697,6 +711,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     scheduler,
     currentPhase,
     verifyResults,
+    cumulativeTokens,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }
