@@ -1,5 +1,5 @@
 import { useKeyboard } from "@opentui/solid"
-import { createMemo, createSignal, For, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { loadAllSkills } from "../../skills/loader"
 import { HelpPanel } from "../component/help-panel"
 import { Logo } from "../component/logo"
@@ -24,6 +24,25 @@ export function Home() {
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)
   const [scrollRef, setScrollRef] = createSignal<any>(null)
+  const [stickyEnabled, setStickyEnabled] = createSignal(true)
+
+  // 检测用户是否在底部（阈值 3 行），用于控制 stickyScroll
+  const checkAtBottom = () => {
+    const el = scrollRef()
+    if (!el) return true
+    const atBottom = (el.scrollTop ?? 0) + (el.height ?? 0) >= (el.scrollHeight ?? 0) - 3
+    setStickyEnabled(atBottom)
+    return atBottom
+  }
+  const [stickyEnabled, setStickyEnabled] = createSignal(true)
+
+  // 检测用户是否在底部（阈值 3 行），用于控制 stickyScroll
+  const checkAtBottom = () => {
+    const el = scrollRef()
+    if (!el) return
+    const atBottom = (el.scrollTop ?? 0) + (el.height ?? 0) >= (el.scrollHeight ?? 0) - 3
+    setStickyEnabled(atBottom)
+  }
 
   const toggleModelPicker = () => {
     setModelPickerOpen(prev => !prev)
@@ -229,23 +248,39 @@ export function Home() {
     if (evt.name === "pageup") {
       evt.preventDefault()
       scrollRef()?.scrollBy(-0.5, "viewport")
+      setTimeout(checkAtBottom, 50)
       return
     }
     if (evt.name === "pagedown") {
       evt.preventDefault()
       scrollRef()?.scrollBy(0.5, "viewport")
+      setTimeout(checkAtBottom, 50)
       return
     }
     if (evt.name === "home") {
       evt.preventDefault()
       scrollRef()?.scrollTo(0)
+      setTimeout(checkAtBottom, 50)
       return
     }
     if (evt.name === "end") {
       evt.preventDefault()
       scrollRef()?.scrollTo(scrollRef()?.scrollHeight ?? 0)
+      setStickyEnabled(true)
       return
     }
+  })
+
+  // 监测消息数量变化时的滚动位置，自动控制 stickyScroll
+  // 当用户向上滚动看旧消息时，新内容到达不会强制拉回底部
+  let lastMsgCount = messages().length
+  createEffect(() => {
+    const count = messages().length
+    if (count > lastMsgCount) {
+      // 新消息到达，检查用户是否在底部
+      checkAtBottom()
+    }
+    lastMsgCount = count
   })
 
   return (
@@ -296,7 +331,7 @@ export function Home() {
             ref={setScrollRef}
             flexGrow={1}
             scrollY={true}
-            stickyScroll={true}
+            stickyScroll={stickyEnabled()}
             stickyStart="bottom"
             // 完全照搬 mimocode 配置（避免 licode 自创配置引入回归）
             // 关键差异：paddingRight: 1、滚动条 visible
