@@ -180,8 +180,8 @@ describe("ExecuteContext onSubagentStart/End", () => {
   })
 
   it("onSubagentEnd 更新状态为 done", async () => {
-    const statuses: Array<{ id: string; status: string; endTime?: number }> = [
-      { id: 'sa_1', status: 'running', startTime: Date.now() }
+    const statuses: Array<{ id: string; task: string; status: string; startTime: number; endTime?: number }> = [
+      { id: 'sa_1', task: '搜索 auth 文件', status: 'running', startTime: Date.now() }
     ]
     const onSubagentEnd = (id: string, success: boolean) => {
       const idx = statuses.findIndex(s => s.id === id)
