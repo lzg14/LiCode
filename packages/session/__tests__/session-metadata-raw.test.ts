@@ -39,15 +39,15 @@ describe('SessionManager part metadata 不应包含完整原始对象副本', ()
     expect(messages.length).toBe(1)
 
     // 通过 SQLite raw query 直接拿 part 的 metadata 字段，避免走 ORM 重建
-    const rows = manager.db
+    const rows = (manager as unknown as { db: { query: (sql: string) => { all: (...args: unknown[]) => unknown[] } } }).db
       .query(`SELECT id, metadata FROM parts WHERE message_id = ?`)
-      .all(messages[0].id) as any[]
+      .all(messages[0].id) as Array<{ id: string; metadata: unknown }>
 
     expect(rows.length).toBeGreaterThan(0)
     for (const row of rows) {
       // metadata 要么为 NULL，要么是一个轻量引用，绝不能存完整原始对象
       if (row.metadata !== null && row.metadata !== undefined) {
-        const parsed = JSON.parse(row.metadata)
+        const parsed = JSON.parse(row.metadata as string)
         // 修复前：{ raw: { type: 'tool-call', toolCallId: 'tc1', ... } }
         // 修复后：null 或 {} 或只含轻量字段
         expect(parsed).not.toHaveProperty('raw')

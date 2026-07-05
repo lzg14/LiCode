@@ -141,7 +141,12 @@ export function Sidebar() {
           </box>
           <Show when={activeSkillInstructions()}>
             <box flexDirection="column" paddingLeft={1} marginTop={0}>
-              <text fg={textMuted()}>{activeSkillInstructions()?.slice(0, 120)}{activeSkillInstructions()?.length > 120 ? '...' : ''}</text>
+              <text fg={textMuted()}>
+                {(() => {
+                  const skill = activeSkillInstructions() ?? ''
+                  return `${skill.slice(0, 120)}${skill.length > 120 ? '...' : ''}`
+                })()}
+              </text>
             </box>
           </Show>
         </box>

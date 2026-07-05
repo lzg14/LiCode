@@ -289,12 +289,15 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         let idx = 0
         let toolBatch = 0
 
+        // raw.content 是 unknown[]（上游 session 层有意退化为弱类型），下游需要 narrow
+        type ContentPart = { type: string; text?: string; toolName?: string; input?: unknown }
         for (const raw of modelMsgs) {
           if (raw.role === 'user' || raw.role === 'assistant') {
             let text = ''
             if (Array.isArray(raw.content)) {
-              for (const part of raw.content) {
-                if (part.type === 'text') text += part.text
+              const parts = raw.content as ContentPart[]
+              for (const part of parts) {
+                if (part.type === 'text') text += part.text ?? ''
               }
             } else if (typeof raw.content === 'string') {
               text = raw.content
@@ -309,7 +312,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             })
 
             if (raw.role === 'assistant' && Array.isArray(raw.content)) {
-              const toolCalls = raw.content.filter(p => p.type === 'tool-call')
+              const parts = raw.content as ContentPart[]
+              const toolCalls = parts.filter(p => p.type === 'tool-call')
               if (toolCalls.length > 0) toolBatch++
               for (const tc of toolCalls) {
                 restored.push({
@@ -317,7 +321,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
                   role: 'tool',
                   content: tc.toolName ?? '',
                   toolName: tc.toolName ?? '',
-                  toolArgs: tc.input ?? {},
+                  toolArgs: (tc.input ?? {}) as Record<string, unknown>,
                   toolStatus: 'completed' as const,
                   toolBatch,
                   timestamp: Date.now(),

@@ -304,7 +304,7 @@ describe('SessionCompactor', () => {
         fileOps: [], commands: [], conclusions: [],
       })
       const lines = summary.split('\n')
-      const idx = lines.findIndex(l => l === '# Goal')
+      const idx = lines.indexOf('# Goal')
       expect(idx).toBeGreaterThanOrEqual(0)
       expect(lines[idx + 1]).toBe('第一条意图')
     })

@@ -180,7 +180,12 @@ export class CoreLoop {
 
     // 如果外部没有传入 llm，使用构造时注入的
     const effectiveLlm = ctx.llm ?? this.llm
-    const model = ctx.model ?? (this.llm ? await createModel({ provider: this.config.llm.provider, model: this.config.llm.model, apiKey: this.config.llm.apiKey, baseUrl: this.config.llm.baseUrl }) : undefined)
+    // createModel 返回 CreateModelResult（{ model: LanguageModel, contextWindow: number }），
+    // ctx.model 字段类型签名是 Record<string, unknown>；这里 cast 让两边对齐
+    const fallbackModel = this.llm
+      ? await createModel({ provider: this.config.llm.provider, model: this.config.llm.model, apiKey: this.config.llm.apiKey, baseUrl: this.config.llm.baseUrl })
+      : undefined
+    const model = ctx.model ?? (fallbackModel as unknown as Record<string, unknown> | undefined)
     ctx = { ...ctx, llm: effectiveLlm, model, memory: this.memory }
 
     // 复用已有 session（跨轮对话），或创建新 session
@@ -335,8 +340,10 @@ export class CoreLoop {
     }
 
     // 直接执行，让 LLM 自己决定用什么工具、做什么
+    // ctx.model 字段类型签名是 Record<string, unknown>；execute 期望 LanguageModel，运行时
+    // 实际存的就是 CreateModelResult.model，这里 cast 让两边对齐
     const aiResponse = await execute({
-      model: ctx.model,
+      model: ctx.model as unknown as Parameters<typeof execute>[0]['model'],
       userInput: ctx.userInput,
       history,
       sessionSummary: ctx.sessionSummary,

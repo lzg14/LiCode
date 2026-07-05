@@ -130,9 +130,9 @@ export class DevLogger {
     this.info('LLM', `>>> LLM Request | model=${model} | provider=${provider}`, {
       messageCount: messages.length,
       tools: tools ? 'yes' : 'no',
-      messages: messages.map((m: { role: string; content: string | unknown[] }) => ({
+      messages: (messages as Array<{ role: string; content: string | unknown[] }>).map((m) => ({
         role: m.role,
-        content: redact(typeof m.content === 'string' ? `${(m.content as string).slice(0, 200)}...` : '[complex]'),
+        content: redact(typeof m.content === 'string' ? `${m.content.slice(0, 200)}...` : '[complex]'),
       })),
     })
   }

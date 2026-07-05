@@ -79,7 +79,7 @@ export class ConfigLoader {
     }
 
     if (process.env.LICODE_MODEL) this.config.llm.model = process.env.LICODE_MODEL
-    if (process.env.LICODE_PROVIDER) this.config.llm.provider = process.env.LICODE_PROVIDER
+    if (process.env.LICODE_PROVIDER) this.config.llm.provider = process.env.LICODE_PROVIDER as Config['llm']['provider']
     if (process.env.LICODE_API_KEY) this.config.llm.apiKey = process.env.LICODE_API_KEY
 
     return this.config
