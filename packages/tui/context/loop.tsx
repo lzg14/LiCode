@@ -517,7 +517,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         },
         onCompaction: (summary: string, originalCount: number, preservedCount: number, error?: Error) => {
           if (error) {
-            // 压缩失败不再静默：toast.error + signal 让 sidebar 显示 ⚠️
             setCompactionError(error)
             toast.show({
               message: `压缩失败: ${error.message.slice(0, 80)}`,
@@ -527,6 +526,16 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             return
           }
           setCompactionError(null)
+          // 压缩后重新加载消息列表，清掉旧的 1000 条，只保留压缩后的近 100 条
+          if (persistentSessionId) {
+            const history = props.loop.getSessionMessages(persistentSessionId)
+            setMessages(history.map((m, i) => ({
+              id: `hist_${i}`,
+              role: m.role as Message["role"],
+              content: m.content,
+              timestamp: Date.now() - (history.length - i) * 1000,
+            })))
+          }
           addMessage({ role: "system", content: `🗜️ 已压缩对话历史：${originalCount} 条 → 保留 ${preservedCount} 条\n\n${summary}`, compaction: true })
           const saved = originalCount - preservedCount
           toast.show({
