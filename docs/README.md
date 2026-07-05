@@ -28,6 +28,9 @@ docs/
 │   └── archive/                 # 已完成的计划（详见 plans/archive/README.md）
 ├── reference/                   # 外部项目参考
 │   └── opencode-analysis.md
+├── audits/                      # 代码质量审计 + 实施状态追踪（详见 §12 内联追踪）
+│   ├── 2026-06-25-code-quality-audit.md
+│   └── 2026-07-04-v0.3.1-improvement-audit.md   # 内嵌 §12 追踪 T01-T27 当前进度
 └── archive/                     # 已废弃/历史设计（详见 archive/README.md）
 ```
 
