@@ -19,7 +19,7 @@ const BUILTIN_COMMANDS: { type: string; label: string; desc: string }[] = [
 ]
 
 export function Home() {
-  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort } = useLoop()
+  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort, subagentStatuses, subagentOpen, setSubagentOpen } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)
@@ -176,6 +176,21 @@ export function Home() {
         setHelpOpen(false)
         return
       }
+      return
+    }
+    // Subagent 列表打开时，Esc 关闭
+    if (subagentOpen()) {
+      if (evt.name === "escape") {
+        evt.preventDefault()
+        setSubagentOpen(false)
+        return
+      }
+      return
+    }
+    // F2 切换 subagent 列表
+    if (evt.name === "f2") {
+      evt.preventDefault()
+      setSubagentOpen(prev => !prev)
       return
     }
     // Esc 停止所有循环 或 中断正在运行的 LLM 调用
@@ -397,9 +412,45 @@ export function Home() {
           <HelpPanel onClose={() => setHelpOpen(false)} />
         </Show>
 
+        {/* L2: Subagent 列表弹窗 */}
+        <Show when={subagentOpen()}>
+          <box
+            position="absolute" top={0} left={0} width="100%" height="100%"
+            flexDirection="column" alignItems="center" justifyContent="center"
+            zIndex={5000}
+          >
+            <box
+              flexDirection="column" width={60} maxHeight="80%"
+              paddingX={2} paddingY={1}
+              backgroundColor={backgroundPanel()}
+              border={['top', 'bottom', 'left', 'right']}
+            >
+              <text fg={primary()}>  Subagent 列表 (Esc 关闭)</text>
+              <Show when={subagentStatuses().length === 0}>
+                <text fg={textMuted()}>  暂无 subagent</text>
+              </Show>
+              <For each={subagentStatuses()}>
+                {(s) => (
+                  <box flexDirection="column" marginBottom={0}>
+                    <box flexDirection="row">
+                      <text fg={s.status === 'running' ? success() : s.status === 'error' ? error() : textMuted()}>
+                        {s.status === 'running' ? '⏳' : s.status === 'error' ? '✗' : '✓'}
+                      </text>
+                      <text fg={text()}> {s.task.slice(0, 40)}{s.task.length > 40 ? '...' : ''}</text>
+                    </box>
+                    <Show when={s.endTime}>
+                      <text fg={textMuted()}>    {((s.endTime! - s.startTime) / 1000).toFixed(1)}s</text>
+                    </Show>
+                  </box>
+                )}
+              </For>
+            </box>
+          </box>
+        </Show>
+
         <box flexShrink={0}>
           <Prompt onSubmit={handleSubmit} disabled={isProcessing()} onInputChange={handleInputChange}
-            popupOpen={modelPickerOpen() || slashOpen() || helpOpen()}
+            popupOpen={modelPickerOpen() || slashOpen() || helpOpen() || subagentOpen()}
             pendingSlashCmd={pendingSlashCmd()}
             onSlashCmdConsumed={() => setPendingSlashCmd(null)}
             onSlashSubmit={(cmd) => handleSlashSubmitByLabel(cmd)} />

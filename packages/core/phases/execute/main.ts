@@ -139,10 +139,13 @@ async function executeToolBatch(
     let errorMessage: string | undefined
 
     if (tc.toolName === "subagent") {
+      const subagentId = `sa_${Date.now()}`
+      ctx.onSubagentStart?.(subagentId, tcInput.task as string)
       execResult = await subagentManager.spawn(
         { task: tcInput.task as string, tools: tcInput.tools as string[] | undefined, timeoutMs: tcInput.timeoutMs as number | undefined },
         { model: ctx.model, system: subagentSystem, messages: msgs.filter(m => m.role === "user" || m.role === "assistant"), cwd: ctx.cwd ?? process.cwd() },
       )
+      ctx.onSubagentEnd?.(subagentId, execResult?.success ?? false)
     } else {
       try {
         execResult = await globalToolRegistry.execute(tc.toolName, tcInput, { cwd: ctx.cwd })

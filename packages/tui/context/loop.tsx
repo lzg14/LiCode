@@ -103,6 +103,9 @@ export interface LoopContext {
   scheduler: Scheduler
   currentPhase: Accessor<string>
   verifyResults: Accessor<Array<{ passed: boolean; message?: string }>>
+  subagentStatuses: Accessor<Array<{ id: string; task: string; status: 'running' | 'done' | 'error'; startTime: number; endTime?: number }>>
+  subagentOpen: Accessor<boolean>
+  setSubagentOpen: (v: boolean | ((prev: boolean) => boolean)) => void
 }
 
 const Ctx = createContext<LoopContext>()
@@ -127,6 +130,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   // VERIFY 阶段状态
   const [currentPhase, setCurrentPhase] = createSignal<string>("EXECUTE")
   const [verifyResults, setVerifyResults] = createSignal<Array<{ passed: boolean; message?: string }>>([])
+  // Subagent 状态跟踪
+  interface SubagentStatus { id: string; task: string; status: 'running' | 'done' | 'error'; startTime: number; endTime?: number }
+  const [subagentStatuses, setSubagentStatuses] = createSignal<SubagentStatus[]>([])
+  const [subagentOpen, setSubagentOpen] = createSignal(false)
 
   const [pendingCount, setPendingCount] = createSignal(0)
   const [streamingSegments, setStreamingSegments] = createSignal<Segment[]>([])
@@ -507,6 +514,12 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             return prev
           })
         },
+        onSubagentStart: (id: string, task: string) => {
+          setSubagentStatuses(prev => [...prev, { id, task, status: 'running', startTime: Date.now() }])
+        },
+        onSubagentEnd: (id: string, success: boolean) => {
+          setSubagentStatuses(prev => prev.map(s => s.id === id ? { ...s, status: success ? 'done' : 'error', endTime: Date.now() } : s))
+        },
         onConfirmContinue: () => {
           return new Promise<boolean>((resolve) => {
             confirmResolve = resolve
@@ -721,6 +734,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     currentPhase,
     verifyResults,
     cumulativeTokens,
+    subagentStatuses,
+    subagentOpen,
+    setSubagentOpen,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }

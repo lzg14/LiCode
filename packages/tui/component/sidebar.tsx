@@ -10,7 +10,7 @@ const VERSION = "0.4.0"
 export function Sidebar() {
   const { text, textMuted, backgroundPanel, success, primary, warning, error } = useTheme()
   const config = useConfig()
-  const { isProcessing, messages, llmCallCount, llmTokenUsage, cumulativeTokens, contextTokens, currentModel, effectiveContextWindow, compactionError, activeSkill, activeSkillInstructions } = useLoop()
+  const { isProcessing, messages, llmCallCount, llmTokenUsage, cumulativeTokens, contextTokens, currentModel, effectiveContextWindow, compactionError, activeSkill, activeSkillInstructions, subagentStatuses, subagentOpen, setSubagentOpen } = useLoop()
 
   const msgCount = createMemo(() => messages().length)
   const toolCallCount = createMemo(() => messages().filter((m) => m.role === "tool").length)
@@ -105,6 +105,22 @@ export function Sidebar() {
       <Show when={compactionError()}>
         <box paddingTop={1} flexDirection="row">
           <text fg={error()}>⚠ 压缩失败：{compactionError()?.message.slice(0, 60)}</text>
+        </box>
+      </Show>
+
+      {/* L1: Subagent 状态 */}
+      <Show when={subagentStatuses().length > 0}>
+        <box flexDirection="column" gap={0} paddingTop={1}>
+          <text fg={primary()}>Subagents</text>
+          <box paddingLeft={1} flexDirection="row">
+            <text fg={textMuted()}>🧠 </text>
+            <text fg={success()}>
+              {subagentStatuses().filter(s => s.status === 'running').length} running
+            </text>
+            <Show when={subagentStatuses().filter(s => s.status !== 'running').length > 0}>
+              <text fg={textMuted()}> / {subagentStatuses().length} total</text>
+            </Show>
+          </box>
         </box>
       </Show>
 

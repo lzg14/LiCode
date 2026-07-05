@@ -22,6 +22,8 @@ export interface ExecuteContext {
   onStreamText?: (text: string) => void
   onToolCall?: (toolName: string, args: Record<string, unknown>, batch: number) => void
   onToolResult?: (result: unknown) => void
+  onSubagentStart?: (id: string, task: string) => void
+  onSubagentEnd?: (id: string, success: boolean) => void
   onIntermediateText?: (text: string) => void
   onConfirmContinue?: () => Promise<boolean>
   history?: Array<{ role: string; content: MessageContent[] }>
