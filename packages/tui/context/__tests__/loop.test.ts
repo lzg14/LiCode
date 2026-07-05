@@ -163,3 +163,72 @@ describe("formatToolArgs", () => {
     expect(formatToolArgs("mcp__server__tool", args)).toBe(JSON.stringify(args))
   })
 })
+
+// ── Subagent 状态跟踪 ──────────────────────────────────────────
+
+describe("ExecuteContext onSubagentStart/End", () => {
+  it("onSubagentStart 添加 running 状态", async () => {
+    const statuses: Array<{ id: string; task: string; status: string; startTime: number }> = []
+    const onSubagentStart = (id: string, task: string) => {
+      statuses.push({ id, task, status: 'running', startTime: Date.now() })
+    }
+    onSubagentStart('sa_1', '搜索 auth 文件')
+    expect(statuses).toHaveLength(1)
+    expect(statuses[0].id).toBe('sa_1')
+    expect(statuses[0].task).toBe('搜索 auth 文件')
+    expect(statuses[0].status).toBe('running')
+  })
+
+  it("onSubagentEnd 更新状态为 done", async () => {
+    const statuses: Array<{ id: string; status: string; endTime?: number }> = [
+      { id: 'sa_1', status: 'running', startTime: Date.now() }
+    ]
+    const onSubagentEnd = (id: string, success: boolean) => {
+      const idx = statuses.findIndex(s => s.id === id)
+      if (idx >= 0) {
+        statuses[idx] = { ...statuses[idx], status: success ? 'done' : 'error', endTime: Date.now() }
+      }
+    }
+    onSubagentEnd('sa_1', true)
+    expect(statuses[0].status).toBe('done')
+    expect(statuses[0].endTime).toBeDefined()
+  })
+
+  it("onSubagentEnd 更新状态为 error", async () => {
+    const statuses: Array<{ id: string; status: string }> = [
+      { id: 'sa_1', status: 'running' }
+    ]
+    const onSubagentEnd = (id: string, success: boolean) => {
+      const idx = statuses.findIndex(s => s.id === id)
+      if (idx >= 0) {
+        statuses[idx] = { ...statuses[idx], status: success ? 'done' : 'error' }
+      }
+    }
+    onSubagentEnd('sa_1', false)
+    expect(statuses[0].status).toBe('error')
+  })
+
+  it("多个 subagent 并行跟踪", async () => {
+    const statuses: Array<{ id: string; task: string; status: string }> = []
+    const onStart = (id: string, task: string) => statuses.push({ id, task, status: 'running' })
+    const onEnd = (id: string, success: boolean) => {
+      const idx = statuses.findIndex(s => s.id === id)
+      if (idx >= 0) statuses[idx] = { ...statuses[idx], status: success ? 'done' : 'error' }
+    }
+
+    onStart('sa_1', '任务 A')
+    onStart('sa_2', '任务 B')
+    onStart('sa_3', '任务 C')
+    expect(statuses.filter(s => s.status === 'running')).toHaveLength(3)
+
+    onEnd('sa_2', true)
+    expect(statuses.filter(s => s.status === 'running')).toHaveLength(2)
+    expect(statuses.find(s => s.id === 'sa_2')?.status).toBe('done')
+
+    onEnd('sa_1', false)
+    onEnd('sa_3', true)
+    expect(statuses.filter(s => s.status === 'running')).toHaveLength(0)
+    expect(statuses.filter(s => s.status === 'done')).toHaveLength(2)
+    expect(statuses.filter(s => s.status === 'error')).toHaveLength(1)
+  })
+})
