@@ -29,16 +29,6 @@ export function Home() {
   // 检测用户是否在底部（阈值 3 行），用于控制 stickyScroll
   const checkAtBottom = () => {
     const el = scrollRef()
-    if (!el) return true
-    const atBottom = (el.scrollTop ?? 0) + (el.height ?? 0) >= (el.scrollHeight ?? 0) - 3
-    setStickyEnabled(atBottom)
-    return atBottom
-  }
-  const [stickyEnabled, setStickyEnabled] = createSignal(true)
-
-  // 检测用户是否在底部（阈值 3 行），用于控制 stickyScroll
-  const checkAtBottom = () => {
-    const el = scrollRef()
     if (!el) return
     const atBottom = (el.scrollTop ?? 0) + (el.height ?? 0) >= (el.scrollHeight ?? 0) - 3
     setStickyEnabled(atBottom)
