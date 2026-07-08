@@ -103,7 +103,7 @@ docs/plans/<topic>-plan.md
 
 **必须有**：
 - 顶部 `**目标**` 一句话
-- 顶部 `**日期**`：YYYY-MM-DD 格式
+- 顶部 `**日期**：YYYY-MM-DD` 格式
 - 步骤列表，每步有 `[Step] → verify: [check]`
 - "不做什么" 区块（明确排除范围）
 
@@ -164,6 +164,38 @@ git worktree add ../licode-<feature>-<agent> -b feature/<feature>
 ```
 
 参考全局 `~/.claude/skills/git-worktrees/SKILL.md` 和 `parallel-agents/SKILL.md`。
+
+### Subagent 派发（强制 verify）
+
+**关键事实**：subagent 工具的**返回内容被基础设施完全吞掉** — 不管 prompt 怎么要求结构化，主对话永远只看到 `OK: (无输出)`。这**不代表失败**，subagent 实际工作正常（已在 2026-07-08 验证：派发后能让 git commit、创建文件、读目录）。
+
+**强制工作流**：
+
+1. **派发前**：明确告诉 subagent **把结果写到文件**（如 `.claude/<task>-summary.md`），不要靠返回内容
+2. **派发后**：**立即**用 `git status` / `read` 自己 verify 副作用
+3. **失败信号**（真失败时才有）：
+   - verify 命令显示**没有**预期副作用
+   - 工作树/文件状态**没有变化**
+4. **不要重试同一任务**，先分析原因（路径错了？工具白名单？worktree 选错了？）
+
+**反模式**：
+- ❌ "subagent 怎么只回 OK？" → 不是 bug，是基础设施行为
+- ❌ 反复重试同一 subagent 调用 → 浪费 token，结果一样
+- ❌ prompt 里要求"必须返回结构化 summary" → 永远看不到
+- ❌ 不 verify 就相信 subagent 完成了任务
+
+**正例**：
+
+```bash
+# 1. 派 subagent，要求落地到文件
+# task: "把分析写到 .claude/perf-audit.md"
+
+# 2. 立即 verify
+git status --short   # 看是否有 .claude/perf-audit.md
+# 读内容用 read 工具
+```
+
+**这规则同时适用于本主对话和 subagent 内对话**（subagent 内的 subagent 同样吞输出）。
 
 ---
 
@@ -242,6 +274,7 @@ whenToUse: <何时用>
 | 长对话压缩 | 自动触发，1000 条阈值，详见 `session-compactor.ts` |
 | 工作树管理 | 用 `git-worktrees` skill（全局） |
 | **工程根不要建临时目录** | 不允许在仓库根新增 `_chg/` / `.mimicode/` / `.audit/` 等一次性工作目录。需要 subagent 工作脚本/临时日志/迁移工具的统一写到 `V:\`（全局 CLAUDE.md 已有此约束） |
+| **subagent 输出被吞** | 见上文"Subagent 派发（强制 verify）"段 |
 
 ---
 
@@ -265,6 +298,7 @@ whenToUse: <何时用>
 | tool-call 报错 "orphan" | `execute.ts` 的 `findValidStart` 截断逻辑（已修） |
 | 安全 hook 误拦 | 看 `registry.ts` 的 `pathTools` 名单 |
 | 编译失败但 tsc 不报 | 某些隐式 any 在 `bun test` 跑时才暴露 |
+| subagent 只返 `OK: (无输出)` | **正常！** 不是失败，subagent 实际工作正常。立即用 `git status` / `read` verify 副作用 |
 
 ---
 
