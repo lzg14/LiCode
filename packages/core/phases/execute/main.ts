@@ -159,7 +159,7 @@ async function executeToolBatch(
     if (tc.toolName === "subagent") {
       const subagentId = `sa_${Date.now()}`
       ctx.onSubagentStart?.(subagentId, tcInput.task as string)
-      execResult = await subagentManager.spawn(
+      const subResult = await subagentManager.spawn(
         { task: tcInput.task as string, tools: tcInput.tools as string[] | undefined, timeoutMs: tcInput.timeoutMs as number | undefined },
         {
           model: ctx.model,
@@ -178,7 +178,14 @@ async function executeToolBatch(
           cwd: ctx.cwd ?? process.cwd(),
         },
       )
-      ctx.onSubagentEnd?.(subagentId, execResult?.success ?? false)
+      // SubagentResult 字段是 text/error/durationMs，不是 ToolResult.output
+      // 显式适配成 ToolResult 形状，让下游 main.ts:213 读 execResult.output 拿到真实输出
+      execResult = {
+        success: subResult.success,
+        output: subResult.text,
+        error: subResult.error,
+      }
+      ctx.onSubagentEnd?.(subagentId, execResult.success)
     } else {
       try {
         execResult = await globalToolRegistry.execute(tc.toolName, tcInput, { cwd: ctx.cwd })

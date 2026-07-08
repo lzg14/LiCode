@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **subagent 工具 "OK: (无输出)" 三次根因修复 — 接口字段错配**：`SubagentResult` 字段是 `text/error/durationMs`（`packages/core/subagent.ts:27-33`），但 `phases/execute/main.ts:212-213` 按 `ToolResult` 接口读 `output` —— 字段不存在 → 永远 `undefined` → 触发 `?? '(无输出)'` fallback → 主循环告诉 LLM `OK: (无输出)`。修复：在 main.ts subagent 分支显式 `execResult = { success: subResult.success, output: subResult.text, error: subResult.error }` 把 `SubagentResult` 适配成 `ToolResult` 形状。配套回归测试 `execute-e2e.test.ts`：断言第二轮 streamText 调用时 tool message content 的 tool-result value 不含 `(无输出)` 且含 subagent 真实输出
+
 ## [0.4.1] - 2026-07-05
 
 ### Added
