@@ -35,6 +35,8 @@ export type ToolName =
   | 'stat' | 'bash' | 'env_vars' | 'datetime' | 'system_info'
   // Windows 系统
   | 'process_list' | 'kill_process' | 'open_explorer' | 'open_url' | 'gh'
+  // 提权命令（专用工具，避免 Start-Process 进程泄漏）
+  | 'elevated_bash'
   // Git
   | 'git_status' | 'git_diff' | 'git_log' | 'git_commit'
   // Web
