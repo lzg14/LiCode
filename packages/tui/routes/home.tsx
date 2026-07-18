@@ -5,20 +5,17 @@ import { HelpPanel } from "../component/help-panel"
 import { Logo } from "../component/logo"
 import { MessageList, QueueMessages } from "../component/message-list"
 import { Prompt, setPromptText } from "../component/prompt"
-import { SlashMenu, fuzzyMatch } from "../component/slash-menu"
 import { Sidebar } from "../component/sidebar"
 import { StatusBar } from "../component/status-bar"
 import { useLoop } from "../context/loop"
 import { modelPickerOpen, setModelPickerOpen, setSidebarVisible, sidebarVisible } from "../context/shortcuts"
 import { useTheme } from "../context/theme"
 
-const BUILTIN_COMMANDS = [
-  { type: 'cmd' as const, label: '/clear', desc: '开新会话' },
-  { type: 'cmd' as const, label: '/compact', desc: '压缩对话历史' },
-  { type: 'cmd' as const, label: '/help', desc: '快捷键帮助' },
-  { type: 'cmd' as const, label: '/loop', desc: '定时执行', usage: '/loop <间隔> <提示词>' },
-  { type: 'cmd' as const, label: '/model', desc: '切换模型' },
-  { type: 'cmd' as const, label: '/skill', desc: '激活/列出技能', usage: '/skill <名称>' },
+const BUILTIN_COMMANDS: { type: string; label: string; desc: string }[] = [
+  { type: 'cmd', label: '/clear', desc: '开新会话（清空当前对话）' },
+  { type: 'cmd', label: '/compact', desc: '压缩对话历史' },
+  { type: 'cmd', label: '/help', desc: '查看所有快捷键' },
+  { type: 'cmd', label: '/loop', desc: '定时重复执行 prompt' },
 ]
 
 export function Home() {
@@ -116,18 +113,16 @@ export function Home() {
   }
   scanSkills()
 
+  const truncate = (s: string, n = 40) => s.length > n ? `${s.slice(0, n)}…` : s
+
   const slashItems = createMemo(() => {
-    const q = slashInput().slice(1)
-    const items = [
-      ...BUILTIN_COMMANDS,
-      ...availableSkills().map(s => ({ type: 'skill' as const, label: `/${s.name}`, desc: s.description })),
-    ]
-    if (!q) return items
-    return items
-      .map(item => ({ item, match: fuzzyMatch(q, item.label) }))
-      .filter((r): r is { item: typeof items[number]; match: NonNullable<ReturnType<typeof fuzzyMatch>> } => r.match !== null)
-      .sort((a, b) => b.match.score - a.match.score)
-      .map(r => r.item)
+    const items = [...BUILTIN_COMMANDS]
+    for (const s of availableSkills()) {
+      items.push({ type: 'skill', label: `/${s.name}`, desc: truncate(s.description) })
+    }
+    const filter = slashInput().slice(1).toLowerCase()
+    if (!filter) return items
+    return items.filter(i => i.label.toLowerCase().includes(filter))
   })
 
   const handleInputChange = (text: string) => {
@@ -145,11 +140,13 @@ export function Home() {
   }
 
   const handleSlashSubmitByLabel = (label: string) => {
-    if (label === '/clear') clearSession()
-    else if (label === '/compact') compactSession()
-    else if (label === '/help') setHelpOpen(true)
-    else if (label === '/model') toggleModelPicker()
-    else if (label.startsWith('/')) {
+    if (label === '/clear') {
+      clearSession()
+    } else if (label === '/compact') {
+      compactSession()
+    } else if (label === '/help') {
+      setHelpOpen(true)
+    } else if (label.startsWith('/')) {
       const skillName = label.replace(/^\//, '')
       setActiveSkill(skillName)
       addMessage({ role: "system", content: `技能 "${skillName}" 已激活，可在侧栏查看指令` })
@@ -388,7 +385,28 @@ export function Home() {
           </box>
         </Show>
 
-        <SlashMenu open={slashOpen()} query={slashInput()} items={slashItems()} selectedIndex={slashIdx()} />
+        <Show when={slashOpen()}>
+          <box
+            flexDirection="column"
+            width="100%"
+            paddingX={2}
+            paddingY={1}
+            backgroundColor={backgroundPanel()}
+            border={["top", "bottom", "left", "right"]}
+            borderColor={primary()}
+            flexShrink={0}
+          >
+            <text fg={primary()}>命令 ({slashInput()})</text>
+            <box height={1} />
+            <For each={slashItems()}>
+              {(item, i) => (
+                <text fg={i() === slashIdx() ? primary() : text()}>
+                  {`${i() === slashIdx() ? '▸ ' : '  '}${item.label}  ${item.desc}`}
+                </text>
+              )}
+            </For>
+          </box>
+        </Show>
 
         <Show when={helpOpen()}>
           <HelpPanel onClose={() => setHelpOpen(false)} />
