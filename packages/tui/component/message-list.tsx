@@ -1,5 +1,5 @@
 import type { SyntaxStyle } from "@opentui/core"
-import { createMemo, For, Show } from "solid-js"
+import { createMemo, For, Show, } from "solid-js"
 import type { Message } from "../context/loop"
 import { useLoop } from "../context/loop"
 import { useTheme } from "../context/theme"
@@ -207,7 +207,7 @@ export function formatToolArgs(toolName: string, args: Record<string, unknown>):
 
 export function QueueMessages() {
   const { messages } = useLoop()
-  const { textMuted } = useTheme()
+  const { primary, textMuted, warning } = useTheme()
   const queuedMsgs = createMemo(() => messages().filter(m => m.queued && m.role === 'user'))
 
   return (
@@ -218,7 +218,7 @@ export function QueueMessages() {
             <box flexDirection="column" marginBottom={0}>
               <box flexDirection="row">
                 <text fg={textMuted()}>┃ [queued] </text>
-                <CollapsibleText content={msg.content} maxLines={5} fg={textMuted()} />
+                <text fg={textMuted()}>{msg.content}</text>
               </box>
             </box>
           )}
