@@ -11,7 +11,6 @@ import { registerPatchTools } from './patch'
 import { registerExcelTools } from './excel'
 import { registerMediaTools } from './media'
 import { registerTodoTools } from './todo'
-import { registerElevatedTools } from './elevated'
 
 export function registerBuiltinTools(): void {
   registerFSTools(globalToolRegistry)
@@ -26,7 +25,6 @@ export function registerBuiltinTools(): void {
   registerExcelTools(globalToolRegistry)
   registerMediaTools(globalToolRegistry)
   registerTodoTools(globalToolRegistry)
-  registerElevatedTools(globalToolRegistry)
 }
 
 export { readClipboardImage, readImageFile } from './media'

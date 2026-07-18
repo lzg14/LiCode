@@ -399,19 +399,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     addMessage({ role: "system", content: "已开新会话" })
   }
 
-  // 流式 pending 文本防抖，减少高频更新导致的闪烁
-  let _pendingFlushTimer: ReturnType<typeof setTimeout> | null = null
-  let _latestPending = ''
-  const PENDING_FLUSH_MS = 60
-  const _flushPendingText = () => {
-    _pendingFlushTimer = null
-    setPendingText(_latestPending)
-  }
-  const _schedulePendingFlush = () => {
-    if (_pendingFlushTimer) return
-    _pendingFlushTimer = setTimeout(_flushPendingText, PENDING_FLUSH_MS)
-  }
-
   const run = async (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }> }): Promise<void> => {
     // 如果正在等待用户确认是否继续 tool call 迭代
     if (confirmResolve) {
@@ -508,9 +495,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             if (closed.length > 0) {
               setStreamingSegments(prev => [...prev, ...closed])
             }
+            if (pending !== pendingText()) {
+              setPendingText(pending)
+            }
           })
-          _latestPending = pending
-          _schedulePendingFlush()
         },
         onIntermediateText: (text: string) => {
           // 中间轮一次性把当前段收尾，然后整个块作为新消息
@@ -590,11 +578,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
 
       if (result.text) {
         // 清空 streaming 状态，避免重复显示
-        if (_pendingFlushTimer) {
-          clearTimeout(_pendingFlushTimer)
-          _pendingFlushTimer = null
-        }
-        _latestPending = ''
         streamAccumulator.reset()
         setStreamingSegments([])
         setPendingText("")
@@ -616,11 +599,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       setIsProcessing(false)
       clearInterval(timer)
       setElapsed(0)
-      if (_pendingFlushTimer) {
-        clearTimeout(_pendingFlushTimer)
-        _pendingFlushTimer = null
-      }
-      setPendingText(_latestPending)
 
       // 处理队列中下一个输入
       if (inputQueue.length > 0) {

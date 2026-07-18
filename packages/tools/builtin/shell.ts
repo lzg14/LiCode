@@ -10,50 +10,12 @@ import type { ToolContext } from '../context'
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
 
-/**
- * 进程泄漏守卫：检测会导致子进程脱离进程树的命令模式
- *
- * 这些模式会导致 child_process.exec 立即返回，但实际子进程在后台驻留内存：
- *   - Start-Process -Verb RunAs (UAC 提权后子进程由 explorer.exe 接管)
- *   - cmd /c start "" (后台启动脱离 cmd.exe 子进程树)
- *   - schtasks /create /tn xxx /tr ... (计划任务立即返回，但任务进程后台跑)
- */
-const PROCESS_LEAK_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
-  {
-    pattern: /Start-Process\s+[^|]*-Verb\s+RunAs/i,
-    reason: '禁止 bash 工具用 Start-Process -Verb RunAs 提权（子进程会脱离进程树，导致 powershell.exe 泄漏）。请改用 elevated_bash 工具。',
-  },
-  {
-    pattern: /\bcmd\s+\/c\s+start\s+/i,
-    reason: '禁止 bash 工具用 cmd /c start 后台启动（子进程会脱离 cmd.exe 进程树）。如需后台进程，请用 elevated_bash。',
-  },
-  {
-    pattern: /\bschtasks\s+\/create\b/i,
-    reason: '禁止 bash 工具用 schtasks /create（计划任务进程不在 bash 工具跟踪范围内）。',
-  },
-]
-
-function checkProcessLeak(command: string): { leak: boolean; reason?: string } {
-  for (const { pattern, reason } of PROCESS_LEAK_PATTERNS) {
-    if (pattern.test(command)) {
-      return { leak: true, reason }
-    }
-  }
-  return { leak: false }
-}
-
 function registerBash(registry: ToolRegistry): void {
   registry.register({
     name: 'bash',
     description: '执行 shell 命令。',
     inputSchema: z.object({ command: z.string(), cwd: z.string().optional(), timeout: z.number().optional() }),
     handler: async ({ command, cwd, timeout }: { command: string; cwd?: string; timeout?: number }, ctx: ToolContext) => {
-      // 进程泄漏守卫
-      const leakCheck = checkProcessLeak(command)
-      if (leakCheck.leak) {
-        return { success: false, error: leakCheck.reason ?? '命令可能造成进程泄漏，已拒绝' }
-      }
-
       const cmdCheck = getSecurityLayer().checkCommand(command)
       if (!cmdCheck.allowed) {
         return { success: false, error: cmdCheck.reason ?? '命令被安全策略阻止' }
