@@ -1,4 +1,4 @@
-import { createWriteStream, existsSync, mkdirSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -61,7 +61,6 @@ export class DevLogger {
   private level: LogLevel
   private sessionId: string
   private logFile: string
-  private stream: import('node:fs').WriteStream | null = null
 
   constructor(level: LogLevel = LogLevel.DEBUG) {
     this.level = level
@@ -75,7 +74,6 @@ export class DevLogger {
     if (!existsSync(this.logDir)) {
       mkdirSync(this.logDir, { recursive: true })
     }
-    this.stream = createWriteStream(this.logFile, { encoding: 'utf-8', flags: 'a' })
   }
 
   private formatMessage(level: string, category: string, msg: string, data?: unknown): string {
@@ -96,8 +94,10 @@ export class DevLogger {
   private write(level: string, category: string, msg: string, data?: unknown): void {
     const line = `${this.formatMessage(level, category, msg, data)}\n`
     console.log(line.trim())
-    if (this.stream) {
-      this.stream.write(line)
+    try {
+      appendFileSync(this.logFile, line, { encoding: 'utf-8' })
+    } catch (e) {
+      console.error('[DevLogger] Failed to write log:', e)
     }
   }
 
