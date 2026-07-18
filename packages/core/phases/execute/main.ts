@@ -58,72 +58,121 @@ async function callLLM(
     abortSignal: combinedSignal,
   })
 
-  // 消费流（触发 token 生成）
+  // 内存泄漏修复（关键）：
+  // AI SDK v6 的 streamResult 内部用 createStitchableStream 维护 fullStream / baseStream
+  // 以及所有 chunk reader。streamResult.text / .toolCalls / .usage 这些 getter **不**
+  // 触发清理，只有 .finishReason / .totalUsage / .rawFinishReason 会隐式调
+  // consumeStream()。
+  // 旧代码在 abort / timeout / 异常路径直接 return，根本没访问 finishReason
+  // → stitchableStream 永远挂着 → 持续引用 LLM 响应 buffer / tool-call
+  // parser state / abort signal listener → 长期运行的 TUI 内存只增不减
+  // （用户实测 5GB+）。
+  // 修复：用 try/finally 在所有退出路径强制 await streamResult.consumeStream()。
   let aborted = false
   let timedOut = false
+
   try {
-    for await (const chunk of streamResult.fullStream) {
+    // 消费流（触发 token 生成）
+    // 注意：必须用 textStream 而非 fullStream——fullStream 会触发 AI SDK v6
+    // 的 tool-call/tool-result 配对校验，而 licode 在流消费完后才执行工具，
+    // fullStream 会在 await streamResult.toolCalls 时报 "Tool results are missing"
+    try {
+      for await (const text of streamResult.textStream) {
+        clearTimeout(timeoutId)
+        ctx.onStreamText?.(text)
+      }
+    } catch (streamError: any) {
       clearTimeout(timeoutId)
-      if (chunk.type === 'text-delta') {
-        ctx.onStreamText?.(chunk.text)
+      if (streamError?.name === 'AbortError' || ctx.signal?.aborted) {
+        aborted = true
+        devLogger.info('STREAM', 'Stream aborted by user')
+      } else if (timeoutController.signal.aborted) {
+        timedOut = true
+        devLogger.warn('STREAM', `LLM call timed out after ${timeoutMs}ms`)
+      } else {
+        devLogger.warn('STREAM', `stream consumption failed: ${streamError?.message ?? streamError}`)
+      }
+      // 关键：非 abort/timeout 的 stream 异常也必须立刻返回。
+      // 旧代码会继续走下方 Promise.all，触发 streamResult.text / .toolCalls 这些
+      // lazy promise —— 这些 promise 可能 hang（因为 fullStream 没被消费）或再次泄漏
+      // 内部 buffer。修复：直接走 finally 清理后返回 null。
+      if (!aborted && !timedOut) return null
+    }
+    clearTimeout(timeoutId)
+
+    if (aborted) return null
+    if (timedOut) return { result: { text: undefined, usage: {} as any, finishReason: 'timeout' }, duration: Date.now() - startTime }
+
+    const safeAwait = async <T>(p: PromiseLike<T> | undefined, fallback: T, label: string): Promise<T> => {
+      try { return p !== undefined ? await p : fallback }
+      catch (e: any) { devLogger.warn('STREAM', `result.${label} rejected: ${e?.message ?? e}`); return fallback }
+    }
+
+    const [finalText, finalToolCalls, usage, finishReason] = await Promise.all([
+      safeAwait(streamResult.text, '', 'text'),
+      safeAwait(streamResult.toolCalls, [], 'toolCalls'),
+      safeAwait(streamResult.usage, {} as any, 'usage'),
+      safeAwait(streamResult.finishReason, 'unknown', 'finishReason'),
+    ])
+
+    const result: LLMResult = {
+      text: finalText || undefined,
+      toolCalls: finalToolCalls.length > 0 ? (finalToolCalls as DynamicToolCall[]) : undefined,
+      usage,
+      finishReason,
+    }
+    const duration = Date.now() - startTime
+
+    // 记录日志 + token 回调
+    if (result.usage) {
+      ctx.onLLMResult?.({
+        inputTokens: result.usage.inputTokens ?? 0,
+        outputTokens: result.usage.outputTokens ?? 0,
+        totalTokens: (result.usage.inputTokens ?? 0) + (result.usage.outputTokens ?? 0),
+      })
+    }
+    if (llmId) ctx.timer?.end(llmId, {
+      toolCalls: result.toolCalls?.length ?? 0,
+      finishReason: result.finishReason ?? 'unknown',
+    })
+    devLogger.logLLMResponse({
+      finishReason: result.finishReason,
+      textLength: result.text?.length ?? 0,
+      toolCalls: result.toolCalls?.map(tc => ({ tool: tc.toolName, input: tc.input })),
+    }, duration)
+
+    return { result, duration }
+  } finally {
+    // 强制清理 streamResult 内部 stitchableStream + baseStream + 所有 reader。
+    // 必须 await：否则 internal promise 还活着，引用链断不了。
+    //
+    // 1) 正常完成路径：finishReason getter 内部已调过 consumeStream() —— 这里
+    //    再次调用是 idempotent（fullStream reader 已 done，consumeStream 立即 resolve）。
+    // 2) abort / timeout 路径：必须显式触发，AI SDK 才能关闭 stitchableStream 并
+    //    释放所有 chunk buffer + abort listener。
+    // 3) 异常路径：同上。
+    //
+    // 测试 mock 可能没有 consumeStream 方法（execute-e2e / execute-stream-error
+    // 的简化 mock），用 typeof 兼容。
+    const consume = (streamResult as { consumeStream?: (opts?: { onError?: (e: unknown) => void }) => PromiseLike<void> }).consumeStream
+    if (typeof consume === 'function') {
+      // 2 秒上限：abort 后网络请求已取消，正常情况立即 done；2 秒是兜底
+      // 防止 consumeStream 本身 hang（极端情况 abort signal 未传到 AI SDK 内部时）
+      try {
+        await Promise.race([
+          consume.call(streamResult, {
+            onError: (e: unknown) => {
+              devLogger.debug('STREAM', `consumeStream cleanup swallowed: ${e instanceof Error ? e.message : String(e)}`)
+            },
+          }),
+          new Promise<void>(resolve => setTimeout(resolve, 2000)),
+        ])
+      } catch (cleanupError) {
+        // cleanup 错误不影响主流程，swallow 即可
+        devLogger.debug('STREAM', `streamResult cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`)
       }
     }
-  } catch (streamError: any) {
-    clearTimeout(timeoutId)
-    if (streamError?.name === 'AbortError' || ctx.signal?.aborted) {
-      aborted = true
-      devLogger.info('STREAM', 'Stream aborted by user')
-    } else if (timeoutController.signal.aborted) {
-      timedOut = true
-      devLogger.warn('STREAM', `LLM call timed out after ${timeoutMs}ms`)
-    } else {
-      devLogger.warn('STREAM', `stream consumption failed: ${streamError?.message ?? streamError}`)
-    }
   }
-  clearTimeout(timeoutId)
-
-  if (aborted) return null
-  if (timedOut) return { result: { text: undefined, usage: {} as any, finishReason: 'timeout' }, duration: Date.now() - startTime }
-
-  const safeAwait = async <T>(p: PromiseLike<T> | undefined, fallback: T, label: string): Promise<T> => {
-    try { return p !== undefined ? await p : fallback }
-    catch (e: any) { devLogger.warn('STREAM', `result.${label} rejected: ${e?.message ?? e}`); return fallback }
-  }
-
-  const [finalText, finalToolCalls, usage, finishReason] = await Promise.all([
-    safeAwait(streamResult.text, '', 'text'),
-    safeAwait(streamResult.toolCalls, [], 'toolCalls'),
-    safeAwait(streamResult.usage, {} as any, 'usage'),
-    safeAwait(streamResult.finishReason, 'unknown', 'finishReason'),
-  ])
-
-  const result: LLMResult = {
-    text: finalText || undefined,
-    toolCalls: finalToolCalls.length > 0 ? (finalToolCalls as DynamicToolCall[]) : undefined,
-    usage,
-    finishReason,
-  }
-  const duration = Date.now() - startTime
-
-  // 记录日志 + token 回调
-  if (result.usage) {
-    ctx.onLLMResult?.({
-      inputTokens: result.usage.inputTokens ?? 0,
-      outputTokens: result.usage.outputTokens ?? 0,
-      totalTokens: (result.usage.inputTokens ?? 0) + (result.usage.outputTokens ?? 0),
-    })
-  }
-  if (llmId) ctx.timer?.end(llmId, {
-    toolCalls: result.toolCalls?.length ?? 0,
-    finishReason: result.finishReason ?? 'unknown',
-  })
-  devLogger.logLLMResponse({
-    finishReason: result.finishReason,
-    textLength: result.text?.length ?? 0,
-    toolCalls: result.toolCalls?.map(tc => ({ tool: tc.toolName, input: tc.input })),
-  }, duration)
-
-  return { result, duration }
 }
 
 // ─── 工具执行 ───────────────────────────────────────────
@@ -375,6 +424,39 @@ export async function execute(ctx: ExecuteContext): Promise<string> {
 
 // ─── 辅助函数 ───────────────────────────────────────────
 
+/**
+ * 修复可能损坏的消息历史：
+ * 1. 移除 assistant 消息中无对应 tool-result 的 tool-call part（中断/取消产生）
+ * 2. 移除 role='tool' 的消息中无对应 tool-call 的 tool-result part（slice 产生）
+ * 3. 移除 content 为空的无效消息
+ */
+function repairHistory(msgs: Array<{ role: string; content: MessageContent[] }>): Array<{ role: string; content: MessageContent[] }> {
+  const callIds = new Set<string>()
+  const resultIds = new Set<string>()
+  for (const m of msgs) {
+    if (Array.isArray(m.content)) {
+      for (const p of m.content) {
+        if (p.type === 'tool-call') callIds.add(p.toolCallId)
+        if (p.type === 'tool-result') resultIds.add(p.toolCallId)
+      }
+    }
+  }
+
+  return msgs
+    .map(m => {
+      if (!Array.isArray(m.content)) return m
+      let cleaned = m.content
+      if (m.role === 'assistant') {
+        cleaned = cleaned.filter(p => p.type !== 'tool-call' || resultIds.has(p.toolCallId))
+      }
+      if (m.role === 'tool') {
+        cleaned = cleaned.filter(p => p.type !== 'tool-result' || callIds.has(p.toolCallId))
+      }
+      return cleaned.length === 0 ? null : (cleaned.length === m.content.length ? m : { ...m, content: cleaned })
+    })
+    .filter((m): m is NonNullable<typeof m> => m !== null)
+}
+
 function buildInitialMessages(ctx: ExecuteContext): Array<{ role: string; content: MessageContent[] }> {
   const rawHistory = ctx.history ?? []
   const hasSummary = !!ctx.sessionSummary
@@ -394,6 +476,8 @@ function buildInitialMessages(ctx: ExecuteContext): Array<{ role: string; conten
       })
       .filter((m): m is NonNullable<typeof m> => m !== null)
   }
+
+  history = repairHistory(history)
 
   const validStart = findValidStart(history)
   const validHistory = validStart > 0 ? history.slice(validStart) : history

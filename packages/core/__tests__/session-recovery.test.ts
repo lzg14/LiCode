@@ -20,6 +20,9 @@ vi.mock('ai', () => ({
 }))
 
 const streamTextResponse = (text: string, toolCalls: any[] = []) => ({
+  textStream: (async function* () {
+    if (text) yield text
+  })(),
   fullStream: (async function* () {
     if (text) yield { type: 'text-delta', text }
     for (const tc of toolCalls) yield { type: 'tool-call', ...tc }

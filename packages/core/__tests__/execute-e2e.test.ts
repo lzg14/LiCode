@@ -20,8 +20,13 @@ vi.mock('ai', () => ({
 }))
 
 // 让 streamText 返回一个看起来像真实 streamText 的对象
-// execute.ts 会消费 fullStream（async iterable）+ usage（promise）+ finishReason（promise）
+// execute.ts 会消费 textStream（async iterable）+ usage（promise）+ finishReason（promise）
+// textStream 是 AI SDK v6 真实接口（execute 改用 textStream 避免 fullStream 的
+// tool-call/tool-result 配对校验问题）。
 const streamTextResponse = (text: string, toolCalls: any[] = []) => ({
+  textStream: (async function* () {
+    if (text) yield text
+  })(),
   fullStream: (async function* () {
     if (text) yield { type: 'text-delta', text }
     for (const tc of toolCalls) yield { type: 'tool-call', ...tc }

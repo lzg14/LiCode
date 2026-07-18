@@ -47,6 +47,10 @@ const streamTextResultWithPipeThroughBug = (text: string, toolCalls: any[]) => {
     throw new TypeError("generatorStream.pipeThrough is not a function. (In 'generatorStream.pipeThrough(forwardStream)', 'generatorStream.pipeThrough' is undefined)")
   })()
   return {
+    // textStream 正常 emit text chunk — execute 改用 textStream 后正常路径能拿到 text
+    textStream: (async function* () {
+      yield text
+    })(),
     fullStream,
     text: Promise.resolve(text),
     toolCalls: Promise.resolve(toolCalls),
@@ -57,6 +61,9 @@ const streamTextResultWithPipeThroughBug = (text: string, toolCalls: any[]) => {
 }
 
 const streamTextResultNormal = (text: string, toolCalls: any[] = []) => ({
+  textStream: (async function* () {
+    if (text) yield text
+  })(),
   fullStream: (async function* () {
     if (text) yield { type: 'text-delta', text }
     for (const tc of toolCalls) yield { type: 'tool-call', ...tc }
