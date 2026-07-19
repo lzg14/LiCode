@@ -1,4 +1,4 @@
-import { useKeyboard } from "@opentui/solid"
+import { useKeyboard, useRenderer } from "@opentui/solid"
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
 import { loadAllSkills } from "../../skills/loader"
 import { HelpPanel } from "../component/help-panel"
@@ -22,6 +22,7 @@ const BUILTIN_COMMANDS = [
 ]
 
 export function Home() {
+  const renderer = useRenderer()
   const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort, subagentStatuses, subagentOpen, setSubagentOpen } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
@@ -170,6 +171,12 @@ export function Home() {
     if (evt.name === "f1") {
       evt.preventDefault()
       setHelpOpen(prev => !prev)
+      return
+    }
+    // F4: toggle OpenTUI debug overlay（fps / frame time）— 调试渲染性能用
+    if (evt.name === "f4") {
+      evt.preventDefault()
+      ;(renderer as any).toggleDebugOverlay?.()
       return
     }
     // 帮助面板打开时，Esc/F1 关闭

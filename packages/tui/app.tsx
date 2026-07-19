@@ -193,6 +193,13 @@ export async function tui(config: any) {
 
   const renderer = await createCliRenderer(rendererConfig)
 
+  // 强制开启 debug overlay（如果 OTUI_SHOW_STATS=true 或环境变量解析有意外）。
+  // OpenTUI 在 setupTerminal() 里只读一次 env.OTUI_SHOW_STATS，如果用户在
+  // createCliRenderer 之后才设 env var，需要这里显式 toggle。
+  if (process.env.OTUI_SHOW_STATS === "true" && !(renderer as any).debugOverlay?.enabled) {
+    (renderer as any).toggleDebugOverlay()
+  }
+
   // 确保鼠标模式已启用（触摸板滚动需要）
   const r = renderer as any
   if (r.enableMouse) {
