@@ -81,15 +81,27 @@ function registerStat(registry: ToolRegistry): void {
 }
 
 function registerEnvVars(registry: ToolRegistry): void {
+  // 统一敏感变量检测规则：单 key 模式和列出模式都用同一份，避免漏过
+  const SENSITIVE_PATTERNS = [/api_?key/i, /token/i, /secret/i, /password/i, /credential/i, /^auth(_|$)/i]
+
+  function isSensitive(name: string): boolean {
+    return SENSITIVE_PATTERNS.some(p => p.test(name))
+  }
+
   registry.register({
     name: 'env_vars',
-    description: '获取环境变量。',
+    description: '获取环境变量。敏感变量（key/token/secret/password 等）会被拒绝读取。',
     inputSchema: z.object({ name: z.string().optional() }),
     handler: async ({ name }: { name?: string }) => {
-      if (name) return { success: true, output: process.env[name] ?? `${name} 不存在` }
-      const sensitivePatterns = [/api_key/i, /token/i, /secret/i, /password/i, /auth/i]
+      if (name) {
+        // 单 key 模式：和列出模式用同一份敏感规则，防止 LLM 用任意 key 名读凭据
+        if (isSensitive(name)) {
+          return { success: false, error: `禁止读取敏感环境变量: ${name}` }
+        }
+        return { success: true, output: process.env[name] ?? `${name} 不存在` }
+      }
       const filtered = Object.entries(process.env)
-        .filter(([k]) => !sensitivePatterns.some(p => p.test(k)))
+        .filter(([k]) => !isSensitive(k))
         .map(([k, v]) => `${k}=${v}`)
         .join('\n')
       return { success: true, output: filtered || '无环境变量' }

@@ -248,6 +248,32 @@ describe('env_vars tool', () => {
     expect(result.success).toBe(true)
     expect(result.output).toContain('不存在')
   })
+
+  // 安全回归：单 key 模式必须拒绝读取敏感变量名（防止 LLM 读取凭据）
+  it('should reject sensitive env var names in single-key mode', async () => {
+    // 即使环境里设置了这些变量，也不能读出来
+    process.env.SENSITIVE_API_KEY = 'secret-value-12345'
+    try {
+      for (const sensitiveName of ['GITHUB_TOKEN', 'AWS_SECRET_KEY', 'DB_PASSWORD', 'MY_API_KEY', 'AUTH_SECRET']) {
+        const result = await globalToolRegistry.execute('env_vars', { name: sensitiveName })
+        expect(result.success, `${sensitiveName} should be rejected`).toBe(false)
+        expect(result.error).toContain('敏感')
+      }
+    } finally {
+      delete process.env.SENSITIVE_API_KEY
+    }
+  })
+
+  it('should not leak sensitive values when listing all env vars', async () => {
+    process.env.LICODE_TEST_TOKEN = 'leak-test-secret'
+    try {
+      const result = await globalToolRegistry.execute('env_vars', {})
+      expect(result.success).toBe(true)
+      expect(result.output).not.toContain('leak-test-secret')
+    } finally {
+      delete process.env.LICODE_TEST_TOKEN
+    }
+  })
 })
 
 describe('input validation', () => {
