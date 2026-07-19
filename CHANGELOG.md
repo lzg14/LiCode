@@ -8,8 +8,8 @@
 ## [Unreleased]
 
 ### Fixed
-- **统一处理 Anthropic 兼容 API 的 baseUrl /v1 后缀**（`2331de1`）：Anthropic SDK 在 baseUrl 后直接加 `/messages`，但第三方 API（如小米 MiMo）需要 `/v1`。新增 `normalizeAnthropicBaseUrl` 函数统一处理，兼容所有 Anthropic 兼容 API
 - **TUI 内存泄漏修复**（`13673bd`）：`toolStartTimes` Map 只增不删导致无限增长；SIGINT handler 未在组件卸载时清理；Scheduler 定时器未在组件卸载时清理；`_pendingFlushTimer` 可能访问已卸载组件。修复：使用 SolidJS `onCleanup` 生命周期钩子统一清理所有资源，`onToolResult` 后立即删除 Map 条目
+- **Anthropic 兼容 API baseUrl 修复**（`2331de1`）：第三方 API（如小米 MiMo）的 baseUrl 缺少 `/v1` 后缀导致 404。新增 `normalizeAnthropicBaseUrl` 函数统一处理，兼容所有 Anthropic 兼容 API（官方和第三方）
 - **subagent 工具 "OK: (无输出)" 三次根因修复 — 接口字段错配**：`SubagentResult` 字段是 `text/error/durationMs`（`packages/core/subagent.ts:27-33`），但 `phases/execute/main.ts:212-213` 按 `ToolResult` 接口读 `output` —— 字段不存在 → 永远 `undefined` → 触发 `?? '(无输出)'` fallback → 主循环告诉 LLM `OK: (无输出)`。修复：在 main.ts subagent 分支显式 `execResult = { success: subResult.success, output: subResult.text, error: subResult.error }` 把 `SubagentResult` 适配成 `ToolResult` 形状。配套回归测试 `execute-e2e.test.ts`：断言第二轮 streamText 调用时 tool message content 的 tool-result value 不含 `(无输出)` 且含 subagent 真实输出
 - **P0 安全/健壮性修复（3 处）**（`9f0b19b` + `863f87a` + `ef99bb3`）：
   - `env_vars` 单 key 模式拒绝读取敏感变量（api_key/token/secret/password/credential/auth 前缀），防 LLM 凭据泄露
