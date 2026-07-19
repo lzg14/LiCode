@@ -1,6 +1,7 @@
 import { readFile, writeFile, access, mkdir, readdir, unlink, stat } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
+import { randomUUID } from 'crypto'
 import type { AnyMemoryEntry, MemoryEntry, MemorySearchResult } from './schema'
 
 const DEFAULT_MEMORY_BASE = join(homedir(), '.licode', 'memory')
@@ -107,7 +108,7 @@ export class Memory {
    */
   async store(entry: Omit<MemoryEntry, 'id' | 'createdAt' | 'updatedAt' | 'accessCount'>): Promise<string> {
     await this.ensureInit()
-    const id = `mem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const id = `mem_${randomUUID()}`
     const fullEntry: MemoryEntry = {
       ...entry,
       id,

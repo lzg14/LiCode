@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 export interface ScheduledTask {
   id: string
   prompt: string
@@ -35,7 +37,7 @@ export class Scheduler {
   }
 
   create(intervalMs: number, prompt: string): string {
-    const id = `loop_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+    const id = `loop_${randomUUID()}`
 
     const tick = async () => {
       const task = this.tasks.get(id)

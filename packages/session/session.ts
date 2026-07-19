@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { SCHEMA } from './schema'
 import type { Message, Part, PartType, Session, SessionStatus, SessionSummary } from './types'
 import { inferPartType } from './helpers'
@@ -43,7 +44,7 @@ export class SessionManager {
   }): Session {
     const now = Date.now()
     const session: Session = {
-      id: `ses_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: `ses_${randomUUID()}`,
       title: input.title ?? `New session - ${new Date().toISOString()}`,
       directory: input.directory,
       parentId: input.parentId,
@@ -100,7 +101,7 @@ export class SessionManager {
   }): Message {
     const now = Date.now()
     const message: Message = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: `msg_${randomUUID()}`,
       sessionId: input.sessionId,
       role: input.role,
       content: input.content,
@@ -158,7 +159,7 @@ export class SessionManager {
     cost?: number
   }): { message: Message; parts: Part[] } {
     const now = Date.now()
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const messageId = `msg_${randomUUID()}`
     const contentJson = JSON.stringify(input.content)
 
     insertMessage(this.db, {
@@ -220,7 +221,7 @@ export class SessionManager {
     metadata?: Record<string, unknown>
   }): Part {
     const part: Part = {
-      id: `prt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: `prt_${randomUUID()}`,
       messageId: input.messageId,
       type: input.type,
       content: input.content,
