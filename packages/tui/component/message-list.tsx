@@ -1,5 +1,5 @@
 import type { SyntaxStyle } from "@opentui/core"
-import { createMemo, For, Show } from "solid-js"
+import { createMemo, createSignal, For, onMount, Show } from "solid-js"
 import type { Message } from "../context/loop"
 import { useLoop } from "../context/loop"
 import { useTheme } from "../context/theme"
@@ -36,15 +36,27 @@ function MarkdownText(props: { content: string; streaming?: boolean; syntaxStyle
     primary: primary(), warning: warning(), success: success(),
     info: info(), text: text(), textMuted: textMuted(), border: border(),
   }))
+  // 1 帧延迟挂载：让 <markdown> 内部先 finalize 完再显示，避免用户看到
+  // "plain → highlighted → 又变" 闪烁（mount 时的两阶段渲染）。
+  // 第 0 帧：fallback 渲染 plain text；第 1 帧 raf 后：切到 <markdown>，已 stable。
+  // 用户视觉上只看到 1 次 16ms 内的 plain → highlighted，几乎不可察觉。
+  const [mounted, setMounted] = createSignal(false)
+  onMount(() => {
+    requestAnimationFrame(() => setMounted(true))
+  })
   return (
-    <markdown
-      content={props.content}
-      streaming={props.streaming ?? false}
-      syntaxStyle={props.syntaxStyle ?? fallbackSyntaxStyle()}
-      conceal={true}
-      fg={text()}
-      bg={background()}
-    />
+    <Show when={mounted()} fallback={
+      <text fg={text()} bg={background()}>{props.content}</text>
+    }>
+      <markdown
+        content={props.content}
+        streaming={props.streaming ?? false}
+        syntaxStyle={props.syntaxStyle ?? fallbackSyntaxStyle()}
+        conceal={true}
+        fg={text()}
+        bg={background()}
+      />
+    </Show>
   )
 }
 
