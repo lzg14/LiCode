@@ -9,6 +9,19 @@
 
 ### Fixed
 - **subagent 工具 "OK: (无输出)" 三次根因修复 — 接口字段错配**：`SubagentResult` 字段是 `text/error/durationMs`（`packages/core/subagent.ts:27-33`），但 `phases/execute/main.ts:212-213` 按 `ToolResult` 接口读 `output` —— 字段不存在 → 永远 `undefined` → 触发 `?? '(无输出)'` fallback → 主循环告诉 LLM `OK: (无输出)`。修复：在 main.ts subagent 分支显式 `execResult = { success: subResult.success, output: subResult.text, error: subResult.error }` 把 `SubagentResult` 适配成 `ToolResult` 形状。配套回归测试 `execute-e2e.test.ts`：断言第二轮 streamText 调用时 tool message content 的 tool-result value 不含 `(无输出)` 且含 subagent 真实输出
+- **P0 安全/健壮性修复（3 处）**（`9f0b19b` + `863f87a` + `ef99bb3`）：
+  - `env_vars` 单 key 模式拒绝读取敏感变量（api_key/token/secret/password/credential/auth 前缀），防 LLM 凭据泄露
+  - `Scheduler.tick()` await 期间被 `delete()` 时不再创建 zombie timer（每 intervalMs 触发一次空 tick 泄漏内存）
+  - SIGINT handler 不再用 `removeAllListeners` 破坏其他模块 handler，改用追加+`installSigintAbort()` helper 返回 dispose 函数
+- **background compaction race 修复**（`dd86e5e`）：fire-and-forget 路径中 `trimAfter()` 包 `try/catch`，错误进 devLogger 不再丢；注释说明 debounceMs=600s 已兜底重复 compaction
+- **统一 ID 用 `crypto.randomUUID()`**（`5090e5a`）：session/msg/part/memory/scheduler 6 处 ID 生成点替换 `Math.random().toString(36)`，与 `tui/loop.tsx` 已有的 `crypto.randomUUID()` 风格统一
+
+### Changed
+- **shouldCompact 拆分**（`7b03ad3`）：`core/session-compactor.ts` 的 `shouldCompact`（CCN=29）拆成 `isDebounced` / `isCountExceeded` / `isTokenExceeded` 三个纯函数，自身降为薄编排（CCN=4）；行为完全保持，31 个现有测试全 pass
+- **chore(deps): 显式声明 `@ai-sdk/provider-utils`**（`0c22585`）：修复 knip 报的 unlisted dependency 警告
+
+### Removed
+- **删除 `packages/eval/` 整个目录 + `packages/skills/self-improve.ts`**：knip 验证这两个模块 0 引用（`packages/skills/index.ts` 的重导出也清理），清理 ~470 行死代码。eval 框架未来如需要再实现，参考 `docs/archive/2026-07-15-assessment.md:116` 的历史记录
 
 ## [0.4.1] - 2026-07-05
 
