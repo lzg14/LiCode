@@ -89,7 +89,7 @@ function PendingStreamView(props: { syntaxStyle?: SyntaxStyle }) {
       </Show>
       <Show when={streamMode() !== 'in-thinking' && mergedText()}>
         <box marginBottom={1}>
-          <MarkdownText content={mergedText()} streaming={true} syntaxStyle={props.syntaxStyle} />
+          <MarkdownText content={mergedText()} streaming={false} syntaxStyle={props.syntaxStyle} />
         </box>
       </Show>
     </box>
@@ -130,9 +130,10 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
         <Show when={isLong}>
           <text fg={textMuted()}>{`  (共 ${lineCount} 行)`}</text>
         </Show>
-        {/* 完全照搬 mimocode：markdown 组件永远 streaming={true}
-            避免 streaming 切换到 false 触发 finalize 操作的整 viewport 重绘（闪烁） */}
-        <ThinkingView display={display} streaming={true} syntaxStyle={props.syntaxStyle} />
+        {/* streaming={true} → 持续重 parse markdown + tree-sitter，导致滚动
+            时 1000ms/帧。改成 false 让 markdown finalize 后缓存。
+            闪烁问题用 debounce + 单独 flush 解决（见 docs/plans） */}
+        <ThinkingView display={display} streaming={false} syntaxStyle={props.syntaxStyle} />
       </box>
     )
   }
