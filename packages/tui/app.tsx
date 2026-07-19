@@ -161,20 +161,34 @@ export async function tui(config: any) {
   // 自动加载最近的 session，实现跨启动连续性
   const lastSessionId = loop.getLastSessionId(process.cwd())
 
-  // 渲染器调优：30fps + 关闭 mouse movement
-  // - targetFps 60→30：OpenTUI 默认 60fps 持续重绘整个 TUI 树，idle 时仍占
-  //   ~5-10% CPU。TUI 不需要 60fps 动画（光标闪烁由终端处理），30fps 肉眼无感
-  // - enableMouseMovement true→false：开启后鼠标在 TUI 窗口内任何移动
-  //   都会触发高频事件 → SolidJS 响应式重算 → 渲染循环里反复 diff 树。
+  // 渲染器调优：targetFps / maxFps 双轨
+  //
+  // OpenTUI 两个 fps 参数各司其职（见 @opentui/core renderer.d.ts 注释）：
+  // - targetFps：持续模式的目标 fps（无 dirty 也在跑），idle 耗 CPU 的主因
+  // - maxFps：scroll/key/resize 触发 requestRender() 时的立即重绘上限
+  //
+  // 设 targetFps < maxFps，idle 走慢节奏、交互走快节奏 → 既省 CPU 又流畅
+  //
+  // - targetFps 30：比默认 60 省一半。30fps 肉眼无感（TUI 不需要 60fps 动画，
+  //   光标闪烁由终端处理）。OpenTUI 默认值就是 30，之前 licode 设 60 是误用
+  // - maxFps 60：scroll/key 触发 requestRender() 时立即重绘，受 16.67ms 上限
+  //   约束，确保交互跟手
+  // - enableMouseMovement false：关掉鼠标移动事件流，否则会触发高频
+  //   SolidJS 重算 → 持续渲染 + 立即重绘两条路径同时抢主线程 → 滚动卡。
   //   点击/滚轮由 useMouse 单独处理，不受影响
   const rendererConfig: CliRendererConfig = {
     externalOutputMode: "passthrough",
     targetFps: 30,
+    maxFps: 60,
     exitOnCtrlC: false,
     useKittyKeyboard: {},
     enableMouseMovement: false,
     useMouse: true,
     autoFocus: true,
+    // FPS 数据收集。OTUI_SHOW_STATS=true 时同时显示 debug overlay，右下角实时
+    // 显示 fps / avg frame time，用来验证 targetFps / maxFps 行为是否符合预期。
+    // 默认关闭，避免无谓开销。
+    gatherStats: process.env.OTUI_SHOW_STATS === "true",
   }
 
   const renderer = await createCliRenderer(rendererConfig)
