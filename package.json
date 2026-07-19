@@ -41,6 +41,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",
     "@ai-sdk/openai": "^3.0.73",
+    "@ai-sdk/provider-utils": "^4.0.30",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opentui/core": "^0.4.2",
     "@opentui/solid": "^0.4.2",
