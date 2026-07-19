@@ -78,29 +78,47 @@ export class SessionCompactor {
    * @param contextWindow 可选，传入 model 的 context window，触发阈值 = contextWindow * 0.8
    */
   shouldCompact(messages: any[], sessionId: string, contextWindow?: number): boolean {
-    const now = Date.now()
+    if (this.isDebounced(sessionId, Date.now())) return false
+    if (this.isCountExceeded(messages)) return true
+    if (this.isTokenExceeded(messages, contextWindow)) return true
+    return false
+  }
+
+  /**
+   * 防抖：同一 session 在 debounceMs 窗口内已压缩过，不再重复触发
+   */
+  private isDebounced(sessionId: string, now: number): boolean {
     const lastTime = this.lastCompactTime.get(sessionId) ?? 0
-    if (now - lastTime < this.config.debounceMs) return false
+    return now - lastTime < this.config.debounceMs
+  }
 
+  /**
+   * 消息数是否达到 maxMessages 阈值
+   */
+  private isCountExceeded(messages: any[]): boolean {
     const msgCount = messages.length
-    const estimatedTokens = this.estimateTokens(messages)
-
-    // 优先用传入的 contextWindow * 0.8，否则用 unknownModelThreshold / maxTokens 取较小者
-    // 关键：maxTokens=200K 会让绝大多数模型永远触发不了（contextWindow ≤ 200K），所以未注册模型必须用更紧的兜底
-    const tokenThreshold = contextWindow
-      ? Math.floor(contextWindow * 0.8)
-      : Math.min(this.config.maxTokens, this.config.unknownModelThreshold)
-
     if (msgCount >= this.config.maxMessages) {
       devLogger.debug('COMPACTOR', `msgCount=${msgCount} >= ${this.config.maxMessages}, will compact`)
       return true
     }
+    return false
+  }
 
+  /**
+   * token 估算是否达到 contextWindow*0.8（或未知模型的兜底阈值）
+   *
+   * 关键：maxTokens=200K 会让绝大多数模型永远触发不了（contextWindow ≤ 200K），
+   * 所以未注册模型必须用更紧的兜底（unknownModelThreshold）。
+   */
+  private isTokenExceeded(messages: any[], contextWindow?: number): boolean {
+    const tokenThreshold = contextWindow
+      ? Math.floor(contextWindow * 0.8)
+      : Math.min(this.config.maxTokens, this.config.unknownModelThreshold)
+    const estimatedTokens = this.estimateTokens(messages)
     if (estimatedTokens >= tokenThreshold) {
       devLogger.debug('COMPACTOR', `tokens=${estimatedTokens} >= ${tokenThreshold} (${contextWindow ? `80% of ${contextWindow}` : `maxTokens`}), will compact`)
       return true
     }
-
     return false
   }
 
