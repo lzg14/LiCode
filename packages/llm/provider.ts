@@ -52,6 +52,25 @@ function normalizeMiniMaxModel(model: string): string {
   return model.replace(/\[[^[\]]*\]$/, "").trim()
 }
 
+/**
+ * 确保 Anthropic 兼容 API 的 baseUrl 以 /v1 结尾
+ *
+ * Anthropic SDK 会在 baseUrl 后直接加 /messages，不加 /v1：
+ * - https://api.anthropic.com → https://api.anthropic.com/messages
+ * - https://api.anthropic.com/v1 → https://api.anthropic.com/v1/messages
+ *
+ * 但第三方 API（如小米 MiMo）需要 /v1：
+ * - https://api.xiaomimimo.com/anthropic → 404
+ * - https://api.xiaomimimo.com/anthropic/v1 → ✅
+ *
+ * Anthropic 官方 API 同时支持两种格式（/messages 和 /v1/messages），
+ * 所以统一使用 /v1 后缀可以兼容所有 Anthropic 兼容 API。
+ */
+function normalizeAnthropicBaseUrl(baseUrl: string | undefined): string {
+  const url = (baseUrl || 'https://api.anthropic.com').replace(/\/+$/, '')
+  return url.endsWith('/v1') ? url : `${url}/v1`
+}
+
 function createModelForProvider(provider: string, config: ModelConfig) {
   let apiKey = config.apiKey || process.env[`${provider.toUpperCase()}_API_KEY`] || ""
   // fallback: 如果没找到 provider 专属 key，尝试 ANTHROPIC_AUTH_TOKEN
@@ -61,7 +80,7 @@ function createModelForProvider(provider: string, config: ModelConfig) {
     return createOpenAI({ apiKey, baseURL: config.baseUrl ?? "https://api.deepseek.com" }).chat(config.model)
   }
   if (provider === "anthropic") {
-    return createAnthropic({ apiKey, baseURL: config.baseUrl })(config.model)
+    return createAnthropic({ apiKey, baseURL: normalizeAnthropicBaseUrl(config.baseUrl) })(config.model)
   }
   if (provider === "minimax") {
     const model = normalizeMiniMaxModel(config.model)
@@ -69,7 +88,7 @@ function createModelForProvider(provider: string, config: ModelConfig) {
     if (baseURL.includes("/v1")) {
       return createOpenAI({ apiKey, baseURL }).chat(model)
     }
-    return createAnthropic({ apiKey, baseURL })(model)
+    return createAnthropic({ apiKey, baseURL: normalizeAnthropicBaseUrl(baseURL) })(model)
   }
   return createOpenAI({ apiKey, baseURL: config.baseUrl }).chat(config.model)
 }
