@@ -86,10 +86,21 @@ export function scheduleMessageStyledText(
 }
 
 /**
- * Helper：获取 token 的原始文本
+ * Helper：获取 token 的纯文本（不含 markdown 语法符号）
+ *
+ * 优先级：text（plain text） > raw（markdown 源）
+ *
+ * 为什么 text 优先：
+ * - heading token 的 raw 是 "### Title"（含 #），text 是 "Title"（不含 #）
+ * - strong token 的 raw 是 "**bold**"（含 **），text 是 "bold"（不含 **）
+ * - link token 的 raw 是 "[text](url)"（含 []()），text 是 "text"（不含 markdown 链接语法）
+ * - 调用点（renderHeading / renderInlineToken 的 fallback / inlineTokensToText）都期望纯文本
+ *   而不是 markdown 源，否则终端会显示语法符号
+ *
+ * 对纯 inline token（text/codespan 等），text 和 raw 通常一致，顺序不影响结果
  */
 export function tokenText(token: Token): string {
-  return token.raw || (token as any).text || ""
+  return (token as any).text || token.raw || ""
 }
 
 /**

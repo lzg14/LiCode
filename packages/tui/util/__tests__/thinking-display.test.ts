@@ -108,4 +108,48 @@ describe('deriveThinkingDisplay', () => {
       expect(r.rest).toBe('before after')
     }
   })
+
+  // 回归: <think>...</think> 格式（LLM 实际输出格式）
+  // 之前 THINKING_REGEX 的 B 部分只有 </think> 闭标签没有 <think> 开标签
+  // 对 LLM 实际输出完全不匹配 → 整段被当 no-thinking → 渲染时显示原始标签
+  const _THINK_OPEN = String.fromCharCode(60, 116, 104, 105, 110, 107, 62)
+  const _THINK_CLOSE = String.fromCharCode(60, 47, 116, 104, 105, 110, 107, 62)
+
+  it('回归: <think>...</think> 格式 only thinking -> thinking-only', () => {
+    const input = _THINK_OPEN + 'analyzing' + _THINK_CLOSE
+    const r = deriveThinkingDisplay(input, false)
+    expect(r.kind).toBe('thinking-only')
+    if (r.kind === 'thinking-only') {
+      expect(r.text).toBe('analyzing')
+    }
+  })
+
+  it('回归: <think>...</think> 格式 thinking + rest -> has-rest', () => {
+    const input = _THINK_OPEN + 'thinking' + _THINK_CLOSE + '\nanswer'
+    const r = deriveThinkingDisplay(input, false)
+    expect(r.kind).toBe('has-rest')
+    if (r.kind === 'has-rest') {
+      expect(r.thinking).toBe('thinking')
+      expect(r.rest).toBe('answer')
+    }
+  })
+
+  it('回归: <think>...</think> 格式 complete -> drop thinking', () => {
+    const input = _THINK_OPEN + 'only thinking' + _THINK_CLOSE
+    const r = deriveThinkingDisplay(input, true)
+    expect(r.kind).toBe('no-thinking')
+    if (r.kind === 'no-thinking') {
+      expect(r.rest).toBe('')
+    }
+  })
+
+  it('回归: <think>/</think> 标签不被泄漏到 rest', () => {
+    const input = _THINK_OPEN + 'thinking' + _THINK_CLOSE + '\nanswer'
+    const r = deriveThinkingDisplay(input, true)
+    if (r.kind === 'has-rest') {
+      expect(r.rest).not.toContain(_THINK_OPEN)
+      expect(r.rest).not.toContain(_THINK_CLOSE)
+      expect(r.rest).toBe('answer')
+    }
+  })
 })

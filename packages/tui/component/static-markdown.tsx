@@ -129,13 +129,16 @@ function renderBlock(token: Token, theme: ReturnType<typeof useTheme>): JSX.Elem
 }
 
 function renderHeading(token: Tokens.Heading, theme: ReturnType<typeof useTheme>): JSX.Element {
-  // heading 本身有 inline tokens（marked 已解析），用 bold + primary
-  // <text> 只能接 string，把 prefix + 内联 token 一起拍平成字符串
-  const prefix = "#".repeat(token.depth) + " "
-  const inline = hasInlineTokens(token) ? inlineTokensToText(token.tokens) : ""
+  // heading 不显示 markdown 前缀符号（###/#### 等），只渲染纯文本
+  // - 用 BOLD + primary 色作为视觉强调（terminal 字号变化有限，靠颜色区分 depth）
+  // - prefix 是 markdown 语法符号，渲染后应丢弃（与 GitHub/Typora 等标准渲染器一致）
+  // - 直接用 marked 提取好的 heading.text（已剥离 # 前缀），不走 tokenText
+  //   因为 tokenText 优先返回 raw（含 #），对 heading 不适用
+  // - fallback 到拍平 inline tokens（极端情况下 text 为空时）
+  const inline = (token as Tokens.Heading).text || inlineTokensToText(token.tokens)
   return (
     <box marginTop={1}>
-      <text fg={theme.primary()} attributes={TextAttributes.BOLD}>{prefix + inline}</text>
+      <text fg={theme.primary()} attributes={TextAttributes.BOLD}>{inline}</text>
     </box>
   )
 }
