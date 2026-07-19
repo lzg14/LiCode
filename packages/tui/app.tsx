@@ -1,7 +1,7 @@
 import { type CliRendererConfig, createCliRenderer } from "@opentui/core"
 import { render, useKeyboard, useRenderer } from "@opentui/solid"
 import { generateText } from "ai"
-import { ErrorBoundary, Match, onMount, Switch } from "solid-js"
+import { Match, onMount, Switch } from "solid-js"
 import { configLoader } from "../config/loader"
 import { devLogger, setupGlobalErrorHandlers } from "../core/dev-logger"
 import { CoreLoop } from "../core/loop"
@@ -9,6 +9,7 @@ import { createModel } from "../llm/provider"
 import type { LLMProvider } from "../llm/types"
 import { createSecurityLayer, setSecurityLayer } from "../security"
 import { registerBuiltinTools } from "../tools/builtin"
+import { RenderErrorBoundary } from "./component/render-error-boundary"
 import { focusInput } from "./component/prompt"
 import { doCopy } from "./util/selection"
 
@@ -209,10 +210,7 @@ export async function tui(config: any) {
   try {
     await render(() => {
       return (
-        <ErrorBoundary fallback={(error) => {
-          devLogger.error('RENDER', 'ErrorBoundary caught error', error)
-          return <text fg="#f38ba8">{String(error)}</text>
-        }}>
+        <RenderErrorBoundary>
           <ConfigProvider config={config}>
             <ThemeProvider>
               <RouteProvider>
@@ -231,7 +229,7 @@ export async function tui(config: any) {
               </RouteProvider>
             </ThemeProvider>
           </ConfigProvider>
-        </ErrorBoundary>
+        </RenderErrorBoundary>
       )
     }, renderer)
   } catch (error) {
