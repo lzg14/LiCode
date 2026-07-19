@@ -5,6 +5,7 @@ import {
   ensureMessageTokens,
   hasInlineTokens,
   scheduleMessageStyledText,
+  tokenText,
   type CachedMessage,
 } from "../util/markdown-cache"
 import { useTheme } from "../context/theme"
@@ -129,22 +130,22 @@ function renderBlock(token: Token, theme: ReturnType<typeof useTheme>): JSX.Elem
 
 function renderHeading(token: Tokens.Heading, theme: ReturnType<typeof useTheme>): JSX.Element {
   // heading 本身有 inline tokens（marked 已解析），用 bold + primary
+  // <text> 只能接 string，把 prefix + 内联 token 一起拍平成字符串
   const prefix = "#".repeat(token.depth) + " "
+  const inline = hasInlineTokens(token) ? inlineTokensToText(token.tokens) : ""
   return (
     <box marginTop={1}>
-      <text fg={theme.primary()} attributes={TextAttributes.BOLD}>
-        {prefix}
-        {renderInlineTokens(token.tokens, theme)}
-      </text>
+      <text fg={theme.primary()} attributes={TextAttributes.BOLD}>{prefix + inline}</text>
     </box>
   )
 }
 
 function renderParagraph(token: Tokens.Paragraph, theme: ReturnType<typeof useTheme>): JSX.Element {
   if (hasInlineTokens(token)) {
+    // <text> 只能接 string，不能接嵌套 JSX；用 inlineTokensToText 拍平
     return (
       <box>
-        <text>{renderInlineTokens(token.tokens, theme)}</text>
+        <text fg={theme.text()}>{inlineTokensToText(token.tokens)}</text>
       </box>
     )
   }
@@ -186,10 +187,8 @@ function renderList(token: Tokens.List, theme: ReturnType<typeof useTheme>): JSX
           return (
             <box flexDirection="row">
               <text fg={theme.textMuted()}>{marker}</text>
-              <text>
-                {hasInlineTokens(item)
-                  ? renderInlineTokens(item.tokens, theme)
-                  : itemText}
+              <text fg={theme.text()}>
+                {hasInlineTokens(item) ? inlineTokensToText(item.tokens) : itemText}
               </text>
             </box>
           )
@@ -201,12 +200,11 @@ function renderList(token: Tokens.List, theme: ReturnType<typeof useTheme>): JSX
 
 function renderBlockquote(token: Tokens.Blockquote, theme: ReturnType<typeof useTheme>): JSX.Element {
   // 引用：左边框 + 灰色 italic
-  const fallbackText = (token as unknown as { text?: string }).text ?? ""
+  // <text> 只能接 string，用 inlineTokensToText 拍平
+  const inline = hasInlineTokens(token) ? inlineTokensToText(token.tokens) : ""
   return (
     <box borderColor={theme.textMuted()} border={["left"]} paddingLeft={1}>
-      <text fg={theme.textMuted()} attributes={TextAttributes.ITALIC}>
-        {hasInlineTokens(token) ? renderInlineTokens(token.tokens, theme) : fallbackText}
-      </text>
+      <text fg={theme.textMuted()} attributes={TextAttributes.ITALIC}>{inline}</text>
     </box>
   )
 }
@@ -259,67 +257,50 @@ function renderInlineTokens(tokens: Token[], theme: ReturnType<typeof useTheme>)
 }
 
 function renderInlineToken(token: Token, theme: ReturnType<typeof useTheme>): JSX.Element {
-  // OpenTUI 的 <text> 元素原生支持 fg/bg/attributes，根本不需要 const S = "span" 这个 hack。
-  // 旧实现把 "span" 字符串当组件用，运行时 JSX 转译成 S(props) 调用字符串，触发
-  // "Comp is not a function. Comp is 'span'" 错误。直接用 <text> 即可。
+  // 关键约束：OpenTUI 的 <text> 只接受 string / TextNodeRenderable / StyledText 作为 children，
+  // 不接受嵌套 JSX 节点（之前用 <strong>/<em>/<a>/<span> 都会触发
+  // "TextNodeRenderable only accepts strings..." 或 "Comp is not a function"）。
+  // 因此所有 inline token 必须展平成纯字符串，外层用 fg 表达语义（粗体/斜体在
+  // terminal 里只能用 fg 颜色近似）。
+  //
+  // 嵌套 token（如 strong 包含 em）递归拍平成 raw text，丢失粗体/斜体语义；
+  // 这是当前 OpenTUI Solid bindings 的限制，等上游加更多 inline element 再优化。
+
   switch (token.type) {
-    case "text": {
-      const t = token as Tokens.Text
-      return <text fg={theme.text()}>{t.text}</text>
-    }
+    case "text":
+      return <text fg={theme.text()}>{(token as Tokens.Text).text}</text>
 
-    case "strong": {
-      const t = token as Tokens.Strong
-      const fallback = t.text || ""
-      return (
-        <strong>
-          {hasInlineTokens(t) ? renderInlineTokens(t.tokens, theme) : fallback}
-        </strong>
-      )
-    }
-
-    case "em": {
-      const t = token as Tokens.Em
-      const fallback = t.text || ""
-      return (
-        <em>
-          {hasInlineTokens(t) ? renderInlineTokens(t.tokens, theme) : fallback}
-        </em>
-      )
-    }
-
-    case "codespan": {
-      const t = token as Tokens.Codespan
-      return <text fg={theme.success()}>{`\`${t.text}\``}</text>
-    }
+    case "codespan":
+      return <text fg={theme.success()}>{`\`${(token as Tokens.Codespan).text}\``}</text>
 
     case "br":
-      return <br />
+      return <text>{"\n"}</text>
+
+    case "strong":
+    case "em": {
+      // 粗体/斜体：拍平嵌套 token 成字符串，用 primary 色近似视觉强调
+      const t = token as Tokens.Strong | Tokens.Em
+      const inner = hasInlineTokens(t) ? inlineTokensToText(t.tokens) : tokenText(t)
+      return <text fg={theme.primary()}>{inner}</text>
+    }
+
+    case "del": {
+      // 删除线：OpenTUI 无原生支持，降级用 muted 颜色
+      const t = token as Tokens.Del
+      const inner = hasInlineTokens(t) ? inlineTokensToText(t.tokens) : tokenText(t)
+      return <text fg={theme.textMuted()}>{inner}</text>
+    }
 
     case "link": {
+      // 链接：拍平成 "text (url)" 形式（OpenTUI 无可点击 link element）
       const t = token as Tokens.Link
-      const fallback = t.text || ""
-      return (
-        <a href={t.href}>
-          {hasInlineTokens(t) ? renderInlineTokens(t.tokens, theme) : fallback}
-        </a>
-      )
+      const inner = hasInlineTokens(t) ? inlineTokensToText(t.tokens) : tokenText(t)
+      return <text fg={theme.primary()}>{`${inner} (${t.href})`}</text>
     }
 
     case "image": {
       const t = token as Tokens.Image
-      return <text>{`[${t.text || "image"}]`}</text>
-    }
-
-    case "del": {
-      const t = token as Tokens.Del
-      // OpenTUI 内置无 <del>（删除线）；降级用 muted 颜色
-      const fallback = t.text || ""
-      return (
-        <text fg={theme.textMuted()}>
-          {hasInlineTokens(t) ? renderInlineTokens(t.tokens, theme) : fallback}
-        </text>
-      )
+      return <text>{`[${t.text || "image"}: ${t.href || ""}]`}</text>
     }
 
     case "escape":
@@ -328,13 +309,25 @@ function renderInlineToken(token: Token, theme: ReturnType<typeof useTheme>): JS
     case "html":
       return <text>{(token as Tokens.HTML).text || (token as unknown as { raw?: string }).raw || ""}</text>
 
-    case "checkbox": {
-      const t = token as Tokens.Checkbox
-      return <text fg={theme.textMuted()}>{t.checked ? "[x] " : "[ ] "}</text>
-    }
+    case "checkbox":
+      return <text fg={theme.textMuted()}>{(token as Tokens.Checkbox).checked ? "[x] " : "[ ] "}</text>
 
     default:
-      // fallback：渲染 raw 或 text
       return <text>{(token as unknown as { raw?: string }).raw || (token as unknown as { text?: string }).text || ""}</text>
   }
+}
+
+/**
+ * 把 inline token 数组递归展平成纯字符串（不含任何 JSX/元素）。
+ * 用于解决 OpenTUI <text> 不接受嵌套 JSX 的限制。
+ */
+function inlineTokensToText(tokens: Token[]): string {
+  return tokens
+    .map((t) => {
+      if (hasInlineTokens(t)) {
+        return inlineTokensToText(t.tokens)
+      }
+      return tokenText(t)
+    })
+    .join("")
 }
