@@ -99,4 +99,35 @@ describe('Scheduler', () => {
     scheduler.delete(id2)
     expect(scheduler.hasTasks()).toBe(false)
   })
+
+  // 回归：tick() 内 await 期间 delete 时，await 之后的 setTimeout 不应被创建
+  // 旧实现会留下 zombie timer（task 已被 Map 删但 timer 引用不到），每 intervalMs 触发一次空 tick
+  it('delete 在 tick await 期间执行后，不创建 zombie timer', async () => {
+    vi.useFakeTimers()
+    try {
+      let resolveTrigger: () => void = () => {}
+      onTrigger.mockImplementation(() => new Promise<void>(r => { resolveTrigger = r }))
+
+      const id = scheduler.create(100, 'p')
+
+      // 让第一次 tick 触发，onTrigger 进入 await
+      await vi.advanceTimersByTime(100)
+      expect(onTrigger).toHaveBeenCalledTimes(1)
+
+      // delete 在 onTrigger 还在 await 期间执行
+      scheduler.delete(id)
+      expect(scheduler.hasTasks()).toBe(false)
+
+      // 让 onTrigger 完成
+      resolveTrigger()
+      // 等 microtask + tick 后续代码跑完
+      await vi.advanceTimersByTime(0)
+      await Promise.resolve()
+
+      // 关键断言：不应有 pending timer（修复前 zombie timer 仍存在）
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

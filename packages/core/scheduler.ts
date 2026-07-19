@@ -47,6 +47,10 @@ export class Scheduler {
       } catch (e) {
         this.callbacks.onLog(`[loop] 执行出错: ${e instanceof Error ? e.message : String(e)}`)
       }
+      // 关键修复：await 期间可能被 delete()。
+      // 旧实现会无条件 setTimeout 创建新 timer，但 task 已被 Map 删掉，
+      // 新 timer 没有任何引用能 clear，每 intervalMs 触发一次空 tick —— zombie timer 泄漏。
+      if (!this.tasks.has(id)) return
       const newTimerId = setTimeout(tick, intervalMs)
       task.timerId = newTimerId
     }
