@@ -605,6 +605,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       }
 
       if (result.text) {
+        // 关键修复：dedup — 检查最后一条 assistant 消息是否和 result.text 完全相同。
+        // 详见 appendFinalAssistantMessage 注释
+        setMessages((prev) => appendFinalAssistantMessage(prev, result.text, Date.now() - startTime))
+
         // 清空 streaming 状态，避免重复显示
         if (_pendingFlushTimer) {
           clearTimeout(_pendingFlushTimer)
@@ -614,12 +618,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         streamAccumulator.reset()
         setStreamingSegments([])
         setPendingText("")
-        
-        addMessage({
-          role: "assistant",
-          content: result.text,
-          duration: Math.floor((Date.now() - startTime) / 1000),
-        })
       }
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e)
@@ -788,6 +786,40 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     setSubagentOpen,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
+}
+
+/**
+ * 把 LLM 最终回复 append 到 messages，去重：如果最后一条 assistant 消息
+ * 内容 === content，跳过（避免 MAX_ITERATIONS 用尽时 onIntermediateText 加过的
+ * 文本被最终 addMessage 重复加一次）。
+ *
+ * 背景：execute() 在每轮有 tool_calls 的 iteration 都调 onIntermediateText() →
+ * addMessage(result.text) 一次。同时 execute 末尾把"最后一轮的 result.text"
+ * 通过 lastChunk 返回，外层 run() 把 result.text 传给这里。
+ *
+ * 最后一轮如果是 tool_calls（被 MAX_ITERATIONS 用尽而非自然结束），
+ * 同一个 result.text 就会出现在 lastChunk 和最后一次 onIntermediateText 里，
+ * 不去重就会渲染两次。
+ */
+export function appendFinalAssistantMessage(
+  messages: Message[],
+  content: string,
+  durationMs: number,
+): Message[] {
+  const last = messages[messages.length - 1]
+  if (last && last.role === "assistant" && last.content === content) {
+    return messages // dedup：内容相同，跳过
+  }
+  return [
+    ...messages,
+    {
+      id: `final_${Date.now()}`,
+      role: "assistant",
+      content,
+      timestamp: Date.now(),
+      duration: Math.floor(durationMs / 1000),
+    },
+  ]
 }
 
 export function useLoop(): LoopContext {
