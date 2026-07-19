@@ -1,4 +1,4 @@
-import { type Accessor, batch, createContext, createMemo, createSignal, type JSX, onMount, useContext } from "solid-js"
+import { type Accessor, batch, createContext, createMemo, createSignal, type JSX, onCleanup, onMount, useContext } from "solid-js"
 import { devLogger } from "../../core/dev-logger"
 import type { CoreLoop } from "../../core/loop"
 import { Scheduler } from "../../core/scheduler"
@@ -173,7 +173,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   // 这会破坏其他模块（bun runtime / 调试器 / 子模块）的 handler，
   // 且 remove → register 之间存在 race window。
   // 新实现：只追加一个 handler，由 installSigintAbort 返回 dispose 函数做精确卸载。
-  installSigintAbort(abort)
+  const disposeSigint = installSigintAbort(abort)
   let activeModel: any = props.model
   // 工具调用轮次上限确认机制
   let confirmResolve: ((value: boolean) => void) | null = null
@@ -376,6 +376,23 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     }
   })
 
+  // 组件卸载时清理所有资源，防止内存泄漏
+  onCleanup(() => {
+    // 1. 清理 SIGINT handler
+    disposeSigint()
+    // 2. 清理 Scheduler 定时器
+    scheduler.deleteAll()
+    // 3. 清理 pending flush timer
+    if (_pendingFlushTimer) {
+      clearTimeout(_pendingFlushTimer)
+      _pendingFlushTimer = null
+    }
+    // 4. 重置 stream accumulator
+    streamAccumulator.reset()
+    // 5. 清空 toolStartTimes Map
+    toolStartTimes.clear()
+  })
+
   const addMessage = (input: AddMessageInput) => {
     const id = input.id ?? crypto.randomUUID()
     const msg: Message = {
@@ -547,6 +564,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             if (last?.role === "tool") {
               const start = toolStartTimes.get(last.id) ?? 0
               const duration = start > 0 ? Date.now() - start : 0
+              toolStartTimes.delete(last.id)
               const diff = result?.diff
               return [...prev.slice(0, -1), { ...last, toolStatus: "completed", duration, diff }]
             }
