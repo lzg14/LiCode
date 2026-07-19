@@ -259,14 +259,13 @@ function renderInlineTokens(tokens: Token[], theme: ReturnType<typeof useTheme>)
 }
 
 function renderInlineToken(token: Token, theme: ReturnType<typeof useTheme>): JSX.Element {
-  // @opentui/solid 的 SpanProps 类型 bug：不包含 fg/bg/attributes
-  // 这些 prop 实际上 TextNodeRenderable 都支持，用 style prop 绕过 TS 检查
-  // style 会被 Solid renderer 拆解后 set 到 node 上
-  const S = "span" as unknown as (props: { children?: JSX.Element; style?: Record<string, unknown> }) => JSX.Element
+  // OpenTUI 的 <text> 元素原生支持 fg/bg/attributes，根本不需要 const S = "span" 这个 hack。
+  // 旧实现把 "span" 字符串当组件用，运行时 JSX 转译成 S(props) 调用字符串，触发
+  // "Comp is not a function. Comp is 'span'" 错误。直接用 <text> 即可。
   switch (token.type) {
     case "text": {
       const t = token as Tokens.Text
-      return <S style={{ fg: theme.text() }}>{t.text}</S>
+      return <text fg={theme.text()}>{t.text}</text>
     }
 
     case "strong": {
@@ -291,7 +290,7 @@ function renderInlineToken(token: Token, theme: ReturnType<typeof useTheme>): JS
 
     case "codespan": {
       const t = token as Tokens.Codespan
-      return <S style={{ fg: theme.success() }}>{`\`${t.text}\``}</S>
+      return <text fg={theme.success()}>{`\`${t.text}\``}</text>
     }
 
     case "br":
@@ -309,7 +308,7 @@ function renderInlineToken(token: Token, theme: ReturnType<typeof useTheme>): JS
 
     case "image": {
       const t = token as Tokens.Image
-      return <S>{`[${t.text || "image"}]`}</S>
+      return <text>{`[${t.text || "image"}]`}</text>
     }
 
     case "del": {
@@ -317,25 +316,25 @@ function renderInlineToken(token: Token, theme: ReturnType<typeof useTheme>): JS
       // OpenTUI 内置无 <del>（删除线）；降级用 muted 颜色
       const fallback = t.text || ""
       return (
-        <S style={{ fg: theme.textMuted() }}>
+        <text fg={theme.textMuted()}>
           {hasInlineTokens(t) ? renderInlineTokens(t.tokens, theme) : fallback}
-        </S>
+        </text>
       )
     }
 
     case "escape":
-      return <S>{(token as Tokens.Escape).text}</S>
+      return <text>{(token as Tokens.Escape).text}</text>
 
     case "html":
-      return <S>{(token as Tokens.HTML).text || (token as unknown as { raw?: string }).raw || ""}</S>
+      return <text>{(token as Tokens.HTML).text || (token as unknown as { raw?: string }).raw || ""}</text>
 
     case "checkbox": {
       const t = token as Tokens.Checkbox
-      return <S style={{ fg: theme.textMuted() }}>{t.checked ? "[x] " : "[ ] "}</S>
+      return <text fg={theme.textMuted()}>{t.checked ? "[x] " : "[ ] "}</text>
     }
 
     default:
       // fallback：渲染 raw 或 text
-      return <S>{(token as unknown as { raw?: string }).raw || (token as unknown as { text?: string }).text || ""}</S>
+      return <text>{(token as unknown as { raw?: string }).raw || (token as unknown as { text?: string }).text || ""}</text>
   }
 }
