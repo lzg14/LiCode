@@ -326,12 +326,25 @@ export class CoreLoop {
       if (!hasExisting) {
         const result = await this.sessionCompactor.compact(history, ctx.sessionId, this.llm)
         ctx.sessionSummary = result.summary
-        trimAfter()
+        try {
+          trimAfter()
+        } catch (e) {
+          devLogger.warn('COMPACT', `trimOldMessages failed after sync compaction: ${e instanceof Error ? e.message : String(e)}`)
+        }
         ctx.onCompaction?.(result.summary, result.originalCount, result.preservedCount)
       } else {
         ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
+        // 已知 race：fire-and-forget 时 trimAfter 可能在 executePhase 返回后才跑，
+        // 中间窗口里新轮 execute 看到的 history 仍含未 trim 的老消息。
+        // 影响：单轮 LLM 多收到几百条旧消息。SessionCompactor.shouldCompact 的
+        // debounceMs=600s 兜底（同一 session 10 分钟内不会重复触发 compaction），
+        // 所以不会无限堆积。这里用 try/catch 保证 trim 抛错不会变成 unhandled rejection。
         this.sessionCompactor.compact(history, ctx.sessionId, this.llm).then((result) => {
-          trimAfter()
+          try {
+            trimAfter()
+          } catch (e) {
+            devLogger.warn('COMPACT', `trimOldMessages failed after background compaction: ${e instanceof Error ? e.message : String(e)}`)
+          }
           ctx.onCompaction?.(result.summary, result.originalCount, result.preservedCount)
         }).catch((e) => {
           // 静默失败升级：warn 级让 dev 日志可见，并把错误回调给上层
