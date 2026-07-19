@@ -161,12 +161,18 @@ export async function tui(config: any) {
   // 自动加载最近的 session，实现跨启动连续性
   const lastSessionId = loop.getLastSessionId(process.cwd())
 
+  // 渲染器调优：30fps + 关闭 mouse movement
+  // - targetFps 60→30：OpenTUI 默认 60fps 持续重绘整个 TUI 树，idle 时仍占
+  //   ~5-10% CPU。TUI 不需要 60fps 动画（光标闪烁由终端处理），30fps 肉眼无感
+  // - enableMouseMovement true→false：开启后鼠标在 TUI 窗口内任何移动
+  //   都会触发高频事件 → SolidJS 响应式重算 → 渲染循环里反复 diff 树。
+  //   点击/滚轮由 useMouse 单独处理，不受影响
   const rendererConfig: CliRendererConfig = {
     externalOutputMode: "passthrough",
-    targetFps: 60,
+    targetFps: 30,
     exitOnCtrlC: false,
     useKittyKeyboard: {},
-    enableMouseMovement: true,
+    enableMouseMovement: false,
     useMouse: true,
     autoFocus: true,
   }
