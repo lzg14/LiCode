@@ -9,6 +9,7 @@ import { readImageFile } from "../../tools/builtin"
 import { useToast } from "../ui/toast"
 import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
 import { installSigintAbort } from "../util/sigint"
+import { ensureMessageTokens } from "../util/markdown-cache"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
 export function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
@@ -46,6 +47,20 @@ export interface Message {
   images?: Array<{ base64: string; mimeType: string }>
   /** 是否为压缩摘要消息（渲染为 markdown） */
   compaction?: boolean
+  /**
+   * marked.lexer 缓存：addMessage 时同步填充
+   * - 用于自实现的 <StaticMarkdown> 渲染
+   * - 历史 message 永不重新 parse（设计原则：解决 scroll 卡顿根因）
+   */
+  tokens?: import("marked").TokensList
+  /** 缓存的 content 字符串，用于检测 content 变化时 invalidate tokens */
+  _cachedContent?: string
+  /**
+   * tree-sitter 异步 parse 结果，给 inline content 加 syntax highlight
+   * - scheduleMessageStyledText 异步填充
+   * - 第一次 render 时可能还没有（用 tokens fallback）
+   */
+  styledText?: import("@opentui/core").StyledText
 }
 
 type AddMessageInput = {
@@ -376,6 +391,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       images: input.images,
       compaction: input.compaction,
     }
+    // 同步预解析 tokens：确保历史 message 在第一次 render 时就已有 cache
+    // 这是"历史 message 永不重新 parse"架构保证的关键
+    ensureMessageTokens(msg)
     setMessages((prev) => [...prev, msg])
   }
 
