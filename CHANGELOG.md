@@ -8,6 +8,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **第三方 Anthropic API baseUrl 缺少 /v1 后缀**（`5b3a0a4`）：`@ai-sdk/anthropic` 期望 baseUrl 以 `/v1` 结尾，否则拼出错误路径导致 404。修复：`importClaudeCodeConfig` 自动在 baseUrl 后补 `/v1`
 - **TUI 内存泄漏修复**（`13673bd`）：`toolStartTimes` Map 只增不删导致无限增长；SIGINT handler 未在组件卸载时清理；Scheduler 定时器未在组件卸载时清理；`_pendingFlushTimer` 可能访问已卸载组件。修复：使用 SolidJS `onCleanup` 生命周期钩子统一清理所有资源，`onToolResult` 后立即删除 Map 条目
 - **subagent 工具 "OK: (无输出)" 三次根因修复 — 接口字段错配**：`SubagentResult` 字段是 `text/error/durationMs`（`packages/core/subagent.ts:27-33`），但 `phases/execute/main.ts:212-213` 按 `ToolResult` 接口读 `output` —— 字段不存在 → 永远 `undefined` → 触发 `?? '(无输出)'` fallback → 主循环告诉 LLM `OK: (无输出)`。修复：在 main.ts subagent 分支显式 `execResult = { success: subResult.success, output: subResult.text, error: subResult.error }` 把 `SubagentResult` 适配成 `ToolResult` 形状。配套回归测试 `execute-e2e.test.ts`：断言第二轮 streamText 调用时 tool message content 的 tool-result value 不含 `(无输出)` 且含 subagent 真实输出
 - **P0 安全/健壮性修复（3 处）**（`9f0b19b` + `863f87a` + `ef99bb3`）：
