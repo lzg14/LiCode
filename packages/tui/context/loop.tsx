@@ -8,6 +8,7 @@ import { createModel } from "../../llm/provider"
 import { readImageFile } from "../../tools/builtin"
 import { useToast } from "../ui/toast"
 import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
+import { installSigintAbort } from "../util/sigint"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
 export function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
@@ -152,15 +153,12 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   }
   // 进程级 Ctrl+C 处理：LLM 卡死时 TUI 事件循环被阻塞，useKeyboard 收不到 ESC
   // SIGINT 不经过 TUI 事件循环，直接 abort 当前操作
-  const originalSigint = process.listeners('SIGINT').slice()
-  process.removeAllListeners('SIGINT')
-  process.on('SIGINT', () => {
-    abort()
-    // 恢复原始处理器
-    for (const handler of originalSigint) {
-      process.on('SIGINT', handler as any)
-    }
-  })
+  //
+  // 修复：旧实现用 process.removeAllListeners('SIGINT') 清空所有 SIGINT handler 再恢复，
+  // 这会破坏其他模块（bun runtime / 调试器 / 子模块）的 handler，
+  // 且 remove → register 之间存在 race window。
+  // 新实现：只追加一个 handler，由 installSigintAbort 返回 dispose 函数做精确卸载。
+  installSigintAbort(abort)
   let activeModel: any = props.model
   // 工具调用轮次上限确认机制
   let confirmResolve: ((value: boolean) => void) | null = null
