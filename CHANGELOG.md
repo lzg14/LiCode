@@ -7,7 +7,13 @@
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-15
+
 ### Fixed
+- **TUI markdown heading 渲染和 thinking 标签解析修复**（`a1b6cb4`）：
+  - heading 不再显示 `###` 前缀符号，只渲染纯文本（与 GitHub/Typora 等标准渲染器一致）
+  - `tokenText` 优先返回 `text`（纯文本）而非 `raw`（含 markdown 语法符号），避免终端显示 `**bold**`、`[text](url)` 等语法
+  - 修复 `thinking-display` 正则表达式，正确匹配 LLM 实际输出的 `<think>...</think>` 格式（之前只匹配了闭标签，导致 thinking 内容被当作正文显示原始标签）
 - **TUI 内存泄漏修复**（`13673bd`）：`toolStartTimes` Map 只增不删导致无限增长；SIGINT handler 未在组件卸载时清理；Scheduler 定时器未在组件卸载时清理；`_pendingFlushTimer` 可能访问已卸载组件。修复：使用 SolidJS `onCleanup` 生命周期钩子统一清理所有资源，`onToolResult` 后立即删除 Map 条目
 - **Anthropic 兼容 API baseUrl 修复**（`2331de1`）：第三方 API（如小米 MiMo）的 baseUrl 缺少 `/v1` 后缀导致 404。新增 `normalizeAnthropicBaseUrl` 函数统一处理，兼容所有 Anthropic 兼容 API（官方和第三方）
 - **subagent 工具 "OK: (无输出)" 三次根因修复 — 接口字段错配**：`SubagentResult` 字段是 `text/error/durationMs`（`packages/core/subagent.ts:27-33`），但 `phases/execute/main.ts:212-213` 按 `ToolResult` 接口读 `output` —— 字段不存在 → 永远 `undefined` → 触发 `?? '(无输出)'` fallback → 主循环告诉 LLM `OK: (无输出)`。修复：在 main.ts subagent 分支显式 `execResult = { success: subResult.success, output: subResult.text, error: subResult.error }` 把 `SubagentResult` 适配成 `ToolResult` 形状。配套回归测试 `execute-e2e.test.ts`：断言第二轮 streamText 调用时 tool message content 的 tool-result value 不含 `(无输出)` 且含 subagent 真实输出
