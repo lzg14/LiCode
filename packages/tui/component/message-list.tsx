@@ -1,5 +1,5 @@
+import { createMemo, createSignal, For, onMount, Show } from "solid-js"
 import type { SyntaxStyle } from "@opentui/core"
-import { createMemo, For, Show } from "solid-js"
 import type { Message } from "../context/loop"
 import { useLoop } from "../context/loop"
 import { useTheme } from "../context/theme"
@@ -7,6 +7,7 @@ import { createMarkdownSyntaxStyle } from "../util/syntax-style"
 import { deriveThinkingDisplay } from "../util/thinking-display"
 import { CollapsibleText } from "./collapsible-text"
 import { Spinner } from "./spinner"
+import { StaticMarkdown } from "./static-markdown"
 import { ThinkingView } from "./thinking-view"
 
 const _MAX_VISIBLE_TOOLS = 3
@@ -29,34 +30,25 @@ function stripSystemTags(content: string): string {
 
   return processed.replace(/\n{3,}/g, "\n\n").trim()
 }
-function MarkdownText(props: { content: string; streaming?: boolean; syntaxStyle?: SyntaxStyle }) {
-  const { primary, warning, success, info, text, textMuted, background, border } = useTheme()
-  // 兜底：如果调用方没传 syntaxStyle，自己 memo 一个（保留向后兼容）
-  const fallbackSyntaxStyle = createMemo(() => createMarkdownSyntaxStyle({
-    primary: primary(), warning: warning(), success: success(),
-    info: info(), text: text(), textMuted: textMuted(), border: border(),
-  }))
-  return (
-    <markdown
-      content={props.content}
-      streaming={props.streaming ?? false}
-      syntaxStyle={props.syntaxStyle ?? fallbackSyntaxStyle()}
-      conceal={true}
-      fg={text()}
-      bg={background()}
-    />
-  )
-}
 
 /**
  * PendingStreamView - 渲染未闭合的 streaming 内容
- * streaming 中的 thinking 内容始终灰色 + 可折叠
+ *
+ * 关键设计（解决 "总闪烁" 根因）：
+ * - 已闭合段（thinking/text segment）：内容稳定，<StaticMarkdown> 渲染（保留 markdown 结构）
+ * - 未闭合的 pending text：内容每 60ms 变一次，用纯 <text> 渲染避免 re-parse 闪烁
+ *   回合完成时通过 addMessage 一次性存入 message，再以 <StaticMarkdown> 渲染（带 markdown）
+ *
+ * 这样用户视觉上：
+ * - 思考过程：实时 streaming（plain text，但能 "看到在思考"）+ 回合完成时升级为 markdown
+ * - 正文：实时 streaming（plain text）+ 回合完成时升级为 markdown
+ * - 不会看到 markdown 组件频繁 mount/unmount 引发整 viewport 重绘
  */
 function PendingStreamView(props: { syntaxStyle?: SyntaxStyle }) {
   const { pendingText, streamMode, streamingSegments } = useLoop()
-  const { textMuted } = useTheme()
+  const { text, textMuted } = useTheme()
 
-  // 已闭合的 thinking 段累积（折叠显示前 5 行，让用户看到"在思考"）
+  // 已闭合的 thinking 段：内容稳定 → 安全用 markdown 渲染（用户能看到思考结构）
   const thinkingText = createMemo(() => {
     return streamingSegments()
       .filter((s) => s.kind === 'thinking')
@@ -64,14 +56,12 @@ function PendingStreamView(props: { syntaxStyle?: SyntaxStyle }) {
       .join('\n\n')
   })
 
-  // 合并已闭合的 text 段 + 未闭合的 pending text，让用户看到的内容一直是一个 markdown 组件
-  // 这样不会有"非高亮 → 高亮"切换，也没有 markdown 组件频繁 mount 引发闪烁
-  const mergedText = createMemo(() => {
-    const closed = streamingSegments()
+  // 已闭合的 text 段：内容稳定 → 用 markdown 渲染
+  const closedText = createMemo(() => {
+    return streamingSegments()
       .filter((s) => s.kind === 'text')
       .map((s) => s.text)
       .join('')
-    return closed + pendingText()
   })
 
   return (
@@ -81,15 +71,24 @@ function PendingStreamView(props: { syntaxStyle?: SyntaxStyle }) {
           <Spinner>思考中</Spinner>
         </box>
       </Show>
-      {/* thinking 内容用灰色折叠框显示（fbc5161 历史设计），maxLines=5 避免长文占屏 */}
+      {/* thinking 内容：闭合段用 markdown 渲染（无 flicker） */}
       <Show when={thinkingText()}>
-        <box marginBottom={1} paddingLeft={1}>
-          <CollapsibleText content={thinkingText()} maxLines={5} fg={textMuted()} />
+        <box marginBottom={1} paddingLeft={1} border={["left"]} borderColor={textMuted()}>
+          <text fg={textMuted()}>{"💭 思考过程"}</text>
+          <StaticMarkdown content={thinkingText()} syntaxStyle={props.syntaxStyle} />
         </box>
       </Show>
-      <Show when={streamMode() !== 'in-thinking' && mergedText()}>
+      {/* 已闭合的 text 段：内容稳定 → markdown 渲染 */}
+      <Show when={streamMode() !== 'in-thinking' && closedText()}>
         <box marginBottom={1}>
-          <MarkdownText content={mergedText()} streaming={true} syntaxStyle={props.syntaxStyle} />
+          <StaticMarkdown content={closedText()} syntaxStyle={props.syntaxStyle} />
+        </box>
+      </Show>
+      {/* 未闭合的 pending text：内容每 60ms 变 → 纯文本渲染避免 flicker
+          回合完成时由 addMessage 把整段存入 message，<MessageItem> 会用 markdown 渲染 */}
+      <Show when={streamMode() !== 'in-thinking' && pendingText()}>
+        <box marginBottom={1} paddingLeft={1}>
+          <text fg={text()}>{pendingText()}</text>
         </box>
       </Show>
     </box>
@@ -130,9 +129,7 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
         <Show when={isLong}>
           <text fg={textMuted()}>{`  (共 ${lineCount} 行)`}</text>
         </Show>
-        {/* 完全照搬 mimocode：markdown 组件永远 streaming={true}
-            避免 streaming 切换到 false 触发 finalize 操作的整 viewport 重绘（闪烁） */}
-        <ThinkingView display={display} streaming={true} syntaxStyle={props.syntaxStyle} />
+        <ThinkingView display={display} streaming={false} syntaxStyle={props.syntaxStyle} msg={props.msg} />
       </box>
     )
   }
@@ -172,7 +169,7 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
     if (props.msg.compaction) {
       return (
         <box flexDirection="column" marginBottom={1}>
-          <MarkdownText content={props.msg.content} syntaxStyle={props.syntaxStyle} />
+          <StaticMarkdown msg={props.msg} syntaxStyle={props.syntaxStyle} />
         </box>
       )
     }
@@ -191,7 +188,7 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
 
 export function formatToolArgs(toolName: string, args: Record<string, unknown>): string {
   if (!args) return ""
-  
+
   if (toolName === "read" && args.path) return args.path as string
   if (toolName === "write" && args.path) return args.path as string
   if (toolName === "edit" && args.path) return args.path as string
@@ -232,8 +229,8 @@ export function MessageList() {
   const { messages, streamingSegments, pendingText, isProcessing, toolCallExpanded, toggleToolCallExpanded, streamMode } = useLoop()
   const { primary, warning, success, info, text, textMuted, background, border } = useTheme()
 
-  // 共享 syntaxStyle：所有 MarkdownText 实例共享同一个，避免每实例 createMemo 重建
-  // 见 docs/plans/archive/scroll-smooth-and-thinking-flash.md 方案 5
+  // 共享 syntaxStyle：所有 StaticMarkdown 实例共享同一个，避免每实例 createMemo 重建
+  // 配合 markdown-cache 的 token 缓存，进一步保证"历史 message 永不重新 parse"
   const sharedSyntaxStyle = createMemo(() => createMarkdownSyntaxStyle({
     primary: primary(), warning: warning(), success: success(),
     info: info(), text: text(), textMuted: textMuted(), border: border(),

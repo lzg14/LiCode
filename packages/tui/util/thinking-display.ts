@@ -4,8 +4,28 @@ export type ThinkingDisplay =
   | { kind: 'has-rest', thinking: string, rest: string }
   | { kind: 'no-thinking', rest: string }
 
-// 匹配 <thinking>...</thinking> 或 <think>...</think>
-const THINKING_REGEX = /<thinking>([\s\S]*?)<\/thinking>|<think>([\s\S]*?)<\/think>/g
+/**
+ * 匹配 <thinking>...</thinking> 或 <think>...</think>
+ *
+ * 必须包含完整的开标签 + 闭标签对：
+ * - <thinking>...</thinking>（10 + 11 字符）
+ * - <think>...</think>（7 + 8 字符，LLM 实际输出格式）
+ *
+ * 之前 bug 版本的 B 部分是 ([\\s\\S]*?)<\\/think>：
+ *   - 只有 闭标签，没有  开标签
+ *   - 对 LLM 实际输出 <think>...</think> 完全不匹配
+ *   - capture group 2 会"漂移"——把开标签也吃进 capture
+ *     （已验证：input="<think>X</think>" → c2="<think>X"）
+ *   - match 返回 null，整个 content 走 no-thinking 分支
+ *   - 渲染时显示原始 <think>...</think> 标签
+ *
+ * 修复：B 部分加上 <think> 开标签
+ *   正则：/<thinking>([\\s\\S]*?)<\\/thinking>|<think>([\\s\\S]*?)<\\/think>/g
+ *   c1 匹配 <thinking>...</thinking> 的内容
+ *   c2 匹配 <think>...</think> 的内容（不带标签本身）
+ */
+const THINKING_REGEX =
+  /<thinking>([\s\S]*?)<\/thinking>|<think>([\s\S]*?)<\/think>/g
 
 /**
  * 从 streaming 文本推导应显示什么
