@@ -1,5 +1,5 @@
 import type { TextareaRenderable } from "@opentui/core"
-import { createEffect, createSignal } from "solid-js"
+import { createEffect, createSignal, onCleanup } from "solid-js"
 import { readClipboardImage } from "../../../tools/builtin"
 import { useHistory } from "../../context/history"
 import { useLoop } from "../../context/loop"
@@ -56,6 +56,13 @@ export function Prompt(props: PromptProps) {
       input.setText(current + text)
       input.focus()
     }
+  })
+
+  // 组件卸载时清空模块级桥接变量，防止旧 input 引用泄漏
+  onCleanup(() => {
+    focusFn = null
+    setTextFn = null
+    prependTextFn = null
   })
 
   const handleSubmit = () => {

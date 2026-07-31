@@ -20,7 +20,7 @@ function stripSystemTags(content: string): string {
       return `\x00THINK${preserved.length - 1}\x00`
     })
 
-  // 剥离所有剩余 HTML/XML 标签（<tool_call>、<mimimax:tool_call> 等）
+  // 剥离所有剩余 HTML/XML 标签（<ä等、<mimimax:tool_call> 等）
   processed = processed.replace(/<[^>]*>/g, "")
 
   // 恢复 thinking 标签（用 \x00 当 placeholder sentinels；故意用控制字符）
@@ -204,7 +204,7 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
 
 export function formatToolArgs(toolName: string, args: Record<string, unknown>): string {
   if (!args) return ""
-  
+
   if (toolName === "read" && args.path) return args.path as string
   if (toolName === "write" && args.path) return args.path as string
   if (toolName === "edit" && args.path) return args.path as string
@@ -252,72 +252,63 @@ export function MessageList() {
     info: info(), text: text(), textMuted: textMuted(), border: border(),
   }))
 
-  // 预处理：识别 tool 批次并折叠显示
-  const processedMessages = createMemo(() => {
+  // tool-batch 信息：batchId → { count, toolNames, firstMsgId }
+  // 与 <For each={messages()}> 分离，避免 processedMessages 每次重建导致全量重渲染
+  // SolidJS <For> 用引用相等性做 keyed diff，直接用 messages() 可复用已有 Message 对象
+  const toolBatchInfo = createMemo(() => {
     const allMsgs = messages()
-    const result: Array<{ type: 'msg'; msg: Message } | { type: 'tool-batch'; batchId: number; count: number; tools: Message[] }> = []
-
-    let i = 0
-    while (i < allMsgs.length) {
-      const msg = allMsgs[i]
-      if (msg.queued) {
-        i++
-        continue
-      }
-
-      // 检测 tool 批次
-      if (msg.role === 'tool') {
-        const batchId = msg.toolBatch ?? 0
-        const batchTools: Message[] = [msg]
-
-        // 收集同一批次的所有 tool 消息
-        let j = i + 1
-        while (j < allMsgs.length && allMsgs[j].role === 'tool' && (allMsgs[j].toolBatch ?? 0) === batchId) {
-          batchTools.push(allMsgs[j])
-          j++
-        }
-
-        // 如果批次有多个 tool，折叠显示
-        if (batchTools.length > 1 && batchId > 0) {
-          result.push({ type: 'tool-batch', batchId, count: batchTools.length, tools: batchTools })
-        } else {
-          // 单个 tool 或批次 ID 为 0，正常显示
-          result.push({ type: 'msg', msg })
-        }
-        i = j
+    const map = new Map<number, { count: number; toolNames: string[]; firstMsgId: string }>()
+    for (const msg of allMsgs) {
+      if (msg.role !== 'tool' || !msg.toolBatch || msg.toolBatch <= 0) continue
+      const batchId = msg.toolBatch
+      const existing = map.get(batchId)
+      if (existing) {
+        existing.count++
+        if (msg.toolName) existing.toolNames.push(msg.toolName)
       } else {
-        result.push({ type: 'msg', msg })
-        i++
+        map.set(batchId, { count: 1, toolNames: msg.toolName ? [msg.toolName] : [], firstMsgId: msg.id })
       }
     }
-    return result
+    return map
   })
 
   return (
     <box flexDirection="column" paddingX={1}>
-      <For each={processedMessages()}>
-        {(item) => {
-          if (item.type === 'tool-batch') {
-            const isExpanded = toolCallExpanded()
-            return (
-              <box flexDirection="column" marginBottom={0}>
-                <box flexDirection="row">
-                  <text fg={textMuted()}>
-                    {isExpanded ? '▾' : '▸'} {item.count} 个工具调用
-                  </text>
-                  <text fg={textMuted()}>
-                    {item.tools.map(t => t.toolName).filter(Boolean).join(', ')}
-                  </text>
+      <For each={messages()}>
+        {(msg) => {
+          // queued 消息由 QueueMessages 单独渲染
+          if (msg.queued) return null
+
+          // tool-batch 折叠：只有批次中第一条消息渲染批次头
+          if (msg.role === 'tool' && msg.toolBatch && msg.toolBatch > 0) {
+            const batch = toolBatchInfo().get(msg.toolBatch)
+            if (batch && batch.count > 1 && batch.firstMsgId === msg.id) {
+              const isExpanded = toolCallExpanded()
+              return (
+                <box flexDirection="column" marginBottom={0}>
+                  <box flexDirection="row">
+                    <text fg={textMuted()}>
+                      {isExpanded ? '▾' : '▸'} {batch.count} 个工具调用
+                    </text>
+                    <text fg={textMuted()}>
+                      {batch.toolNames.filter(Boolean).join(', ')}
+                    </text>
+                  </box>
+                  <Show when={isExpanded}>
+                    <MessageItem msg={msg} syntaxStyle={sharedSyntaxStyle()} />
+                  </Show>
                 </box>
-                <Show when={isExpanded}>
-                  <For each={item.tools}>
-                    {(tool) => <MessageItem msg={tool} syntaxStyle={sharedSyntaxStyle()} />}
-                  </For>
-                </Show>
-              </box>
-            )
+              )
+            }
+            // 批次中非第一条消息，且未展开时跳过
+            if (batch && batch.count > 1 && batch.firstMsgId !== msg.id && !toolCallExpanded()) {
+              return null
+            }
+            // 单个 tool 或展开中的后续消息，正常渲染
+            return <MessageItem msg={msg} syntaxStyle={sharedSyntaxStyle()} />
           }
-          return <MessageItem msg={item.msg} syntaxStyle={sharedSyntaxStyle()} />
+
+          return <MessageItem msg={msg} syntaxStyle={sharedSyntaxStyle()} />
         }}
       </For>
 
@@ -338,18 +329,4 @@ export function MessageList() {
       <box height={2} />
     </box>
   )
-}
-
-/** 从 idx 开始往前找连续 tool 消息的起始位置 */
-function _findToolBatchStart(msgs: Message[], idx: number): number {
-  let start = idx
-  while (start > 0 && msgs[start - 1].role === "tool") start--
-  return start
-}
-
-/** 从 idx 开始往后找连续 tool 消息的结束位置 */
-function _findToolBatchEnd(msgs: Message[], idx: number): number {
-  let end = idx
-  while (end < msgs.length - 1 && msgs[end + 1].role === "tool") end++
-  return end
 }

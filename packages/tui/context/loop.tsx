@@ -1,4 +1,4 @@
-import { type Accessor, batch, createContext, createMemo, createSignal, type JSX, onMount, useContext } from "solid-js"
+import { type Accessor, batch, createContext, createMemo, createSignal, type JSX, onCleanup, onMount, useContext } from "solid-js"
 import { devLogger } from "../../core/dev-logger"
 import type { CoreLoop } from "../../core/loop"
 import { Scheduler } from "../../core/scheduler"
@@ -161,6 +161,32 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       process.on('SIGINT', handler as any)
     }
   })
+  // 组件卸载时清理所有资源，防止内存泄漏
+  onCleanup(() => {
+    // 恢复原始 SIGINT 处理器
+    process.removeAllListeners('SIGINT')
+    for (const handler of originalSigint) {
+      process.on('SIGINT', handler as any)
+    }
+    // 清理所有状态
+    toolStartTimes.clear()
+    setSubagentStatuses([])
+    inputQueue.length = 0
+    streamAccumulator.reset()
+    if (_pendingFlushTimer) {
+      clearTimeout(_pendingFlushTimer)
+      _pendingFlushTimer = null
+    }
+    if (_segmentFlushTimer) {
+      clearTimeout(_segmentFlushTimer)
+      _segmentFlushTimer = null
+    }
+    abortController?.abort()
+    abortController = null
+    // 停止 /loop 定时器
+    scheduler.deleteAll()
+  })
+
   let activeModel: any = props.model
   // 工具调用轮次上限确认机制
   let confirmResolve: ((value: boolean) => void) | null = null
@@ -412,6 +438,21 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     _pendingFlushTimer = setTimeout(_flushPendingText, PENDING_FLUSH_MS)
   }
 
+  // 流式 closed segments 防抖，与 pendingText 相同策略
+  let _segmentFlushTimer: ReturnType<typeof setTimeout> | null = null
+  let _latestClosedSegments: Segment[] = []
+  const _flushSegments = () => {
+    _segmentFlushTimer = null
+    if (_latestClosedSegments.length > 0) {
+      setStreamingSegments(prev => [...prev, ..._latestClosedSegments])
+      _latestClosedSegments = []
+    }
+  }
+  const _scheduleSegmentFlush = () => {
+    if (_segmentFlushTimer) return
+    _segmentFlushTimer = setTimeout(_flushSegments, PENDING_FLUSH_MS)
+  }
+
   const run = async (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }> }): Promise<void> => {
     // 如果正在等待用户确认是否继续 tool call 迭代
     if (confirmResolve) {
@@ -503,21 +544,33 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         },
         onStreamText: (delta: string) => {
           const { closed, pending, mode } = streamAccumulator.push(delta)
-          batch(() => {
-            setStreamMode(mode)
-            if (closed.length > 0) {
-              setStreamingSegments(prev => [...prev, ...closed])
-            }
-          })
+          setStreamMode(mode)
+          if (closed.length > 0) {
+            _latestClosedSegments.push(...closed)
+            _scheduleSegmentFlush()
+          }
           _latestPending = pending
           _schedulePendingFlush()
         },
         onIntermediateText: (text: string) => {
-          // 中间轮一次性把当前段收尾，然后整个块作为新消息
-          streamAccumulator.reset()
-          setStreamingSegments([])
-          setPendingText("")
-          addMessage({ role: "assistant", content: text })
+          // 中间轮：batch 包裹清空 + 添加，避免"清空→重建"闪烁
+          batch(() => {
+            // 先 flush 所有 pending 内容
+            if (_pendingFlushTimer) {
+              clearTimeout(_pendingFlushTimer)
+              _pendingFlushTimer = null
+            }
+            if (_segmentFlushTimer) {
+              clearTimeout(_segmentFlushTimer)
+              _segmentFlushTimer = null
+            }
+            _latestClosedSegments = []
+            streamAccumulator.reset()
+            setStreamingSegments([])
+            setPendingText("")
+            // 添加完整消息
+            addMessage({ role: "assistant", content: text })
+          })
         },
         onToolCall: (toolName: string, args: Record<string, unknown>, batch: number) => {
           toolCallIdCounter++
@@ -531,6 +584,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             if (last?.role === "tool") {
               const start = toolStartTimes.get(last.id) ?? 0
               const duration = start > 0 ? Date.now() - start : 0
+              toolStartTimes.delete(last.id)  // 用后即删，防止 Map 无限增长
               const diff = result?.diff
               return [...prev.slice(0, -1), { ...last, toolStatus: "completed", duration, diff }]
             }
@@ -594,11 +648,16 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           clearTimeout(_pendingFlushTimer)
           _pendingFlushTimer = null
         }
+        if (_segmentFlushTimer) {
+          clearTimeout(_segmentFlushTimer)
+          _segmentFlushTimer = null
+        }
         _latestPending = ''
+        _latestClosedSegments = []
         streamAccumulator.reset()
         setStreamingSegments([])
         setPendingText("")
-        
+
         addMessage({
           role: "assistant",
           content: result.text,
@@ -620,7 +679,14 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         clearTimeout(_pendingFlushTimer)
         _pendingFlushTimer = null
       }
+      if (_segmentFlushTimer) {
+        clearTimeout(_segmentFlushTimer)
+        _segmentFlushTimer = null
+      }
+      _latestClosedSegments = []
       setPendingText(_latestPending)
+      // 回合结束清理 subagent 状态，防止数组无限增长
+      setSubagentStatuses([])
 
       // 处理队列中下一个输入
       if (inputQueue.length > 0) {
