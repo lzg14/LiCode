@@ -9,7 +9,6 @@ import { createModel } from "../llm/provider"
 import type { LLMProvider } from "../llm/types"
 import { createSecurityLayer, setSecurityLayer } from "../security"
 import { registerBuiltinTools } from "../tools/builtin"
-import { focusInput } from "./component/prompt"
 import { doCopy } from "./util/selection"
 
 /** 保存终端尺寸，用于 Ctrl+L 刷新 */
@@ -65,7 +64,7 @@ async function loadConfig() {
 
 function App() {
   const route = useRoute()
-  const _loop = useLoop()
+  const { focusInput } = useLoop()
   const renderer = useRenderer()
   const toast = useToast()
 

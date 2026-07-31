@@ -1,4 +1,4 @@
-import type { SyntaxStyle } from "@opentui/core"
+﻿import type { SyntaxStyle } from "@opentui/core"
 import { createMemo, createSignal, For, onMount, Show } from "solid-js"
 import type { Message } from "../context/loop"
 import { useLoop } from "../context/loop"
@@ -20,7 +20,7 @@ function stripSystemTags(content: string): string {
       return `\x00THINK${preserved.length - 1}\x00`
     })
 
-  // 剥离所有剩余 HTML/XML 标签（<ä等、<mimimax:tool_call> 等）
+  // 剥离所有剩余 HTML/XML 标签（<tool_call>等、<mimimax:tool_call> 等）
   processed = processed.replace(/<[^>]*>/g, "")
 
   // 恢复 thinking 标签（用 \x00 当 placeholder sentinels；故意用控制字符）
@@ -272,39 +272,65 @@ export function MessageList() {
     return map
   })
 
+  // 展开的批次内容：batchId → { messages: Message[], names: string }
+  // 仅在展开时计算，用于在 <For> 外渲染完整批次
+  const expandedBatches = createMemo(() => {
+    if (!toolCallExpanded()) return new Map()
+    const allMsgs = messages()
+    const info = toolBatchInfo()
+    const result = new Map<number, { msgs: Message[]; names: string }>()
+    for (const [batchId, batch] of info) {
+      if (batch.count <= 1) continue
+      const batchMsgs = allMsgs.filter(m => m.toolBatch === batchId)
+      result.set(batchId, {
+        msgs: batchMsgs,
+        names: batch.toolNames.filter(Boolean).join(', '),
+      })
+    }
+    return result
+  })
+
+  // 收集已展开批次的 ID，用于在 <For> 中跳过这些消息
+  const expandedBatchIds = createMemo(() => {
+    const ids = new Set<number>()
+    for (const [batchId] of expandedBatches()) {
+      ids.add(batchId)
+    }
+    return ids
+  })
+
   return (
     <box flexDirection="column" paddingX={1}>
+      {/* 展开的批次：在 <For> 外渲染，确保所有消息都显示 */}
+      <For each={Array.from(expandedBatches().entries())}>
+        {([batchId, batch]) => (
+          <box flexDirection="column" marginBottom={0}>
+            <box flexDirection="row">
+              <text fg={textMuted()}>
+                ▾ {batch.msgs.length} 个工具调用
+              </text>
+              <text fg={textMuted()}>
+                {batch.names}
+              </text>
+            </box>
+            <For each={batch.msgs}>
+              {(msg) => <MessageItem msg={msg} syntaxStyle={sharedSyntaxStyle()} />}
+            </For>
+          </box>
+        )}
+      </For>
+
       <For each={messages()}>
         {(msg) => {
           // queued 消息由 QueueMessages 单独渲染
           if (msg.queued) return null
 
-          // tool-batch 折叠：只有批次中第一条消息渲染批次头
+          // 跳过已展开批次中的所有消息（已在上面渲染）
           if (msg.role === 'tool' && msg.toolBatch && msg.toolBatch > 0) {
-            const batch = toolBatchInfo().get(msg.toolBatch)
-            if (batch && batch.count > 1 && batch.firstMsgId === msg.id) {
-              const isExpanded = toolCallExpanded()
-              return (
-                <box flexDirection="column" marginBottom={0}>
-                  <box flexDirection="row">
-                    <text fg={textMuted()}>
-                      {isExpanded ? '▾' : '▸'} {batch.count} 个工具调用
-                    </text>
-                    <text fg={textMuted()}>
-                      {batch.toolNames.filter(Boolean).join(', ')}
-                    </text>
-                  </box>
-                  <Show when={isExpanded}>
-                    <MessageItem msg={msg} syntaxStyle={sharedSyntaxStyle()} />
-                  </Show>
-                </box>
-              )
-            }
-            // 批次中非第一条消息，且未展开时跳过
-            if (batch && batch.count > 1 && batch.firstMsgId !== msg.id && !toolCallExpanded()) {
+            if (expandedBatchIds().has(msg.toolBatch)) {
               return null
             }
-            // 单个 tool 或展开中的后续消息，正常渲染
+            // 未展开的单个 tool，正常渲染
             return <MessageItem msg={msg} syntaxStyle={sharedSyntaxStyle()} />
           }
 

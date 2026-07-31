@@ -17,14 +17,10 @@ export interface PromptProps {
   onSlashSubmit?: (cmd: string) => void
 }
 
-let focusFn: (() => void) | null = null
-let setTextFn: ((text: string) => void) | null = null
-let prependTextFn: ((text: string) => void) | null = null
-
 export function Prompt(props: PromptProps) {
   const { primary, text, textMuted, backgroundElement, borderActive } = useTheme()
   const history = useHistory()
-  const { toggleToolCallExpanded, abort, pendingCount, addMessage } = useLoop()
+  const { toggleToolCallExpanded, abort, pendingCount, addMessage, registerInputFns, unregisterInputFns } = useLoop()
   let input: TextareaRenderable
   const [pendingImages, setPendingImages] = createSignal<Array<{ base64: string; mimeType: string }>>([])
 
@@ -34,35 +30,29 @@ export function Prompt(props: PromptProps) {
   })
 
   createEffect(() => {
-    focusFn = () => {
-      if (!input || input.isDestroyed) return
-      input.focus()
-    }
+    registerInputFns({
+      focus: () => {
+        if (!input || input.isDestroyed) return
+        input.focus()
+      },
+      setText: (text: string) => {
+        if (!input || input.isDestroyed) return
+        input.setText(text)
+        input.cursorOffset = text.length
+        input.focus()
+      },
+      prependText: (text: string) => {
+        if (!input || input.isDestroyed) return
+        const current = input.plainText
+        input.setText(current + text)
+        input.focus()
+      },
+    })
   })
 
-  createEffect(() => {
-    setTextFn = (text: string) => {
-      if (!input || input.isDestroyed) return
-      input.setText(text)
-      input.cursorOffset = text.length
-      input.focus()
-    }
-  })
-
-  createEffect(() => {
-    prependTextFn = (text: string) => {
-      if (!input || input.isDestroyed) return
-      const current = input.plainText
-      input.setText(current + text)
-      input.focus()
-    }
-  })
-
-  // 组件卸载时清空模块级桥接变量，防止旧 input 引用泄漏
+  // 组件卸载时清空输入框操作函数，防止旧 input 引用泄漏
   onCleanup(() => {
-    focusFn = null
-    setTextFn = null
-    prependTextFn = null
+    unregisterInputFns()
   })
 
   const handleSubmit = () => {
@@ -455,16 +445,4 @@ export function Prompt(props: PromptProps) {
       </box>
     </box>
   )
-}
-
-export function focusInput() {
-  focusFn?.()
-}
-
-export function setPromptText(text: string) {
-  setTextFn?.(text)
-}
-
-export function prependPromptText(text: string) {
-  prependTextFn?.(text)
 }

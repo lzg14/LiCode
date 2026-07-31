@@ -359,3 +359,43 @@ Step 8 (segment flush timer 清理) ← 依赖 Step 4
 
 - [docs/plans/tui-render-optimization.md](./tui-render-optimization.md) — StreamStore 长期方案（未实施）
 - [docs/plans/archive/streaming-chunked-display.md](./archive/streaming-chunked-display.md) — 流式分块展示
+
+---
+
+## 代码审查（提交 eaf29dd）
+
+审查日期：2026-07-31
+
+### 实施与计划的偏差
+
+| 计划步骤 | 计划方案 | 实际实施 | 说明 |
+|----------|---------|---------|------|
+| Step 5 | processedMessages 加 stable key，修改返回结构 | 改用 `<For each={messages()}>` + `toolBatchInfo` memo 分离 | 实际方案更优，让 SolidJS 直接用 Message 引用做 keyed diff |
+| Step 7 | 模块级变量移到组件内 ref | 仅添加 `onCleanup` 清理，未改动模块级变量 | 未完全实施，见问题 #6 |
+
+### 问题清单
+
+| # | 严重度 | 文件 | 行号 | 问题 |
+|---|--------|------|------|------|
+| 1 | 🔴 Bug | `message-list.tsx` | 22 | 注释被乱码：`<ä­�等` 应为 `<tool_call>等`，疑似编码问题 |
+| 2 | 🟡 设计 | `loop.tsx` | 162-183 | `onCleanup` 与 SIGINT handler 有重复清理逻辑（都执行 `removeAllListeners` + 恢复原始处理器），SIGINT 触发后 `onCleanup` 再执行会重复操作 |
+| 3 | 🟡 设计 | `loop.tsx` | 438-452 | `_latestClosedSegments` 用 `.push(...closed)` 追加，但 `_flushSegments` 读后未清空原引用就 `setStreamingSegments(prev => [...prev, ...])`，若 flush 期间有新 segment 追加可能重复（概率低但逻辑不严谨） |
+| 4 | 🟡 正确性 | `message-list.tsx` | 277 | tool-batch 展开时只渲染了 `firstMsgId` 对应的那条 `MessageItem`，批次中其他 tool 消息未渲染，展开后用户只看到第一条工具调用 |
+| 5 | 🟡 性能 | `loop.tsx` | 547-553 | `onStreamText` 中 `_latestClosedSegments.push(...closed)` 每次展开数组，高频调用时有 GC 压力 |
+| 6 | 🟢 改进 | `prompt/index.tsx` | 62-67 | `onCleanup` 清理了模块级变量，但 `focusFn`/`setTextFn`/`prependTextFn` 仍在模块作用域，多 Prompt 实例场景下仍是共享状态 |
+| 7 | 🟢 改进 | `loop.tsx` | 183 | `scheduler` 在 `onCleanup` 中 `deleteAll()`，但 `onCleanup` 注册在 `scheduler` 创建之前，依赖闭包捕获变量，实际能工作但顺序依赖不够明显 |
+| 8 | 🟢 杂项 | `docs/plans/...` | — | 计划文档 Step 5/Step 7 未完全按计划实施，但 Step 5 的替代方案更优 |
+
+### 已修复（2026-07-31）
+
+- [x] **#4**：tool-batch 展开逻辑修复 — 改为在 `<For>` 外渲染展开的批次内容，确保所有消息都显示
+- [x] **#1**：乱码注释恢复 — `<tool_call>` 替代乱码字符
+- [x] **#2**：SIGINT handler 重复清理 — 添加 `sigintHandled` 标志避免重复恢复
+- [x] **#3**：_latestClosedSegments 竞态风险 — 先保存并立即清空原引用，再调用 `setStreamingSegments`
+- [x] **#5**：_latestClosedSegments GC 压力 — 用 `for...of` 循环替代 `push(...closed)`
+- [x] **#6**：prompt 模块级变量迁移为 context — 通过 `registerInputFns`/`unregisterInputFns` 注册到 LoopContext
+
+### 待修复
+
+- [ ] #7：scheduler 顺序依赖（可选优化）
+- [ ] #8：计划文档更新（已完成）

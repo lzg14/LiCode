@@ -106,6 +106,16 @@ export interface LoopContext {
   subagentStatuses: Accessor<Array<{ id: string; task: string; status: 'running' | 'done' | 'error'; startTime: number; endTime?: number }>>
   subagentOpen: Accessor<boolean>
   setSubagentOpen: (v: boolean | ((prev: boolean) => boolean)) => void
+  /** 聚焦输入框 */
+  focusInput: () => void
+  /** 设置输入框文本 */
+  setPromptText: (text: string) => void
+  /** 在输入框文本前插入内容 */
+  prependPromptText: (text: string) => void
+  /** 注册输入框操作函数（Prompt 组件调用） */
+  registerInputFns: (fns: { focus: () => void; setText: (text: string) => void; prependText: (text: string) => void }) => void
+  /** 清除输入框操作函数（Prompt 组件卸载时调用） */
+  unregisterInputFns: () => void
 }
 
 const Ctx = createContext<LoopContext>()
@@ -144,6 +154,33 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   let toolCallIdCounter = 0
   const toolStartTimes = new Map<string, number>()
   let abortController: AbortController | null = null
+
+  // 输入框操作函数（由 Prompt 组件通过 createEffect 设置）
+  let _focusInputFn: (() => void) | null = null
+  let _setPromptTextFn: ((text: string) => void) | null = null
+  let _prependPromptTextFn: ((text: string) => void) | null = null
+
+  /** 注册输入框操作函数（Prompt 组件调用） */
+  const registerInputFns = (fns: { focus: () => void; setText: (text: string) => void; prependText: (text: string) => void }) => {
+    _focusInputFn = fns.focus
+    _setPromptTextFn = fns.setText
+    _prependPromptTextFn = fns.prependText
+  }
+
+  /** 清除输入框操作函数（Prompt 组件卸载时调用） */
+  const unregisterInputFns = () => {
+    _focusInputFn = null
+    _setPromptTextFn = null
+    _prependPromptTextFn = null
+  }
+
+  /** 聚焦输入框 */
+  const focusInput = () => _focusInputFn?.()
+  /** 设置输入框文本 */
+  const setPromptText = (text: string) => _setPromptTextFn?.(text)
+  /** 在输入框文本前插入内容 */
+  const prependPromptText = (text: string) => _prependPromptTextFn?.(text)
+
   const abort = () => {
     abortController?.abort()
     // 清空队列
@@ -153,8 +190,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   // 进程级 Ctrl+C 处理：LLM 卡死时 TUI 事件循环被阻塞，useKeyboard 收不到 ESC
   // SIGINT 不经过 TUI 事件循环，直接 abort 当前操作
   const originalSigint = process.listeners('SIGINT').slice()
+  let sigintHandled = false
   process.removeAllListeners('SIGINT')
   process.on('SIGINT', () => {
+    sigintHandled = true
     abort()
     // 恢复原始处理器
     for (const handler of originalSigint) {
@@ -163,10 +202,12 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   })
   // 组件卸载时清理所有资源，防止内存泄漏
   onCleanup(() => {
-    // 恢复原始 SIGINT 处理器
-    process.removeAllListeners('SIGINT')
-    for (const handler of originalSigint) {
-      process.on('SIGINT', handler as any)
+    // 恢复原始 SIGINT 处理器（仅当 SIGINT 未触发过）
+    if (!sigintHandled) {
+      process.removeAllListeners('SIGINT')
+      for (const handler of originalSigint) {
+        process.on('SIGINT', handler as any)
+      }
     }
     // 清理所有状态
     toolStartTimes.clear()
@@ -444,8 +485,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const _flushSegments = () => {
     _segmentFlushTimer = null
     if (_latestClosedSegments.length > 0) {
-      setStreamingSegments(prev => [...prev, ..._latestClosedSegments])
+      // 先保存当前 segments 并立即清空原引用，避免竞态条件下重复添加
+      const segmentsToFlush = _latestClosedSegments
       _latestClosedSegments = []
+      setStreamingSegments(prev => [...prev, ...segmentsToFlush])
     }
   }
   const _scheduleSegmentFlush = () => {
@@ -546,7 +589,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           const { closed, pending, mode } = streamAccumulator.push(delta)
           setStreamMode(mode)
           if (closed.length > 0) {
-            _latestClosedSegments.push(...closed)
+            // 逐个添加避免展开数组，减少 GC 压力
+            for (const seg of closed) {
+              _latestClosedSegments.push(seg)
+            }
             _scheduleSegmentFlush()
           }
           _latestPending = pending
@@ -836,6 +882,11 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     subagentStatuses,
     subagentOpen,
     setSubagentOpen,
+    focusInput,
+    setPromptText,
+    prependPromptText,
+    registerInputFns,
+    unregisterInputFns,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }

@@ -4,7 +4,7 @@ import { loadAllSkills } from "../../skills/loader"
 import { HelpPanel } from "../component/help-panel"
 import { Logo } from "../component/logo"
 import { MessageList, QueueMessages } from "../component/message-list"
-import { Prompt, setPromptText } from "../component/prompt"
+import { Prompt } from "../component/prompt"
 import { SlashMenu, fuzzyMatch } from "../component/slash-menu"
 import { Sidebar } from "../component/sidebar"
 import { StatusBar } from "../component/status-bar"
@@ -22,7 +22,7 @@ const BUILTIN_COMMANDS = [
 ]
 
 export function Home() {
-  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort, subagentStatuses, subagentOpen, setSubagentOpen } = useLoop()
+  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort, subagentStatuses, subagentOpen, setSubagentOpen, setPromptText } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)

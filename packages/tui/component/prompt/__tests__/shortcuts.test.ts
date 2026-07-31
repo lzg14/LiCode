@@ -22,18 +22,6 @@ describe('Prompt shortcuts', () => {
     expect(typeof mod.Prompt).toBe('function')
   })
 
-  it('exports focusInput', async () => {
-    const mod = await import('../index')
-    expect(typeof mod.focusInput).toBe('function')
-  })
-
-  it('exports setPromptText', async () => {
-    const mod = await import('../index')
-    expect(typeof mod.setPromptText).toBe('function')
-  })
-
-  it('exports prependPromptText', async () => {
-    const mod = await import('../index')
-    expect(typeof mod.prependPromptText).toBe('function')
-  })
+  // focusInput/setPromptText/prependPromptText 已迁移到 LoopContext
+  // 不再从 prompt/index.tsx 导出
 })
