@@ -1,4 +1,4 @@
-﻿import type { SyntaxStyle } from "@opentui/core"
+import type { SyntaxStyle } from "@opentui/core"
 import { createMemo, createSignal, For, onMount, Show } from "solid-js"
 import type { Message } from "../context/loop"
 import { useLoop } from "../context/loop"
@@ -20,7 +20,7 @@ function stripSystemTags(content: string): string {
       return `\x00THINK${preserved.length - 1}\x00`
     })
 
-  // 剥离所有剩余 HTML/XML 标签（<tool_call>等、<mimimax:tool_call> 等）
+  // 剥离所有剩余 HTML/XML 标签（<tool_call>、<mimimax:tool_call> 等）
   processed = processed.replace(/<[^>]*>/g, "")
 
   // 恢复 thinking 标签（用 \x00 当 placeholder sentinels；故意用控制字符）
