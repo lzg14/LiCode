@@ -312,7 +312,7 @@ export class CoreLoop {
     const contextWindow = getModelConfig(this.config.llm.model)?.contextWindow
     if (this.sessionCompactor.shouldCompact(history, ctx.sessionId, contextWindow)) {
       devLogger.debug('COMPACT', `History ${history.length} messages, triggering compaction`)
-      const hasExisting = this.sessionCompactor.hasSummary(ctx.sessionId)
+      const hasExisting = await this.sessionCompactor.hasSummary(ctx.sessionId)
       const trimAfter = () => {
         // 压缩后从 SQLite 删除旧消息，只保留近 preserveRecent 条
         // 防止下次加载时又看到 1000 条触发循环压缩
@@ -325,7 +325,7 @@ export class CoreLoop {
         trimAfter()
         ctx.onCompaction?.(result.summary, result.originalCount, result.preservedCount)
       } else {
-        ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
+        ctx.sessionSummary = await this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
         this.sessionCompactor.compact(history, ctx.sessionId, this.llm).then((result) => {
           trimAfter()
           ctx.onCompaction?.(result.summary, result.originalCount, result.preservedCount)
@@ -338,8 +338,8 @@ export class CoreLoop {
         })
       }
     } else {
-      if (!ctx.sessionSummary && this.sessionCompactor.hasSummary(ctx.sessionId)) {
-        ctx.sessionSummary = this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
+      if (!ctx.sessionSummary && await this.sessionCompactor.hasSummary(ctx.sessionId)) {
+        ctx.sessionSummary = await this.sessionCompactor.loadLatestSummary(ctx.sessionId) ?? undefined
       }
     }
 

@@ -17,10 +17,8 @@
 ### Changed
 - **代码质量提升**（`code-quality-improvement-plan`）：清理死代码（KeybindProvider/DialogProvider/_MAX_VISIBLE_TOOLS/copy 别名/_latestVersion/_duration/calculateCost）、修复 Spinner 动画、修复 ToastProvider 内存泄漏、修复 MessageItem 响应式缺陷、修复核心包 any 类型、修复错误吞没
 - **基础设施补全**：`.gitignore` 添加 `test_api.js`；`package.json` 添加 `clean` 脚本；`helpers.ts` 末尾换行修复
-
-### Planned
-- **工具测试补充**（`tool-tests-plan`）：为 read/write/edit/bash/grep 5 个高频工具补充独立测试文件，含安全拦截场景
-- **同步 I/O 改异步**（`async-io-plan`）：`session-compactor.ts`/`memory.ts`/`loader.ts` 共 33 处同步 I/O 改为 `node:fs/promises`
+- **工具测试补充**（`tool-tests-plan`）：为 read/write/edit/bash/grep 5 个高频工具补充独立测试文件（共 27 个测试），含安全拦截场景验证
+- **同步 I/O 改异步**（`async-io-plan`）：`session-compactor.ts`/`memory.ts`/`loader.ts` 共 33 处同步 I/O 改为 `node:fs/promises`，提取共享 `exists` helper 到 `packages/core/utils/fs.ts`
 
 ## [0.4.1] - 2026-07-05
 

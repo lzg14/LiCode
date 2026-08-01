@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { devLogger } from '../core/dev-logger'
+import { exists } from '../core/utils/fs'
 import { globalSkillRegistry } from './registry'
 import type { Skill } from './types'
 
@@ -38,19 +39,19 @@ export class SkillLoader {
    * 从目录加载所有技能（支持 Claude Code {name}/SKILL.md 格式）
    */
   async loadFromDir(dir: string): Promise<number> {
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
+    if (!(await exists(dir))) {
+      await mkdir(dir, { recursive: true })
       return 0
     }
 
     let count = 0
     
     // Claude Code 格式：{dir}/{name}/SKILL.md
-    const entries = readdirSync(dir, { withFileTypes: true })
+    const entries = await readdir(dir, { withFileTypes: true })
     for (const entry of entries) {
       if (entry.isDirectory()) {
         const skillFile = join(dir, entry.name, 'SKILL.md')
-        if (existsSync(skillFile)) {
+        if (await exists(skillFile)) {
           if (await this.loadClaudeSkill(skillFile, entry.name)) {
             count++
           }
@@ -59,7 +60,7 @@ export class SkillLoader {
     }
 
     // 旧格式：.skill.json / .skill.md 文件
-    const files = readdirSync(dir).filter(f => f.endsWith('.skill.json') || f.endsWith('.skill.md'))
+    const files = (await readdir(dir)).filter(f => f.endsWith('.skill.json') || f.endsWith('.skill.md'))
     for (const file of files) {
       const skillPath = join(dir, file)
       if (await this.loadSkill(skillPath)) {
@@ -75,10 +76,10 @@ export class SkillLoader {
    */
   private async loadClaudeSkill(skillPath: string, dirName: string): Promise<boolean> {
     try {
-      if (!existsSync(skillPath)) return false
+      if (!(await exists(skillPath))) return false
       if (this.loadedSkills.has(skillPath)) return true
 
-      const content = readFileSync(skillPath, 'utf-8')
+      const content = await readFile(skillPath, 'utf-8')
       const { meta, body } = parseFrontmatter(content)
       
       const skill: Skill = {
@@ -103,10 +104,10 @@ export class SkillLoader {
    */
   async loadSkill(skillPath: string): Promise<boolean> {
     try {
-      if (!existsSync(skillPath)) return false
+      if (!(await exists(skillPath))) return false
       if (this.loadedSkills.has(skillPath)) return true
 
-      const content = readFileSync(skillPath, 'utf-8')
+      const content = await readFile(skillPath, 'utf-8')
       let skill: Skill
 
       if (skillPath.endsWith('.json')) {
@@ -166,12 +167,12 @@ export class SkillLoader {
    */
   async saveSkill(skill: Skill, dir?: string): Promise<string> {
     const saveDir = dir || join(SKILLS_BASE, 'custom')
-    mkdirSync(saveDir, { recursive: true })
+    await mkdir(saveDir, { recursive: true })
 
     const filename = `${skill.name.replace(/\s+/g, '-').toLowerCase()}.skill.json`
     const filepath = join(saveDir, filename)
 
-    writeFileSync(filepath, JSON.stringify(skill, null, 2))
+    await writeFile(filepath, JSON.stringify(skill, null, 2))
     globalSkillRegistry.register(skill)
 
     return filepath
@@ -206,7 +207,7 @@ export async function loadAllSkills(cwd?: string): Promise<Skill[]> {
     let dir = cwd
     while (dir !== dirname(dir)) {
       const claudeSkills = join(dir, '.claude', 'skills')
-      if (existsSync(claudeSkills)) {
+      if (await exists(claudeSkills)) {
         projectDirs.push(claudeSkills)
         break
       }

@@ -575,7 +575,7 @@ describe('Memory', () => {
     await mkdir(memDir, { recursive: true })
     await writeFile(memFile, '# Project memory\n\nRules: Always use TypeScript\n')
 
-    const results = searchMemory({
+    const results = await searchMemory({
       query: 'TypeScript',
       dataDir: TEST_DATA_DIR,
       projectID: 'memory-test',
@@ -585,16 +585,16 @@ describe('Memory', () => {
     expect(results[0].path).toContain('MEMORY.md')
   })
 
-  it('should return empty for no matches', () => {
-    const results = searchMemory({
+  it('should return empty for no matches', async () => {
+    const results = await searchMemory({
       query: 'zzzznotfound',
       dataDir: TEST_DATA_DIR,
     })
     expect(results.length).toBe(0)
   })
 
-  it('should get recent memory entries', () => {
-    const entries = getRecentMemoryEntries(TEST_DATA_DIR)
+  it('should get recent memory entries', async () => {
+    const entries = await getRecentMemoryEntries(TEST_DATA_DIR)
     expect(Array.isArray(entries)).toBe(true)
   })
 })

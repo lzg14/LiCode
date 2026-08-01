@@ -1,6 +1,7 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { devLogger } from './dev-logger'
+import { exists } from './utils/fs'
 
 /**
  * Session 历史压缩器
@@ -176,7 +177,7 @@ export class SessionCompactor {
     const summary = this.buildSummaryDocument(summaryBody, total, preserved.length)
 
     // 4. 保存
-    const summaryPath = this.saveSummary(sessionId, summary)
+    const summaryPath = await this.saveSummary(sessionId, summary)
 
     return {
       summary: summaryBody,
@@ -190,15 +191,15 @@ export class SessionCompactor {
   /**
    * 加载最新的摘要内容（用于注入 LLM 上下文）
    */
-  loadLatestSummary(sessionId: string): string | null {
+  async loadLatestSummary(sessionId: string): Promise<string | null> {
     const dir = this.summaryDir(sessionId)
-    if (!existsSync(dir)) return null
+    if (!(await exists(dir))) return null
 
     // 找最新的 summary-vN.md
     let latestPath = ''
     for (let v = 1; ; v++) {
       const p = join(dir, `summary-v${v}.md`)
-      if (existsSync(p)) {
+      if (await exists(p)) {
         latestPath = p
       } else {
         break
@@ -207,7 +208,7 @@ export class SessionCompactor {
 
     if (!latestPath) return null
 
-    const content = readFileSync(latestPath, 'utf-8')
+    const content = await readFile(latestPath, 'utf-8')
     // 只返回摘要正文（去掉元数据头）
     const body = this.extractSummaryBody(content)
     return body
@@ -220,10 +221,10 @@ export class SessionCompactor {
     return this.summaryDir(sessionId)
   }
 
-  hasSummary(sessionId: string): boolean {
+  async hasSummary(sessionId: string): Promise<boolean> {
     const dir = this.summaryDir(sessionId)
-    if (!existsSync(dir)) return false
-    return existsSync(join(dir, 'summary-v1.md'))
+    if (!(await exists(dir))) return false
+    return exists(join(dir, 'summary-v1.md'))
   }
 
   // ─── LLM 总结 ─────────────────────────────────────────
@@ -502,24 +503,24 @@ ${conversationText}`
     ].join('\n')
   }
 
-  private saveSummary(sessionId: string, summary: string): string {
+  private async saveSummary(sessionId: string, summary: string): Promise<string> {
     const dir = this.summaryDir(sessionId)
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
+    if (!(await exists(dir))) {
+      await mkdir(dir, { recursive: true })
     }
 
     // 确定版本号
     let version = 1
-    while (existsSync(join(dir, `summary-v${version}.md`))) {
+    while (await exists(join(dir, `summary-v${version}.md`))) {
       version++
     }
 
     const filePath = join(dir, `summary-v${version}.md`)
-    writeFileSync(filePath, summary, 'utf-8')
+    await writeFile(filePath, summary, 'utf-8')
 
     // 也追加到累积摘要文件
     const accumPath = join(dir, 'summary.md')
-    appendFileSync(accumPath, `\n\n${summary}`, 'utf-8')
+    await appendFile(accumPath, `\n\n${summary}`, 'utf-8')
 
     return filePath
   }

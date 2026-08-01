@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { extname, join } from 'node:path'
+import { exists } from '../core/utils/fs'
 import { memoryRoot } from './checkpoint-paths'
 
 export interface MemoryEntry {
@@ -34,20 +35,20 @@ function termFrequency(terms: string[], doc: string): number {
   return score
 }
 
-function collectFiles(dir: string, maxDepth = 3): string[] {
+async function collectFiles(dir: string, maxDepth = 3): Promise<string[]> {
   const results: string[] = []
-  if (!existsSync(dir)) return results
+  if (!(await exists(dir))) return results
 
-  function walk(current: string, depth: number) {
+  async function walk(current: string, depth: number): Promise<void> {
     if (depth > maxDepth) return
-    const entries = readdirSync(current)
+    const entries = await readdir(current)
     for (const entry of entries) {
       const fullPath = join(current, entry)
       try {
-        const stat = statSync(fullPath)
-        if (stat.isDirectory()) {
-          walk(fullPath, depth + 1)
-        } else if (stat.isFile() && ['.md', '.txt', '.json'].includes(extname(fullPath))) {
+        const s = await stat(fullPath)
+        if (s.isDirectory()) {
+          await walk(fullPath, depth + 1)
+        } else if (s.isFile() && ['.md', '.txt', '.json'].includes(extname(fullPath))) {
           if (!entry.startsWith('.')) {
             results.push(fullPath)
           }
@@ -56,30 +57,30 @@ function collectFiles(dir: string, maxDepth = 3): string[] {
     }
   }
 
-  walk(dir, 0)
+  await walk(dir, 0)
   return results
 }
 
-export function searchMemory(input: {
+export async function searchMemory(input: {
   query: string
   dataDir: string
   topK?: number
   projectID?: string
-}): MemoryEntry[] {
+}): Promise<MemoryEntry[]> {
   const { query, dataDir, topK = 5, projectID } = input
   const root = memoryRoot(dataDir)
-  if (!existsSync(root)) return []
+  if (!(await exists(root))) return []
 
   const searchDirs: string[] = []
 
   const globalDir = join(root, 'global')
-  if (existsSync(globalDir)) {
+  if (await exists(globalDir)) {
     searchDirs.push(globalDir)
   }
 
   if (projectID) {
     const projectDir = join(root, 'projects', projectID)
-    if (existsSync(projectDir)) {
+    if (await exists(projectDir)) {
       searchDirs.push(projectDir)
     }
   }
@@ -90,10 +91,10 @@ export function searchMemory(input: {
   const scored: MemoryEntry[] = []
 
   for (const dir of searchDirs) {
-    const files = collectFiles(dir)
+    const files = await collectFiles(dir)
     for (const filePath of files) {
       try {
-        const content = readFileSync(filePath, 'utf-8')
+        const content = await readFile(filePath, 'utf-8')
         const score = termFrequency(terms, content)
         if (score > 0) {
           scored.push({ path: filePath, content, score })
@@ -106,33 +107,34 @@ export function searchMemory(input: {
   return scored.slice(0, topK)
 }
 
-export function getRecentMemoryEntries(dataDir: string, limit = 5): MemoryEntry[] {
+export async function getRecentMemoryEntries(dataDir: string, limit = 5): Promise<MemoryEntry[]> {
   const root = memoryRoot(dataDir)
-  if (!existsSync(root)) return []
+  if (!(await exists(root))) return []
 
   const recent: { path: string; mtime: Date }[] = []
 
-  function walk(dir: string) {
-    const entries = readdirSync(dir)
+  async function walk(dir: string): Promise<void> {
+    const entries = await readdir(dir)
     for (const entry of entries) {
       const fullPath = join(dir, entry)
       try {
-        const stat = statSync(fullPath)
-        if (stat.isDirectory()) {
-          walk(fullPath)
-        } else if (stat.isFile() && extname(fullPath) === '.md') {
-          recent.push({ path: fullPath, mtime: stat.mtime })
+        const s = await stat(fullPath)
+        if (s.isDirectory()) {
+          await walk(fullPath)
+        } else if (s.isFile() && extname(fullPath) === '.md') {
+          recent.push({ path: fullPath, mtime: s.mtime })
         }
       } catch { /* 无权限读取该文件，跳过 */ }
     }
   }
 
-  walk(root)
+  await walk(root)
   recent.sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
 
-  return recent.slice(0, limit).map(r => ({
-    path: r.path,
-    content: readFileSync(r.path, 'utf-8'),
-    score: 0,
-  }))
+  const results: MemoryEntry[] = []
+  for (const r of recent.slice(0, limit)) {
+    const content = await readFile(r.path, 'utf-8')
+    results.push({ path: r.path, content, score: 0 })
+  }
+  return results
 }

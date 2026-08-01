@@ -257,11 +257,11 @@ describe('SessionCompactor', () => {
   })
 
   describe('loadLatestSummary / hasSummary', () => {
-    it('无摘要目录时返回 null / false', () => {
+    it('无摘要目录时返回 null / false', async () => {
       const compactor = new SessionCompactor({ ...DEFAULT_CONFIG, dataDir: '/non-existent-dir' })
 
-      expect(compactor.loadLatestSummary('nonexistent')).toBeNull()
-      expect(compactor.hasSummary('nonexistent')).toBe(false)
+      expect(await compactor.loadLatestSummary('nonexistent')).toBeNull()
+      expect(await compactor.hasSummary('nonexistent')).toBe(false)
     })
   })
 
