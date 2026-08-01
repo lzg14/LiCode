@@ -53,3 +53,6 @@ git-restore.txt
 
 # Manual test/debug runner 脚本（cmd/bat，跑完不入版本管理）
 run*.bat
+
+# Manual test/debug API script
+test_api.js

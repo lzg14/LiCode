@@ -36,7 +36,8 @@
     "check": "bun run typecheck && bun run format:check && bun run lint",
     "cli": "bun run packages/cli/index.ts",
     "dev": "bun run packages/cli/index.ts",
-    "logs": "bun run packages/cli/logs.ts"
+    "logs": "bun run packages/cli/logs.ts",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",
