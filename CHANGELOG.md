@@ -14,13 +14,18 @@
 ### Added
 - **tools 包测试扩展**：新增 `glob.test.ts`、`git.test.ts`、`shell.test.ts`；扩展 `bash.test.ts`（+7 用例）、`read.test.ts`（+5 用例）
 - **测试覆盖提升**：tools 包测试从 44 个用例增加到 131 个，覆盖更多边界场景和安全拦截
-- **Skill 自动触发系统 Phase 1**：system prompt 注入可用技能索引，AI 可自主判断何时调用 skill 工具
-  - `packages/skills/types.ts`：`Skill` 接口增加 `triggerHints` 字段，新增 `SkillIndex` 类型
-  - `packages/skills/loader.ts`：新增 `extractTriggerHints()` 从 SKILL.md "何时用" 段落提取触发提示；新增 `getSkillIndex()` 获取 skill 索引
-  - `packages/core/phases/execute/context.ts`：`ExecuteContext` 增加 `availableSkills` 字段
-  - `packages/core/phases/execute/main.ts`：`buildSystem()` 注入 skill 索引表格
-  - `packages/core/loop.ts`：`LoopContext` 增加 `availableSkills`，传递给 execute
-  - `packages/tui/context/loop.tsx`：运行时加载 `availableSkills` 并传递
+- **Skill 自动触发系统**（完整实现 3 个 Phase）：
+  - **Phase 1 - Skill 索引注入**：system prompt 注入可用技能索引，AI 可自主判断何时调用 skill
+    - `packages/skills/types.ts`：`Skill` 接口增加 `triggerHints` 字段，新增 `SkillIndex` 类型
+    - `packages/skills/loader.ts`：新增 `extractTriggerHints()`、`getSkillIndex()`
+  - **Phase 2 - 规则自动建议**：用户输入匹配规则时自动建议激活 skill，支持用户确认/拒绝
+    - `packages/skills/auto-suggest.ts`：新建规则匹配引擎（9 个 skill 规则）
+    - `packages/tui/component/skill-suggest.tsx`：新建建议 UI 组件
+    - `packages/tui/context/loop.tsx`：集成自动建议逻辑
+  - **Phase 3 - 多 Skill 栈组合**：支持复杂场景多 skill 协同（如 planning → tdd → finishing-branch）
+    - `packages/skills/stack.ts`：新建 skill 栈管理，支持 push/pop/remove/toPromptString
+    - `packages/core/phases/execute/context.ts`：`ExecuteContext` 增加 `skillStack` 字段
+    - `packages/core/phases/execute/main.ts`：`buildSystem()` 支持多 skill 栈注入
 
 ## [0.4.3] - 2026-07-05
 

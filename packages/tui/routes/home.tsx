@@ -7,6 +7,7 @@ import { MessageList, QueueMessages } from "../component/message-list"
 import { Prompt } from "../component/prompt"
 import { SlashMenu, fuzzyMatch } from "../component/slash-menu"
 import { Sidebar } from "../component/sidebar"
+import { SkillSuggest } from "../component/skill-suggest"
 import { StatusBar } from "../component/status-bar"
 import { useLoop } from "../context/loop"
 import { modelPickerOpen, setModelPickerOpen, setSidebarVisible, sidebarVisible } from "../context/shortcuts"
@@ -22,7 +23,7 @@ const BUILTIN_COMMANDS = [
 ]
 
 export function Home() {
-  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort, subagentStatuses, subagentOpen, setSubagentOpen, setPromptText } = useLoop()
+  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort, subagentStatuses, subagentOpen, setSubagentOpen, setPromptText, pendingSkillSuggestion, resolveSkillSuggestion } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)
@@ -392,6 +393,18 @@ export function Home() {
 
         <Show when={helpOpen()}>
           <HelpPanel onClose={() => setHelpOpen(false)} />
+        </Show>
+
+        {/* Skill 自动建议 */}
+        <Show when={pendingSkillSuggestion()}>
+          <SkillSuggest
+            skills={pendingSkillSuggestion()!}
+            onConfirm={(skill) => {
+              setActiveSkill(skill.name)
+              resolveSkillSuggestion(true)
+            }}
+            onReject={() => resolveSkillSuggestion(false)}
+          />
         </Show>
 
         {/* L2: Subagent 列表弹窗 */}

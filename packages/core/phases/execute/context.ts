@@ -4,6 +4,7 @@ import type { SessionManager } from "../../../session/session"
 import type { Memory } from "../../../memory/memory"
 import type { Timer } from "../../perf"
 import type { SkillIndex } from "../../../skills/types"
+import type { SkillStackItem } from "../../../skills/stack"
 
 import type { ToolCallPart, ToolResultPart } from "@ai-sdk/provider-utils"
 
@@ -35,6 +36,8 @@ export interface ExecuteContext {
   activeSkillInstructions?: string | null
   /** 所有可用 skill 的索引信息（用于 system prompt 注入） */
   availableSkills?: SkillIndex[]
+  /** 多 skill 栈（用于复杂场景） */
+  skillStack?: SkillStackItem[]
   timer?: Timer
   /** v2 智能增强 §4.M5: Memory 实例（adpter 读写 M4 schema 用） */
   memory?: Memory

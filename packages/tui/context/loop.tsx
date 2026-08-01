@@ -116,6 +116,10 @@ export interface LoopContext {
   registerInputFns: (fns: { focus: () => void; setText: (text: string) => void; prependText: (text: string) => void }) => void
   /** 清除输入框操作函数（Prompt 组件卸载时调用） */
   unregisterInputFns: () => void
+  /** 待确认的 skill 建议 */
+  pendingSkillSuggestion: Accessor<Array<{ name: string; description: string; triggerHints: string }> | null>
+  /** 确认/拒绝 skill 建议 */
+  resolveSkillSuggestion: (confirmed: boolean) => void
 }
 
 const Ctx = createContext<LoopContext>()
@@ -144,6 +148,12 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   interface SubagentStatus { id: string; task: string; status: 'running' | 'done' | 'error'; startTime: number; endTime?: number }
   const [subagentStatuses, setSubagentStatuses] = createSignal<SubagentStatus[]>([])
   const [subagentOpen, setSubagentOpen] = createSignal(false)
+  // Skill 自动建议状态
+  const [pendingSkillSuggestion, setPendingSkillSuggestion] = createSignal<Array<{ name: string; description: string; triggerHints: string }> | null>(null)
+  let skillSuggestResolve: ((value: boolean) => void) | null = null
+  const setSkillSuggestResolve = (fn: ((value: boolean) => void) | null) => {
+    skillSuggestResolve = fn
+  }
 
   const [pendingCount, setPendingCount] = createSignal(0)
   const [streamingSegments, setStreamingSegments] = createSignal<Segment[]>([])
@@ -523,6 +533,31 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     // 合并剪贴板图片 + 文件引用图片
     const allImages = [...parsedImages, ...(opts?.clipboardImages ?? [])]
 
+    // Phase 2: 自动建议 skill（规则匹配 + 用户确认）
+    if (!activeSkill()) {
+      const { matchSkills } = await import("../../skills/auto-suggest")
+      const { getSkillIndex } = await import("../../skills/loader")
+      const availableSkills = await getSkillIndex(process.cwd())
+      const suggested = matchSkills(cleanText, availableSkills, activeSkill())
+      if (suggested.length > 0) {
+        // 暂存建议，等待用户确认（通过 skill-suggest 组件）
+        setPendingSkillSuggestion(suggested)
+        // 等待用户响应（最多 3 秒）
+        const confirmed = await new Promise<boolean>((resolve) => {
+          const timeout = setTimeout(() => resolve(false), 3000)
+          setSkillSuggestResolve((r) => {
+            clearTimeout(timeout)
+            resolve(r)
+            return null
+          })
+        })
+        setPendingSkillSuggestion(null)
+        if (!confirmed) {
+          // 用户拒绝或超时，正常执行
+        }
+      }
+    }
+
     abortController = new AbortController()
     addMessage({ role: "user", content: cleanText, images: allImages.length > 0 ? allImages : undefined })
     // 让消息先渲染，再做后续状态更新（避免 solid 批量合并导致"输入清了但消息没出来"的卡顿）
@@ -891,6 +926,13 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     prependPromptText,
     registerInputFns,
     unregisterInputFns,
+    pendingSkillSuggestion,
+    resolveSkillSuggestion: (confirmed: boolean) => {
+      if (skillSuggestResolve) {
+        skillSuggestResolve(confirmed)
+        skillSuggestResolve = null
+      }
+    },
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }
