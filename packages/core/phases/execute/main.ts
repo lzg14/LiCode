@@ -301,6 +301,9 @@ function buildSystem(
       const item = ctx.skillStack[i]
       const roleLabel = item.role === 'primary' ? '主' : '辅'
       sys += `${i + 1}. ${item.skill.name} (${roleLabel}) — ${item.skill.description || '无描述'}\n`
+      if (item.instructions) {
+        sys += `\n${item.instructions}\n`
+      }
     }
     sys += `\n请严格遵循上述技能的指令与规则。`
   } else if (ctx.activeSkillInstructions) {

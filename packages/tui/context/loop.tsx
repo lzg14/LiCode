@@ -8,6 +8,7 @@ import { createModel } from "../../llm/provider"
 import { readImageFile } from "../../tools/builtin"
 import { useToast } from "../ui/toast"
 import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
+import type { SkillIndex } from "../../skills/types"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
 export function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
@@ -533,28 +534,39 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     // 合并剪贴板图片 + 文件引用图片
     const allImages = [...parsedImages, ...(opts?.clipboardImages ?? [])]
 
+    // 一次加载 skill 索引，后续复用
+    const { getSkillIndex } = await import("../../skills/loader")
+    const availableSkills = await getSkillIndex(process.cwd())
+
     // Phase 2: 自动建议 skill（规则匹配 + 用户确认）
     if (!activeSkill()) {
       const { matchSkills } = await import("../../skills/auto-suggest")
-      const { getSkillIndex } = await import("../../skills/loader")
-      const availableSkills = await getSkillIndex(process.cwd())
-      const suggested = matchSkills(cleanText, availableSkills, activeSkill())
+      const { inferSkillStack } = await import("../../skills/stack")
+      // 规则匹配 + 推断组合
+      const ruleMatched = matchSkills(cleanText, availableSkills, activeSkill())
+      const inferredNames = inferSkillStack(cleanText)
+      const inferred = inferredNames
+        .map(name => availableSkills.find(s => s.name === name))
+        .filter((s): s is SkillIndex => !!s && s.name !== activeSkill())
+      // 合并去重
+      const suggestedMap = new Map<string, SkillIndex>()
+      for (const s of [...ruleMatched, ...inferred]) {
+        suggestedMap.set(s.name, s)
+      }
+      const suggested = [...suggestedMap.values()]
       if (suggested.length > 0) {
         // 暂存建议，等待用户确认（通过 skill-suggest 组件）
         setPendingSkillSuggestion(suggested)
-        // 等待用户响应（最多 3 秒）
+        // 等待用户响应（最多 10 秒）
         const confirmed = await new Promise<boolean>((resolve) => {
-          const timeout = setTimeout(() => resolve(false), 3000)
-          setSkillSuggestResolve((r) => {
+          const timeout = setTimeout(() => resolve(false), 10_000)
+          skillSuggestResolve = (v) => {
             clearTimeout(timeout)
-            resolve(r)
-            return null
-          })
+            resolve(v)
+            skillSuggestResolve = null
+          }
         })
         setPendingSkillSuggestion(null)
-        if (!confirmed) {
-          // 用户拒绝或超时，正常执行
-        }
       }
     }
 
@@ -578,9 +590,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       if (!persistentSessionId) {
         persistentSessionId = crypto.randomUUID()
       }
-      // 加载可用 skill 索引（用于 system prompt 注入）
-      const { getSkillIndex } = await import("../../skills/loader")
-      const availableSkills = await getSkillIndex(process.cwd())
       const ctx = {
         sessionId: persistentSessionId,
         userInput: cleanText,

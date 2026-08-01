@@ -12,7 +12,8 @@ export function SkillSuggest(props: SkillSuggestProps) {
   const { backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [selectedIndex, setSelectedIndex] = createSignal(0)
 
-  const handleKey = (key: string) => {
+  const handleKey = (e: any) => {
+    const key = typeof e === 'string' ? e : e?.key
     if (key === 'up' || key === 'k') {
       setSelectedIndex(prev => Math.max(0, prev - 1))
     } else if (key === 'down' || key === 'j') {
@@ -36,6 +37,7 @@ export function SkillSuggest(props: SkillSuggestProps) {
       backgroundColor={backgroundPanel()}
       border={["top", "bottom", "left", "right"]}
       borderColor={primary()}
+      onKeyDown={handleKey}
     >
       <text fg={primary()}>🎯 检测到相关技能</text>
       <box height={1} />

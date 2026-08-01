@@ -13,6 +13,8 @@ export interface SkillStackItem {
   role: 'primary' | 'secondary'
   /** 激活时间 */
   activatedAt: number
+  /** skill 的完整指令内容 */
+  instructions: string
 }
 
 export class SkillStack {
@@ -21,15 +23,16 @@ export class SkillStack {
   /**
    * 压入新 skill
    */
-  push(skill: SkillIndex, role: 'primary' | 'secondary' = 'primary'): void {
+  push(skill: SkillIndex, role: 'primary' | 'secondary' = 'primary', instructions: string = ''): void {
     // 检查是否已存在
     const existing = this.stack.find(s => s.skill.name === skill.name)
     if (existing) {
-      // 更新 role
+      // 更新 role 和 instructions
       existing.role = role
+      if (instructions) existing.instructions = instructions
       return
     }
-    this.stack.push({ skill, role, activatedAt: Date.now() })
+    this.stack.push({ skill, role, activatedAt: Date.now(), instructions })
   }
 
   /**
@@ -107,8 +110,12 @@ export class SkillStack {
       const item = sorted[i]
       const roleLabel = item.role === 'primary' ? '主' : '辅'
       lines.push(`${i + 1}. ${item.skill.name} (${roleLabel}) — ${item.skill.description || '无描述'}`)
+      if (item.instructions) {
+        lines.push(`\n${item.instructions}\n`)
+      }
     }
 
+    lines.push(`\n请严格遵循上述技能的指令与规则。`)
     return lines.join('\n')
   }
 }
