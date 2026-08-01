@@ -53,7 +53,7 @@ This is a test skill instruction.`
     })
 
     it('should handle non-existent directory', async () => {
-      const count = await loader.loadFromDir('/non-existent-dir')
+      const count = await loader.loadFromDir('V:\\non-existent-dir')
       expect(count).toBe(0)
     })
 

@@ -650,11 +650,109 @@ sys += `\n\n## 当前激活技能: ${ctx.activeSkill}\n\n${ctx.activeSkillInstru
 
 ---
 
-### 10.3 审查总结
+### 10.3 二轮审查（597a4e3）
+
+7 个问题中 6 个已修复，**Bug 2 修复不正确，需要重做**。
+
+| # | 问题 | 状态 |
+|---|------|------|
+| 1 | getSkillIndex 重复调用 | ✅ 已修复 |
+| 2 | SkillSuggest 键盘事件未绑定 | ❌ 修复不正确，见下方 |
+| 3 | Promise 模式类型混乱 | ✅ 已修复 |
+| 4 | 缺少测试 | ✅ 新增 20 个用例，全部通过 |
+| 5 | inferSkillStack() 未被调用 | ✅ 已接入 |
+| 6 | 确认超时太短 | ✅ 3s → 10s |
+| 7 | skillStack 缺 instructions | ✅ 已修复 |
+
+#### Bug 2 修复不正确（需要重做）
+
+当前修复（597a4e3）：
+
+```typescript
+// packages/tui/component/skill-suggest.tsx
+const handleKey = (e: any) => {
+  const key = typeof e === 'string' ? e : e?.key  // ← 错误：ink 用 e.name 不是 e.key
+  ...
+}
+<box onKeyDown={handleKey}>  // ← 错误：box 不接收键盘事件
+```
+
+**问题 1：ink 事件属性名错误**
+
+ink 的键盘事件用 `e.name` 表示按键名称，不是 `e.key`。对比项目中正确的用法：
+
+```typescript
+// packages/tui/component/prompt/index.tsx
+if (e.name === "up") { ... }    // ✅ 正确
+if (e.name === "escape") { ... } // ✅ 正确
+
+// packages/tui/component/skill-suggest.tsx
+const key = e?.key               // ❌ 错误：应为 e?.name
+```
+
+**问题 2：`box` 组件不支持键盘事件**
+
+ink 框架中，`box` 是纯布局组件，不接收 `onKeyDown`。只有 `textarea` 等可聚焦组件才触发键盘事件。
+
+项目的全局键盘处理都在 `home.tsx` 的 `useKeyboard` hook 中：
+
+```typescript
+// packages/tui/routes/home.tsx
+useKeyboard((evt) => {
+  // 模型选择器的键盘处理
+  if (modelPickerOpen()) {
+    if (evt.name === "up") { ... }
+    if (evt.name === "down") { ... }
+    if (evt.name === "return") { ... }
+    if (evt.name === "escape") { ... }
+  }
+  // 斜杠菜单的键盘处理
+  if (slashOpen()) {
+    if (evt.name === "up") { ... }
+    if (evt.name === "down") { ... }
+    if (evt.name === "return") { ... }
+    if (evt.name === "escape") { ... }
+  }
+  // ❌ 缺少 pendingSkillSuggestion() 的处理
+})
+```
+
+**正确修复方案**：
+
+1. `skill-suggest.tsx` 改为纯渲染组件（删除 `handleKey`、删除 `onKeyDown`）
+2. 在 `home.tsx` 的 `useKeyboard` 中添加 skill 建议的键盘处理：
+
+```typescript
+// packages/tui/routes/home.tsx → useKeyboard()
+if (pendingSkillSuggestion()) {
+  const skills = pendingSkillSuggestion()!
+  if (evt.name === "up") {
+    evt.preventDefault()
+    // 需要将 selectedIndex 提升到 home.tsx 或用其他方式共享状态
+  } else if (evt.name === "down") {
+    evt.preventDefault()
+  } else if (evt.name === "return" || evt.name === "y") {
+    evt.preventDefault()
+    const selected = skills[skillSuggestIdx()]
+    if (selected) {
+      setActiveSkill(selected.name)
+      resolveSkillSuggestion(true)
+    }
+  } else if (evt.name === "escape" || evt.name === "n") {
+    evt.preventDefault()
+    resolveSkillSuggestion(false)
+  }
+  return
+}
+```
+
+注意：`selectedIndex` 状态需要从 `SkillSuggest` 组件提升到 `home.tsx`（或通过 context 共享），因为 `useKeyboard` 和组件不在同一作用域。
+
+### 10.4 审查总结
 
 | 级别 | 数量 | 关键项 |
 |------|------|--------|
-| 🔴 必须修复 | 3 | getSkillIndex 重复调用、键盘事件未绑定、Promise 竞态 |
-| 🟡 建议修复 | 4 | 缺测试、inferSkillStack 未接入、超时太短、skillStack 缺 instructions |
+| 🔴 必须修复 | 1 | SkillSuggest 键盘事件（需重做） |
+| 🟡 无 | 0 | 其余 6 个问题已修复 |
 
-**总体评价**：架构设计合理，分层清晰，但实现细节有几处"半成品"状态。建议先修复 3 个 🔴 问题再合并。
+**总体评价**：6/7 问题修复质量良好（测试 20 个用例全绿）。剩余 Bug 2 需要理解 ink 框架的事件模型后重做。
