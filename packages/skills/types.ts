@@ -4,6 +4,15 @@ export interface Skill {
   triggerWords: string[]
   instructions: string
   sandboxLevel: 1 | 2 | 3 | 4
+  /** 从 SKILL.md "## 何时用" 段落提取的触发提示 */
+  triggerHints?: string
+}
+
+/** 用于 system prompt 注入的 skill 摘要 */
+export interface SkillIndex {
+  name: string
+  description: string
+  triggerHints: string
 }
 
 export interface SkillResult {

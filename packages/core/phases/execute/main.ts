@@ -297,6 +297,16 @@ function buildSystem(
   if (ctx.activeSkillInstructions) {
     sys += `\n\n## 当前激活技能: ${ctx.activeSkill ?? "?"}\n\n${ctx.activeSkillInstructions}\n\n请严格遵循上述技能的指令与规则。`
   }
+  // 注入可用 skill 索引（让 AI 知道有哪些 skill 可调用）
+  if (ctx.availableSkills && ctx.availableSkills.length > 0) {
+    sys += `\n\n## 可用技能\n\n以下技能可通过 \`skill\` 工具激活。当用户任务匹配触发条件时，应先激活对应技能再执行。\n\n`
+    sys += `| 技能 | 描述 | 何时用 |\n|------|------|--------|\n`
+    for (const s of ctx.availableSkills) {
+      const hints = s.triggerHints || '-'
+      sys += `| ${s.name} | ${s.description || '-'} | ${hints} |\n`
+    }
+    sys += `\n激活方式：调用 \`skill\` 工具，参数 \`{ "name": "<技能名>" }\`。`
+  }
   if (intelligenceHints) {
     sys += `\n\n${intelligenceHints}`
   }

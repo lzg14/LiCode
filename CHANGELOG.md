@@ -14,6 +14,13 @@
 ### Added
 - **tools 包测试扩展**：新增 `glob.test.ts`、`git.test.ts`、`shell.test.ts`；扩展 `bash.test.ts`（+7 用例）、`read.test.ts`（+5 用例）
 - **测试覆盖提升**：tools 包测试从 44 个用例增加到 131 个，覆盖更多边界场景和安全拦截
+- **Skill 自动触发系统 Phase 1**：system prompt 注入可用技能索引，AI 可自主判断何时调用 skill 工具
+  - `packages/skills/types.ts`：`Skill` 接口增加 `triggerHints` 字段，新增 `SkillIndex` 类型
+  - `packages/skills/loader.ts`：新增 `extractTriggerHints()` 从 SKILL.md "何时用" 段落提取触发提示；新增 `getSkillIndex()` 获取 skill 索引
+  - `packages/core/phases/execute/context.ts`：`ExecuteContext` 增加 `availableSkills` 字段
+  - `packages/core/phases/execute/main.ts`：`buildSystem()` 注入 skill 索引表格
+  - `packages/core/loop.ts`：`LoopContext` 增加 `availableSkills`，传递给 execute
+  - `packages/tui/context/loop.tsx`：运行时加载 `availableSkills` 并传递
 
 ## [0.4.3] - 2026-07-05
 

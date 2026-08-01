@@ -543,6 +543,9 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       if (!persistentSessionId) {
         persistentSessionId = crypto.randomUUID()
       }
+      // 加载可用 skill 索引（用于 system prompt 注入）
+      const { getSkillIndex } = await import("../../skills/loader")
+      const availableSkills = await getSkillIndex(process.cwd())
       const ctx = {
         sessionId: persistentSessionId,
         userInput: cleanText,
@@ -554,6 +557,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         model: activeModel,
         activeSkill: activeSkill() ?? undefined,
         activeSkillInstructions: activeSkillInstructions() ?? undefined,
+        availableSkills,
         onPhaseChange: (phase: string) => {
           setCurrentPhase(phase)
         },

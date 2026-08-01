@@ -6,6 +6,7 @@ import { getModelConfig } from '../llm/catalog'
 import { createModel } from '../llm/provider'
 import type { LLMProvider } from '../llm/types'
 import { Memory } from '../memory/memory'
+import type { SkillIndex } from '../skills/types'
 import { SessionManager } from '../session/session'
 import { CheckpointManager, type SessionCheckpoint } from './checkpoint'
 import { devLogger } from './dev-logger'
@@ -64,6 +65,7 @@ export interface LoopContext {
   // Skill 相关
   activeSkill?: string
   activeSkillInstructions?: string
+  availableSkills?: SkillIndex[]
 }
 
 export class CoreLoop {
@@ -366,6 +368,7 @@ export class CoreLoop {
       cwd: ctx.cwd,
       activeSkill: ctx.activeSkill,
       activeSkillInstructions: ctx.activeSkillInstructions,
+      availableSkills: ctx.availableSkills,
       onStreamText: ctx.onStreamText,
       onLLMCall: ctx.onLLMCall,
       onLLMResult: ctx.onLLMResult,

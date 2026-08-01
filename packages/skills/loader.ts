@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { devLogger } from '../core/dev-logger'
 import { exists } from '../core/utils/fs'
 import { globalSkillRegistry } from './registry'
-import type { Skill } from './types'
+import type { Skill, SkillIndex } from './types'
 
 /**
  * 技能系统 - 技能注册、加载、热更新
@@ -30,6 +30,21 @@ function parseFrontmatter(raw: string): { meta: SkillMeta; body: string } {
     if (kv) meta[kv[1]] = kv[2].trim()
   }
   return { meta, body: m[2] }
+}
+
+/**
+ * 从 SKILL.md 正文提取 "## 何时用" 段落作为 triggerHints
+ * 格式：提取 "## 何时用" 到下一个 "##" 之间的列表项，用分号连接
+ */
+export function extractTriggerHints(instructions: string): string {
+  const match = instructions.match(/## 何时用\n([\s\S]*?)(?=\n##|$)/)
+  if (match) {
+    return match[1].trim().split('\n')
+      .filter(line => line.startsWith('- '))
+      .map(line => line.slice(2).trim())
+      .join('；')
+  }
+  return ''
 }
 
 export class SkillLoader {
@@ -88,6 +103,7 @@ export class SkillLoader {
         triggerWords: [meta.name || dirName],
         instructions: body,
         sandboxLevel: 1,
+        triggerHints: extractTriggerHints(body),
       }
 
       globalSkillRegistry.register(skill)
@@ -230,4 +246,16 @@ export async function loadAllSkills(cwd?: string): Promise<Skill[]> {
 export async function findSkill(name: string, cwd?: string): Promise<Skill | undefined> {
   await loadAllSkills(cwd)
   return globalSkillRegistry.findByName(name)
+}
+
+/**
+ * 获取所有 skill 的索引信息（用于 system prompt 注入）
+ */
+export async function getSkillIndex(cwd?: string): Promise<SkillIndex[]> {
+  const skills = await loadAllSkills(cwd)
+  return skills.map(s => ({
+    name: s.name,
+    description: s.description,
+    triggerHints: s.triggerHints || '',
+  }))
 }
