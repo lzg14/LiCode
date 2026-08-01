@@ -23,7 +23,7 @@ const BUILTIN_COMMANDS = [
 ]
 
 export function Home() {
-  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort, subagentStatuses, subagentOpen, setSubagentOpen, setPromptText, pendingSkillSuggestion, resolveSkillSuggestion } = useLoop()
+  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort, subagentStatuses, subagentOpen, setSubagentOpen, setPromptText, pendingSkillSuggestion, skillSuggestIdx, setSkillSuggestIdx, resolveSkillSuggestion } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)
@@ -264,6 +264,28 @@ export function Home() {
       else if (evt.name === "escape") { evt.preventDefault(); setSlashOpen(false); setPendingSlashCmd(null) }
       return
     }
+    // Skill 建议打开时，↑↓ 选择，Enter/y 激活，Esc/n 跳过
+    if (pendingSkillSuggestion()) {
+      const skills = pendingSkillSuggestion()!
+      if (evt.name === "up") {
+        evt.preventDefault()
+        setSkillSuggestIdx(prev => Math.max(0, prev - 1))
+      } else if (evt.name === "down") {
+        evt.preventDefault()
+        setSkillSuggestIdx(prev => Math.min(skills.length - 1, prev + 1))
+      } else if (evt.name === "return" || evt.name === "y") {
+        evt.preventDefault()
+        const selected = skills[skillSuggestIdx()]
+        if (selected) {
+          setActiveSkill(selected.name)
+          resolveSkillSuggestion(true)
+        }
+      } else if (evt.name === "escape" || evt.name === "n") {
+        evt.preventDefault()
+        resolveSkillSuggestion(false)
+      }
+      return
+    }
     // pendingSlashCmd 有值时，return 键直接执行命令
     if (pendingSlashCmd() && evt.name === "return") {
       evt.preventDefault()
@@ -399,11 +421,7 @@ export function Home() {
         <Show when={pendingSkillSuggestion()}>
           <SkillSuggest
             skills={pendingSkillSuggestion()!}
-            onConfirm={(skill) => {
-              setActiveSkill(skill.name)
-              resolveSkillSuggestion(true)
-            }}
-            onReject={() => resolveSkillSuggestion(false)}
+            selectedIndex={skillSuggestIdx()}
           />
         </Show>
 

@@ -119,6 +119,10 @@ export interface LoopContext {
   unregisterInputFns: () => void
   /** 待确认的 skill 建议 */
   pendingSkillSuggestion: Accessor<Array<{ name: string; description: string; triggerHints: string }> | null>
+  /** skill 建议当前选中索引 */
+  skillSuggestIdx: Accessor<number>
+  /** 设置 skill 建议当前选中索引 */
+  setSkillSuggestIdx: (fn: (prev: number) => number) => void
   /** 确认/拒绝 skill 建议 */
   resolveSkillSuggestion: (confirmed: boolean) => void
 }
@@ -151,6 +155,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   const [subagentOpen, setSubagentOpen] = createSignal(false)
   // Skill 自动建议状态
   const [pendingSkillSuggestion, setPendingSkillSuggestion] = createSignal<Array<{ name: string; description: string; triggerHints: string }> | null>(null)
+  const [skillSuggestIdx, setSkillSuggestIdx] = createSignal(0)
   let skillSuggestResolve: ((value: boolean) => void) | null = null
   const setSkillSuggestResolve = (fn: ((value: boolean) => void) | null) => {
     skillSuggestResolve = fn
@@ -556,6 +561,7 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       const suggested = [...suggestedMap.values()]
       if (suggested.length > 0) {
         // 暂存建议，等待用户确认（通过 skill-suggest 组件）
+        setSkillSuggestIdx(0)
         setPendingSkillSuggestion(suggested)
         // 等待用户响应（最多 10 秒）
         const confirmed = await new Promise<boolean>((resolve) => {
@@ -936,6 +942,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     registerInputFns,
     unregisterInputFns,
     pendingSkillSuggestion,
+    skillSuggestIdx,
+    setSkillSuggestIdx,
     resolveSkillSuggestion: (confirmed: boolean) => {
       if (skillSuggestResolve) {
         skillSuggestResolve(confirmed)
