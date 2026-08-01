@@ -9,8 +9,6 @@ import { CollapsibleText } from "./collapsible-text"
 import { Spinner } from "./spinner"
 import { ThinkingView } from "./thinking-view"
 
-const _MAX_VISIBLE_TOOLS = 3
-
 function stripSystemTags(content: string): string {
   // 暂存 thinking 标签（交给 ThinkingView / deriveThinkingDisplay 处理）
   const preserved: string[] = []
@@ -111,8 +109,30 @@ function PendingStreamView(props: { syntaxStyle?: SyntaxStyle }) {
 function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
   const { primary, text, textMuted, error, success, warning, info } = useTheme()
 
+  // 响应式计算：在 tracking scope 内包裹 createMemo
+  const hasImages = createMemo(() => props.msg.role === "user" && props.msg.images && props.msg.images.length > 0)
+  const cleaned = createMemo(() => props.msg.role === "assistant" ? stripSystemTags(props.msg.content) : "")
+  const display = createMemo(() => props.msg.role === "assistant" ? deriveThinkingDisplay(cleaned(), true) : undefined)
+  const lineCount = createMemo(() => props.msg.role === "assistant" ? props.msg.content.split('\n').length : 0)
+  const isLong = createMemo(() => lineCount() > 15)
+  const statusIcon = createMemo(() => {
+    if (props.msg.role !== "tool") return ""
+    return props.msg.toolStatus === "running" ? "⏳"
+      : props.msg.toolStatus === "completed" ? "✓"
+      : props.msg.toolStatus === "error" ? "✗" : ""
+  })
+  const statusColor = createMemo(() => {
+    if (props.msg.role !== "tool") return warning()
+    return props.msg.toolStatus === "completed" ? success()
+      : props.msg.toolStatus === "error" ? error() : warning()
+  })
+  const toolArgs = createMemo(() => {
+    if (props.msg.role !== "tool") return ""
+    return props.msg.toolArgs && props.msg.toolName ? formatToolArgs(props.msg.toolName, props.msg.toolArgs) : ""
+  })
+  const isError = createMemo(() => props.msg.role === "system" && (props.msg.content.startsWith('错误:') || props.msg.content.startsWith('Error:')))
+
   if (props.msg.role === "user") {
-    const hasImages = props.msg.images && props.msg.images.length > 0
     return (
       <box flexDirection="column" marginBottom={1}>
         <box flexDirection="row">
@@ -121,7 +141,7 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
           </text>
           <CollapsibleText content={props.msg.content} maxLines={5} />
         </box>
-        <Show when={hasImages}>
+        <Show when={hasImages()}>
           <box flexDirection="row" paddingLeft={2}>
             <text fg={textMuted()}>
               {`📎 ${props.msg.images?.length} 张图片已附带`}
@@ -133,41 +153,28 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
   }
 
   if (props.msg.role === "assistant") {
-    const cleaned = stripSystemTags(props.msg.content)
-    const display = deriveThinkingDisplay(cleaned, true)
-    const lineCount = props.msg.content.split('\n').length
-    const isLong = lineCount > 15
     return (
       <box flexDirection="column" marginBottom={1} flexShrink={0}>
-        <Show when={isLong}>
-          <text fg={textMuted()}>{`  (共 ${lineCount} 行)`}</text>
+        <Show when={isLong()}>
+          <text fg={textMuted()}>{`  (共 ${lineCount()} 行)`}</text>
         </Show>
-        {/* streaming={true} → 持续重 parse markdown + tree-sitter，导致滚动
-            时 1000ms/帧。改成 false 让 markdown finalize 后缓存。
-            闪烁问题用 debounce + 单独 flush 解决（见 docs/plans） */}
-        <ThinkingView display={display} streaming={false} syntaxStyle={props.syntaxStyle} />
+        <ThinkingView display={display()!} streaming={false} syntaxStyle={props.syntaxStyle} />
       </box>
     )
   }
 
   if (props.msg.role === "tool") {
-    const statusIcon = props.msg.toolStatus === "running" ? "⏳"
-      : props.msg.toolStatus === "completed" ? "✓"
-      : props.msg.toolStatus === "error" ? "✗" : ""
-    const statusColor = props.msg.toolStatus === "completed" ? success()
-      : props.msg.toolStatus === "error" ? error() : warning()
-    const toolArgs = props.msg.toolArgs && props.msg.toolName ? formatToolArgs(props.msg.toolName, props.msg.toolArgs) : ""
     return (
       <box flexDirection="column" marginBottom={0}>
         <box flexDirection="row">
-          <Show when={statusIcon}>
-            <text fg={statusColor}>{` ${statusIcon}`}</text>
+          <Show when={statusIcon()}>
+            <text fg={statusColor()}>{` ${statusIcon()}`}</text>
           </Show>
           <text fg={textMuted()}>{` ${props.msg.toolName ?? props.msg.content}`}</text>
         </box>
-        <Show when={toolArgs}>
+        <Show when={toolArgs()}>
           <box paddingLeft={1}>
-            <CollapsibleText content={toolArgs} maxLines={5} fg={textMuted()} />
+            <CollapsibleText content={toolArgs()} maxLines={5} fg={textMuted()} />
           </box>
         </Show>
         <Show when={props.msg.diff}>
@@ -180,7 +187,6 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
   }
 
   if (props.msg.role === "system") {
-    const isError = props.msg.content.startsWith('错误:') || props.msg.content.startsWith('Error:')
     // 压缩摘要用 markdown 渲染（有标题、列表等格式）
     if (props.msg.compaction) {
       return (
@@ -192,8 +198,8 @@ function MessageItem(props: { msg: Message; syntaxStyle?: SyntaxStyle }) {
     return (
       <box marginBottom={0}>
         <box flexDirection="row">
-          <text fg={isError ? error() : textMuted()}>{` ┃ `}</text>
-          <text fg={isError ? error() : textMuted()}>{props.msg.content}</text>
+          <text fg={isError() ? error() : textMuted()}>{` ┃ `}</text>
+          <text fg={isError() ? error() : textMuted()}>{props.msg.content}</text>
         </box>
       </box>
     )

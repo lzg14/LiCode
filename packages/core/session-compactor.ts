@@ -13,6 +13,24 @@ import { devLogger } from './dev-logger'
  * 完整历史保留在 SQLite 中不删，摘要写入 Markdown 文件。
  */
 
+/** 压缩器内部使用的消息结构（比 session/types.ts 的 Message 更宽松） */
+export interface CompactionMessage {
+  role: string
+  content: Array<{
+    type: string
+    text?: string
+    toolName?: string
+    input?: Record<string, unknown>
+    output?: unknown
+    toolCallId?: string
+  }> | string
+}
+
+/** LLM 完成函数接口 */
+export interface LLMCompleteFn {
+  complete: (req: { messages: CompactionMessage[]; system?: string; model: string; temperature?: number; maxTokens?: number }) => Promise<{ content?: string }>
+}
+
 export interface ExtractionResult {
   userIntents: string[]
   fileOps: string[]
@@ -77,7 +95,7 @@ export class SessionCompactor {
    * 判断是否需要压缩
    * @param contextWindow 可选，传入 model 的 context window，触发阈值 = contextWindow * 0.8
    */
-  shouldCompact(messages: any[], sessionId: string, contextWindow?: number): boolean {
+  shouldCompact(messages: CompactionMessage[], sessionId: string, contextWindow?: number): boolean {
     const now = Date.now()
     const lastTime = this.lastCompactTime.get(sessionId) ?? 0
     if (now - lastTime < this.config.debounceMs) return false
@@ -109,9 +127,9 @@ export class SessionCompactor {
    * 优先使用 LLM 生成连贯摘要，失败时降级为规则提取
    */
   async compact(
-    messages: any[],
+    messages: CompactionMessage[],
     sessionId: string,
-    llm?: { complete: (req: any) => Promise<any> },
+    llm?: LLMCompleteFn,
   ): Promise<CompactionResult> {
     const now = Date.now()
     this.lastCompactTime.set(sessionId, now)
@@ -177,12 +195,10 @@ export class SessionCompactor {
     if (!existsSync(dir)) return null
 
     // 找最新的 summary-vN.md
-    let _latestVersion = 0
     let latestPath = ''
     for (let v = 1; ; v++) {
       const p = join(dir, `summary-v${v}.md`)
       if (existsSync(p)) {
-        _latestVersion = v
         latestPath = p
       } else {
         break
@@ -213,8 +229,8 @@ export class SessionCompactor {
   // ─── LLM 总结 ─────────────────────────────────────────
 
   private async summarizeWithLLM(
-    messages: any[],
-    llm: { complete: (req: any) => Promise<any> },
+    messages: CompactionMessage[],
+    llm: LLMCompleteFn,
   ): Promise<string> {
     const conversationText = this.formatMessagesForSummary(messages)
 
@@ -272,12 +288,24 @@ ${conversationText}`
     return response.content ?? ''
   }
 
-  private formatMessagesForSummary(messages: any[]): string {
+  private formatMessagesForSummary(messages: CompactionMessage[]): string {
     const parts: string[] = []
 
     for (const msg of messages) {
       const role = msg.role ?? 'unknown'
-      const content = msg.content ?? []
+      const content = msg.content
+
+      if (typeof content === 'string') {
+        // content 是字符串，直接使用
+        if (role === 'user') {
+          const trimmed = content.trim().slice(0, 200)
+          if (trimmed) parts.push(`[用户]: ${trimmed}`)
+        } else if (role === 'assistant') {
+          const trimmed = content.trim().slice(0, 300)
+          if (trimmed) parts.push(`[助手]: ${trimmed}`)
+        }
+        continue
+      }
 
       if (role === 'user') {
         for (const part of content) {
@@ -311,7 +339,7 @@ ${conversationText}`
     return parts.slice(0, 50).join('\n') // 限制 50 行，避免 prompt 过长
   }
 
-  private summarizeToolCall(toolName: string, input: any): string {
+  private summarizeToolCall(toolName: string, input: Record<string, unknown>): string {
     switch (toolName) {
       case 'read':
         return `读取 ${input.path ?? ''}`
@@ -332,7 +360,7 @@ ${conversationText}`
 
   // ─── 规则提取（降级方案）─────────────────────────────────
 
-  private extractRules(messages: any[]): ExtractionResult {
+  private extractRules(messages: CompactionMessage[]): ExtractionResult {
     const userIntents: string[] = []
     const fileOps: string[] = []
     const commands: string[] = []
@@ -340,7 +368,16 @@ ${conversationText}`
 
     for (const msg of messages) {
       const role = msg.role ?? 'unknown'
-      const content = msg.content ?? []
+      const content = msg.content
+
+      if (typeof content === 'string') {
+        // content 是字符串，直接使用
+        if (role === 'user') {
+          const trimmed = content.trim().slice(0, 80)
+          if (trimmed) userIntents.push(trimmed)
+        }
+        continue
+      }
 
       if (role === 'user') {
         for (const part of content) {
@@ -508,21 +545,24 @@ ${conversationText}`
       .trim()
   }
 
-  private estimateTokens(messages: any[]): number {
+  private estimateTokens(messages: CompactionMessage[]): number {
     let total = 0
     for (const msg of messages) {
-      const content = msg.content ?? []
-      for (const part of content) {
-        if (part?.type === 'text' && part?.text) {
-          total += part.text.length
-        } else if (part?.type === 'tool-result' && part?.output?.value) {
-          // tool-result 的 value 是字符串，取其长度
-          total += typeof part.output.value === 'string' ? part.output.value.length : JSON.stringify(part.output.value).length
-        } else if (part?.type === 'tool-call' && part?.input) {
-          // tool-call 的 input 参数
-          total += JSON.stringify(part.input).length
-        } else if (typeof part === 'string') {
-          total += part.length
+      const content = msg.content
+      if (typeof content === 'string') {
+        total += content.length
+      } else if (Array.isArray(content)) {
+        for (const part of content) {
+          if (part.type === 'text' && part.text) {
+            total += part.text.length
+          } else if (part.type === 'tool-result' && part.output && typeof part.output === 'object' && 'value' in part.output) {
+            // tool-result 的 value 是字符串，取其长度
+            const value = (part.output as { value: unknown }).value
+            total += typeof value === 'string' ? value.length : JSON.stringify(value).length
+          } else if (part.type === 'tool-call' && part.input) {
+            // tool-call 的 input 参数
+            total += JSON.stringify(part.input).length
+          }
         }
       }
     }

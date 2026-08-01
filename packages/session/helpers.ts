@@ -71,34 +71,34 @@ export function inferPartType(t: string): PartType {
   }
 }
 
-export function rowToMessage(row: any): Message {
+export function rowToMessage(row: Record<string, unknown>): Message {
   return {
-    id: row.id,
-    sessionId: row.session_id,
-    role: row.role,
-    content: row.content,
-    agent: row.agent,
-    model: row.model,
-    tokenUsage: row.token_input > 0 ? {
-      input: row.token_input,
-      output: row.token_output,
+    id: row.id as string,
+    sessionId: row.session_id as string,
+    role: row.role as Message['role'],
+    content: row.content as string,
+    agent: row.agent as string | undefined,
+    model: row.model as string | undefined,
+    tokenUsage: (row.token_input as number) > 0 ? {
+      input: row.token_input as number,
+      output: row.token_output as number,
     } : undefined,
-    cost: row.cost,
-    createdAt: row.created_at,
+    cost: row.cost as number | undefined,
+    createdAt: row.created_at as number,
   }
 }
 
-export function rowToPart(row: any): Part {
+export function rowToPart(row: Record<string, unknown>): Part {
   return {
-    id: row.id,
-    messageId: row.message_id,
-    type: row.type,
-    content: row.content,
-    toolName: row.tool_name,
-    toolCallId: row.tool_call_id,
-    args: row.args ? JSON.parse(row.args) : undefined,
-    result: row.result,
-    metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-    createdAt: row.created_at,
+    id: row.id as string,
+    messageId: row.message_id as string,
+    type: row.type as PartType,
+    content: row.content as string,
+    toolName: row.tool_name as string | undefined,
+    toolCallId: row.tool_call_id as string | undefined,
+    args: row.args ? JSON.parse(row.args as string) : undefined,
+    result: row.result as string | undefined,
+    metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,
+    createdAt: row.created_at as number,
   }
 }

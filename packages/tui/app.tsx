@@ -38,12 +38,10 @@ function getTerminalSize(): { width: number; height: number } {
 
 import { ConfigProvider } from "./context/config"
 import { HistoryProvider } from "./context/history"
-import { KeybindProvider } from "./context/keybind"
 import { LoopProvider, useLoop } from "./context/loop"
 import { RouteProvider, useRoute } from "./context/route"
 import { ThemeProvider } from "./context/theme"
 import { Home } from "./routes/home"
-import { DialogProvider } from "./ui/dialog"
 import { Toast, ToastProvider, useToast } from "./ui/toast"
 
 setupGlobalErrorHandlers(devLogger)
@@ -189,16 +187,12 @@ export async function tui(config: any) {
             <ThemeProvider>
               <RouteProvider>
                 <HistoryProvider>
-                  <KeybindProvider>
-                    <DialogProvider>
-                      <ToastProvider>
-                        <Toast />
-                        <LoopProvider loop={loop} model={model} provider={config.llm.provider} sessionId={lastSessionId ?? undefined} llmConfig={config.llm} effectiveContextWindow={contextWindow}>
-                          <App />
-                        </LoopProvider>
-                      </ToastProvider>
-                    </DialogProvider>
-                  </KeybindProvider>
+                  <ToastProvider>
+                    <Toast />
+                    <LoopProvider loop={loop} model={model} provider={config.llm.provider} sessionId={lastSessionId ?? undefined} llmConfig={config.llm} effectiveContextWindow={contextWindow}>
+                      <App />
+                    </LoopProvider>
+                  </ToastProvider>
                 </HistoryProvider>
               </RouteProvider>
             </ThemeProvider>

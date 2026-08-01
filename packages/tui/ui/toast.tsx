@@ -1,4 +1,4 @@
-import { createContext, type ParentProps, Show, useContext } from "solid-js"
+import { createContext, type ParentProps, onCleanup, Show, useContext } from "solid-js"
 import { createStore } from "solid-js/store"
 import { SplitBorder } from "../component/border"
 import { useTheme } from "../context/theme"
@@ -38,12 +38,21 @@ function init() {
       toast.show({ message: String(err), variant: "error" })
     },
   }
-  return toast
+
+  const cleanup = () => {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle)
+      timeoutHandle = null
+    }
+  }
+
+  return { toast, cleanup }
 }
 
 export function ToastProvider(props: ParentProps) {
-  const value = init()
-  return <ctx.Provider value={value}>{props.children}</ctx.Provider>
+  const { toast, cleanup } = init()
+  onCleanup(cleanup)
+  return <ctx.Provider value={toast}>{props.children}</ctx.Provider>
 }
 
 export function useToast() {

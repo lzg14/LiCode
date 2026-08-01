@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { devLogger } from './dev-logger'
 
 export interface ProjectInfo {
   language: string          // 'typescript' | 'python' | 'go' | 'rust' | 'java' | 'csharp' | 'unknown'
@@ -64,7 +65,7 @@ function detectRuntimes(cwd: string): string[] {
     if (deps.bun) runtimes.push('bun')
     else if (deps.deno) runtimes.push('deno')
     else if (deps.node) runtimes.push('node')
-  } catch {}
+  } catch (e) { devLogger.debug('DETECT', 'detectRuntimes failed', e) }
   return runtimes
 }
 
@@ -83,7 +84,8 @@ function detectFramework(cwd: string): string | undefined {
     if (deps.svelte) return 'svelte'
     if (deps.bun) return 'bun'
     return undefined
-  } catch {
+  } catch (e) {
+    devLogger.debug('DETECT', 'detectFramework failed', e)
     return undefined
   }
 }

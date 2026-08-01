@@ -60,7 +60,7 @@ function registerCodesearch(registry: ToolRegistry): void {
         const { stdout } = await execFileAsync('rg', args, { maxBuffer: 1024 * 1024 })
         const lines = (stdout || '').split('\n').filter(Boolean).slice(0, maxResults)
         return { success: true, output: lines.join('\n') || '未找到匹配' }
-      } catch {}
+      } catch { /* rg 不可用，fallback 到 findstr */ }
       try {
         if (process.platform === 'win32') {
           const winPath = cwd.replace(/\//g, '\\')

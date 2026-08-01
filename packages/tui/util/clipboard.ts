@@ -7,8 +7,6 @@ import { spawn } from 'node:child_process'
  * Linux: xclip
  */
 
-export const copy = copyToClipboard
-
 export async function copyToClipboard(text: string): Promise<void> {
   return new Promise((resolve, reject) => {
     let cmd: string

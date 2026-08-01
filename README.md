@@ -79,7 +79,7 @@ licode/
 | LLM | [Anthropic](https://www.anthropic.com/) / [OpenAI](https://openai.com/) |
 | 验证 | [Zod](https://zod.dev/) |
 | 数据库 | SQLite (bun:sqlite) |
-| 测试 | [Vitest](https://vitest.dev/) |
+| 测试 | [Bun test](https://bun.sh/docs/cli/test) |
 
 ---
 

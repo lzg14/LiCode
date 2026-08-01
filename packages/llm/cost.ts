@@ -1,5 +1,4 @@
 import { MODEL_CATALOG } from './catalog'
-import type { LLMResponse } from './types'
 
 export interface CostEstimate {
   model: string
@@ -23,11 +22,6 @@ export function estimateCost(model: string, inputTokens: number, outputTokens: n
     outputCost,
     totalCost: inputCost + outputCost,
   }
-}
-
-export function calculateCost(model: string, response: LLMResponse): CostEstimate | null {
-  if (!response.usage) return null
-  return estimateCost(model, response.usage.inputTokens, response.usage.outputTokens)
 }
 
 export function formatCost(cents: number): string {

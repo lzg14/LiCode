@@ -175,7 +175,6 @@ export class CoreLoop {
   }
 
   async run(ctx: LoopContext): Promise<{ text: string; sessionId: string }> {
-    const startTime = Date.now()
     const timer = new Timer(0)
 
     // 如果外部没有传入 llm，使用构造时注入的
@@ -273,9 +272,6 @@ export class CoreLoop {
     } finally {
       // 更新 session 状态
       this.sessionManager.updateSession(session.id, { status: 'completed' })
-
-      // 记录会话结束
-      const _duration = Date.now() - startTime
 
       // 构建并回调 perf trace
       const trace = timer.buildTrace(ctx.sessionId)

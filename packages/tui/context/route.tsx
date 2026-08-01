@@ -2,7 +2,6 @@ import { type Accessor, createContext, createSignal, type JSX, useContext } from
 
 export type Route =
   | { type: "home" }
-  | { type: "session"; sessionID: string }
 
 export interface RouteContext {
   data: Accessor<Route>

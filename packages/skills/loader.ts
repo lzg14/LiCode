@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { devLogger } from '../core/dev-logger'
 import { globalSkillRegistry } from './registry'
 import type { Skill } from './types'
 
@@ -91,7 +92,8 @@ export class SkillLoader {
       globalSkillRegistry.register(skill)
       this.loadedSkills.add(skillPath)
       return true
-    } catch {
+    } catch (e) {
+      devLogger.debug('SKILL', `loadClaudeSkill failed: ${skillPath}`, e)
       return false
     }
   }
@@ -120,7 +122,8 @@ export class SkillLoader {
       globalSkillRegistry.register(skill)
       this.loadedSkills.add(skillPath)
       return true
-    } catch {
+    } catch (e) {
+      devLogger.debug('SKILL', `loadSkill failed: ${skillPath}`, e)
       return false
     }
   }
