@@ -7,12 +7,17 @@
 
 ## [Unreleased]
 
+（暂无）
+
+## [0.4.3] - 2026-07-05
+
 ### Fixed
 - **subagent 工具 "OK: (无输出)" 三次根因修复 — 接口字段错配**：`SubagentResult` 字段是 `text/error/durationMs`（`packages/core/subagent.ts:27-33`），但 `phases/execute/main.ts:212-213` 按 `ToolResult` 接口读 `output` —— 字段不存在 → 永远 `undefined` → 触发 `?? '(无输出)'` fallback → 主循环告诉 LLM `OK: (无输出)`。修复：在 main.ts subagent 分支显式 `execResult = { success: subResult.success, output: subResult.text, error: subResult.error }` 把 `SubagentResult` 适配成 `ToolResult` 形状。配套回归测试 `execute-e2e.test.ts`：断言第二轮 streamText 调用时 tool message content 的 tool-result value 不含 `(无输出)` 且含 subagent 真实输出
 - **TUI 内存泄漏和消息列表闪烁**（`eaf29dd`）：LoopProvider 添加 onCleanup 清理所有资源；streamingSegments 添加防抖；processedMessages 添加稳定 key；onIntermediateText 平滑过渡；prompt 模块级变量清理
 - **Anthropic API baseUrl /v1 后缀修复**（`978f579`）：统一处理第三方 Anthropic 兼容 API 的 baseUrl 缺少 /v1 后缀问题
 - **callLLM streamResult 泄漏修复**（`2a809fa`）：修复 callLLM 在 abort/timeout/异常路径泄漏 streamResult 内部 stitchableStream
 - **TUI 代码审查问题修复**（`fddeed5`）：tool-batch 展开逻辑、SIGINT handler 重复清理、_latestClosedSegments 竞态、prompt 模块级变量迁移
+- **TUI message-list.tsx UTF-8 BOM 和乱码注释清理**（`e5fde7b`）
 
 ### Changed
 - **代码质量提升**（`code-quality-improvement-plan`）：清理死代码（KeybindProvider/DialogProvider/_MAX_VISIBLE_TOOLS/copy 别名/_latestVersion/_duration/calculateCost）、修复 Spinner 动画、修复 ToastProvider 内存泄漏、修复 MessageItem 响应式缺陷、修复核心包 any 类型、修复错误吞没
