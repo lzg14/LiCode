@@ -1,31 +1,29 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import simpleGit, { type LogResult, type SimpleGit, type StatusResult } from 'simple-git'
+import { exec, execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { BaseIntegration, type HealthStatus } from './types'
 
-/**
- * Git 集成 - 使用 simple-git SDK
- */
+const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
+/**
+ * Git 集成 - 使用 git CLI（无需 simple-git 依赖）
+ */
 export class GitIntegration extends BaseIntegration {
   name = 'git'
   private repoPath: string
-  private git?: SimpleGit
 
   constructor(repoPath: string) {
     super()
     this.repoPath = repoPath
-    try {
-      this.git = simpleGit(repoPath)
-    } catch {
-      this.enabled = false
-    }
   }
 
   async connect(): Promise<void> {
-    if (!this.git) { this.enabled = false; return }
     if (existsSync(join(this.repoPath, '.git'))) {
       this.enabled = true
+    } else {
+      this.enabled = false
     }
   }
 
@@ -34,9 +32,8 @@ export class GitIntegration extends BaseIntegration {
   }
 
   async health(): Promise<HealthStatus> {
-    if (!this.git) return { healthy: false, message: 'Git not available' }
     try {
-      await this.git.status()
+      await execFileAsync('git', ['status'], { cwd: this.repoPath })
       return { healthy: true }
     } catch {
       return { healthy: false, message: 'Git not available' }
@@ -47,13 +44,22 @@ export class GitIntegration extends BaseIntegration {
    * 获取状态
    */
   async getStatus(): Promise<{ branch: string; ahead: number; behind: number; dirty: boolean }> {
-    if (!this.git) return { branch: '', ahead: 0, behind: 0, dirty: false }
-    const status: StatusResult = await this.git.status()
-    return {
-      branch: status.current ?? '',
-      ahead: status.ahead,
-      behind: status.behind,
-      dirty: status.isClean() === false,
+    try {
+      const { stdout: branch } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: this.repoPath })
+      const { stdout: statusOutput } = await execFileAsync('git', ['status', '--porcelain'], { cwd: this.repoPath })
+      const { stdout: aheadBehind } = await execFileAsync('git', ['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'], { cwd: this.repoPath }).catch(() => ({ stdout: '0\t0' }))
+
+      const [ahead, behind] = aheadBehind.trim().split('\t').map(Number)
+      const dirty = statusOutput.trim().length > 0
+
+      return {
+        branch: branch.trim(),
+        ahead: ahead || 0,
+        behind: behind || 0,
+        dirty,
+      }
+    } catch {
+      return { branch: '', ahead: 0, behind: 0, dirty: false }
     }
   }
 
@@ -61,53 +67,60 @@ export class GitIntegration extends BaseIntegration {
    * 获取 diff
    */
   async getDiff(staged = false): Promise<string> {
-    if (!this.git) return ''
-    if (staged) {
-      const diff = await this.git.diff(['--cached'])
-      return diff
+    try {
+      const args = staged ? ['diff', '--cached'] : ['diff']
+      const { stdout } = await execFileAsync('git', args, { cwd: this.repoPath })
+      return stdout
+    } catch {
+      return ''
     }
-    const diff = await this.git.diff()
-    return diff
   }
 
   /**
    * 获取 log
    */
   async getLog(count = 10): Promise<{ hash: string; message: string; author: string; date: string }[]> {
-    if (!this.git) return []
-    const log: LogResult = await this.git.log({ maxCount: count })
-    return log.all.map(entry => ({
-      hash: entry.hash,
-      message: entry.message,
-      author: entry.author_name,
-      date: entry.date,
-    }))
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['log', `--max-count=${count}`, '--pretty=format:%H|%s|%an|%ai'],
+        { cwd: this.repoPath }
+      )
+      return stdout.split('\n').filter(Boolean).map(line => {
+        const [hash, message, author, date] = line.split('|')
+        return { hash, message, author, date }
+      })
+    } catch {
+      return []
+    }
   }
 
   /**
    * 暂存文件
    */
   async add(files: string[]): Promise<void> {
-    if (!this.git) return
-    await this.git.add(files)
+    await execFileAsync('git', ['add', ...files], { cwd: this.repoPath })
   }
 
   /**
    * 提交
    */
   async commit(message: string): Promise<string> {
-    if (!this.git) return ''
-    const result = await this.git.commit(message)
-    return result.commit
+    await execFileAsync('git', ['commit', '-m', message], { cwd: this.repoPath })
+    const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: this.repoPath })
+    return stdout.trim().slice(0, 7)
   }
 
   /**
    * 获取分支列表
    */
   async getBranches(): Promise<string[]> {
-    if (!this.git) return []
-    const branches = await this.git.branchLocal()
-    return branches.all
+    try {
+      const { stdout } = await execFileAsync('git', ['branch', '--no-color'], { cwd: this.repoPath })
+      return stdout.split('\n').filter(Boolean).map(b => b.replace(/^\*?\s+/, ''))
+    } catch {
+      return []
+    }
   }
 
   /**

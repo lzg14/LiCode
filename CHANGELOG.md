@@ -7,7 +7,13 @@
 
 ## [Unreleased]
 
-（暂无）
+### Changed
+- **移除 simple-git 依赖**：`packages/integration/git.ts` 改用 `child_process.exec` 直接调用 git CLI，减少约 200KB 依赖体积
+- **清理 CHANGELOG.md 重复条目**：删除 v0.4.0 中重复的"测试"、"工程"、"文档"部分
+
+### Added
+- **tools 包测试扩展**：新增 `glob.test.ts`、`git.test.ts`、`shell.test.ts`；扩展 `bash.test.ts`（+7 用例）、`read.test.ts`（+5 用例）
+- **测试覆盖提升**：tools 包测试从 44 个用例增加到 131 个，覆盖更多边界场景和安全拦截
 
 ## [0.4.3] - 2026-07-05
 
@@ -137,10 +143,6 @@
 - **SessionStatus type guard**（`22c8986`）：加 `SESSION_STATUSES` 常量 + `parseSessionStatus(raw)`，DB 写入的 status 字符串读出时验证，落到 `unknown → failed` 兜底
 - **execute phases 类型严格化**（`22c8986`）：移除 `(ctx.model as { modelId?: string })?.modelId` 冗余断言；新增 `ModelMessage` 类型；`helpers.ts` 把 `content: any[]` 替换为 `content: MessageContent[]`
 
-### 测试
-- **`buildFallbackSummary` 6 段 + 3 子段覆盖**（`22c8986`，9 用例）：6 个一级 section + Progress 下 3 个二级（Done/In Progress/Blocked）+ Goal/Done 截断逻辑 + Critical Context 降级标注 + 空 extraction 占位
-- **`as any` LLM mock 改用 `MockLanguageModelV3` helper**（`4c31d51`）：新建 `packages/core/__tests__/helpers/mock-model.ts` 导出 `makeMockLanguageModel({ modelId?, provider? })`，替换 4 个测试文件（execute-e2e / execute-stream-error / session-recovery / subagent-tool-result-schema），统一 LLM 类型断言为 helper
-
 ### 工程
 - **CLI 测试脚手架**（`82a2d71`）：`logs.ts` 加 `export` + `import.meta.url` side-effect gate 让模块可被测试导入；新建 `__tests__/logs.test.ts` 覆盖 `--help` / `list` / `ERROR` 过滤 / `search` / `tail` 5 用例
 - **TUI 测试脚手架**（`82a2d71`）：`loop.tsx` 加 `parseImageRefs` export；新建 `context.test.ts` 覆盖 todos / shortcuts signals + `parseImageRefs` 共 6 用例
@@ -149,21 +151,6 @@
 
 ### 文档
 - **v0.3.1 improvement audit §12 实施状态追踪**（`5032a77`）：原 audit（2026-07-04 14:00 起草）6 小时内被多 agent 完成 7 项（T01/T02/T05/T06/T07/T12/T13），追写 §12 标注 ✅/⏳ 状态 + sprint 对比 + 显式记下 T11 与 25cccb4 的设计方向冲突
-清理未使用的导出和依赖**：移除未被引用的导出和多余的依赖声明
-
-### 测试
-- **`buildFallbackSummary` 6 段 + 3 子段覆盖**（`22c8986`，9 用例）：6 个一级 section + Progress 下 3 个二级（Done/In Progress/Blocked）+ Goal/Done 截断逻辑 + Critical Context 降级标注 + 空 extraction 占位
-- **`as any` LLM mock 改用 `MockLanguageModelV3` helper**（`4c31d51`）：新建 `packages/core/__tests__/helpers/mock-model.ts` 导出 `makeMockLanguageModel({ modelId?, provider? })`，替换 4 个测试文件（execute-e2e / execute-stream-error / session-recovery / subagent-tool-result-schema），统一 LLM 类型断言为 helper
-
-### 工程
-- **CLI 测试脚手架**（`82a2d71`）：`logs.ts` 加 `export` + `import.meta.url` side-effect gate 让模块可被测试导入；新建 `__tests__/logs.test.ts` 覆盖 `--help` / `list` / `ERROR` 过滤 / `search` / `tail` 5 用例
-- **TUI 测试脚手架**（`82a2d71`）：`loop.tsx` 加 `parseImageRefs` export；新建 `context.test.ts` 覆盖 todos / shortcuts signals + `parseImageRefs` 共 6 用例
-- **Release workflow**（`82a2d71`）：`.github/workflows/release.yml` 在 `v*` tag 上自动跑 3 平台 build + lint + test，上传 dist artifact + 创建 GitHub Release；新增 `RELEASING.md` 人工发布 checklist
-- **CI coverage 上传（T08 from v0.3.1 audit）**（`5032a77`）：`ci.yml` test step 加 `--coverage --coverage-reporter=lcov`（bun 原生支持），ubuntu matrix 把 `coverage/lcov.info` 上传为 workflow artifact；`.gitignore` 加 `coverage/` / `*.lcov` 规则
-
-### 文档
-- **v0.3.1 improvement audit §12 实施状态追踪**（`5032a77`）：原 audit（2026-07-04 14:00 起草）6 小时内被多 agent 完成 7 项（T01/T02/T05/T06/T07/T12/T13），追写 §12 标注 ✅/⏳ 状态 + sprint 对比 + 显式记下 T11 与 25cccb4 的设计方向冲突
-
 
 ### 工程（unreleased 续）
 - **TUI home.tsx 智能 stickyScroll 去重**（`1a87656`）：合并 `5a27feb` + `eebdf42` 时 `checkAtBottom` 函数和 `const [stickyEnabled, setStickyEnabled] = createSignal(true)` 各被声明了两次（biome `noRedeclare` 编译错）。删除旧版（带 `return atBottom` boolean 返回）+ 重复 declare 后保留最简版（无返回值箭头函数 + 信号），下游 4 处 `setTimeout(checkAtBottom, 50)` + `stickyScroll={stickyEnabled()}` 使用不受影响
