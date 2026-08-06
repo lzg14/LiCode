@@ -286,7 +286,7 @@ async function executeToolBatch(
 // v2 §4.M5: 追加 augmentedPrompt.systemHints（来自 M5 adapter beforeExecute）
 // 顺序：SYSTEM_PROMPT → projectConfig → activeSkill → intelligenceAdapter hints
 
-function buildSystem(
+export function buildSystem(
   ctx: ExecuteContext,
   projectConfig: string,
   intelligenceHints: string,
