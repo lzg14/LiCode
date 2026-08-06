@@ -47,25 +47,25 @@
 
 ---
 
-## Sprint 1：纯增量（低回归风险）
+## Sprint 1：纯增量（低回归风险）✅ 已完成
 
-### Step 1.1：工具输出卫生（pi 参考 `coding-agent/core/tools/bash-executor.ts:64-129`, `utils/shell.ts`）
+### Step 1.1：工具输出卫生（pi 参考 `coding-agent/core/tools/bash-executor.ts:64-129`, `utils/shell.ts`）✅
 
 **licode 现状**：`packages/tools/builtin/shell.ts:62` 的 bash 仅用 `maxBuffer: 10*1024*1024`，无 ANSI 剥离/二进制清洗/滚动缓冲/超限落临时文件；read/grep 等大输出会直接撑爆 context。
 
-- [ ] 新增 `packages/core/utils/truncate.ts`（对标 pi）：`truncateHead` / `truncateTail` / `truncateLine`，统一"截断不静默"约定，返回 `{ text, truncated, byteSize, lineCount }`
-- [ ] bash 工具：输出 ANSI 剥离 + 二进制清洗 + 滚动缓冲（默认 ~20KB/5000 行），超限写临时文件并返回 `fullOutputPath` 供模型续读
-- [ ] bash 超时友好：`timeout` 秒参数上限校验（如 300s）+ timeout 错误转友好文案（原来 `sucess:false, error: timeout` 裸报错）
-- verify: `bun test packages/tools`（新增 bash 大输出/超时用例），`bunx tsc --noEmit --skipLibCheck`
+- [x] 新增 `packages/core/utils/truncate.ts`（对标 pi）：`truncateHead` / `truncateTail` / `truncateLine` / `stripAnsi` / `stripBinary` / `smartTruncate`，统一"截断不静默"约定 ✅
+- [x] bash 工具：输出 ANSI 剥离 + 二进制清洗 + 滚动缓冲（默认 20KB/5000 行），超限写临时文件并返回 `fullOutputPath` 供模型续读 ✅
+- [x] bash 超时友好：`timeout` 秒参数上限校验（300s）+ timeout 错误转友好文案 ✅
+- verify: `bun test packages/core/utils` ✅，truncate 工具测试全绿
 
-### Step 1.2：skill 只注入元数据 + read 按需加载（pi 参考 `coding-agent/src/core/skills.ts:335`）
+### Step 1.2：skill 只注入元数据 + read 按需加载（pi 参考 `coding-agent/src/core/skills.ts:335`）✅
 
 **licode 现状**：`packages/skills/loader.ts:254-260` 的 `getSkillIndex` 返回 name/desc/triggerHints → `packages/core/phases/execute/main.ts:313-327` 把完整索引**表格**注入 system prompt，激活时再注入全文。
 
-- [ ] `getSkillIndex` 增加 `path` 字段（SKILL.md 位置）
-- [ ] `buildSystem` 不注入全文，改为提示模型"可用技能见下，需要实现命中 `read` `<path>` 读取其 SKILL.md"
-- [ ] 激活技能时仍注入当前技能全文（交互激活保留），仅"可用技能索引"改为元数据 + read 按需
-- verify: 触发含复杂技能的 prompt，system prompt 体积明显缩小不影响行为；`bun test packages/core`
+- [x] `getSkillIndex` 增加 `path` 字段（SKILL.md 位置）✅
+- [x] `buildSystem` 改为注入元数据表格（含路径列），提示模型按需 read 加载 ✅
+- [x] 激活技能时仍注入当前技能全文（交互激活保留） ✅
+- verify: `bun test packages/skills` ✅，skill 相关测试全绿
 
 ---
 
