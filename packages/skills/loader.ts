@@ -104,6 +104,7 @@ export class SkillLoader {
         instructions: body,
         sandboxLevel: 1,
         triggerHints: extractTriggerHints(body),
+        path: skillPath, // 新增：保存 SKILL.md 位置
       }
 
       globalSkillRegistry.register(skill)
@@ -135,6 +136,9 @@ export class SkillLoader {
       }
 
       if (!skill.name) return false
+
+      // 保存 path
+      skill.path = skillPath
 
       globalSkillRegistry.register(skill)
       this.loadedSkills.add(skillPath)
@@ -250,6 +254,7 @@ export async function findSkill(name: string, cwd?: string): Promise<Skill | und
 
 /**
  * 获取所有 skill 的索引信息（用于 system prompt 注入）
+ * 增加 path 字段，支持按需 read 加载
  */
 export async function getSkillIndex(cwd?: string): Promise<SkillIndex[]> {
   const skills = await loadAllSkills(cwd)
@@ -257,5 +262,6 @@ export async function getSkillIndex(cwd?: string): Promise<SkillIndex[]> {
     name: s.name,
     description: s.description,
     triggerHints: s.triggerHints || '',
+    path: s.path, // 新增：SKILL.md 文件位置，供模型按需 read
   }))
 }

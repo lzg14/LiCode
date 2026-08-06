@@ -306,13 +306,14 @@ function buildSystem(
     // 单 skill 模式（兼容）
     sys += `\n\n## 当前激活技能: ${ctx.activeSkill ?? "?"}\n\n${ctx.activeSkillInstructions}\n\n请严格遵循上述技能的指令与规则。`
   }
-  // 注入可用 skill 索引（让 AI 知道有哪些 skill 可调用）
+  // 注入可用 skill 元数据（只注入索引，按需 read 加载全文）
   if (ctx.availableSkills && ctx.availableSkills.length > 0) {
-    sys += `\n\n## 可用技能\n\n以下技能可通过 \`skill\` 工具激活。当用户任务匹配触发条件时，应先激活对应技能再执行。\n\n`
-    sys += `| 技能 | 描述 | 何时用 |\n|------|------|--------|\n`
+    sys += `\n\n## 可用技能\n\n以下技能可通过 \`skill\` 工具激活。当用户任务匹配触发条件时，应先激活对应技能再执行。\n注：技能详细指令请用 read 工具读取对应的 SKILL.md 文件（路径见下表）。\n\n`
+    sys += `| 技能 | 描述 | 何时用 | 路径 |\n|------|------|--------|------|\n`
     for (const s of ctx.availableSkills) {
       const hints = s.triggerHints || '-'
-      sys += `| ${s.name} | ${s.description || '-'} | ${hints} |\n`
+      const path = s.path || '-'
+      sys += `| ${s.name} | ${s.description || '-'} | ${hints} | ${path} |\n`
     }
     sys += `\n激活方式：调用 \`skill\` 工具，参数 \`{ "name": "<技能名>" }\`。`
   }

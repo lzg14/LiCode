@@ -1,9 +1,11 @@
 import { exec, execFile } from 'node:child_process'
-import { stat as fsStat } from 'node:fs/promises'
+import { stat as fsStat, writeFile, mkdir } from 'node:fs/promises'
 import { promisify } from 'node:util'
-import { resolve } from 'node:path'
+import { resolve, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { z } from 'zod'
 import { getSecurityLayer } from '../../security'
+import { smartTruncate, getTruncationSummary, type TruncateResult } from '../../core/utils/truncate'
 import type { ToolRegistry } from '../registry'
 import type { ToolContext } from '../context'
 
@@ -42,11 +44,58 @@ function checkProcessLeak(command: string): { leak: boolean; reason?: string } {
   return { leak: false }
 }
 
+/** 最大超时秒数（防止用户设置过长） */
+const MAX_TIMEOUT_SECONDS = 300
+/** 默认超时 */
+const DEFAULT_TIMEOUT_SECONDS = 30
+/** 输出截断阈值 */
+const OUTPUT_MAX_BYTES = 20 * 1024 // 20KB
+const OUTPUT_MAX_LINES = 5000
+
+/** 保存完整输出的临时目录 */
+const FULL_OUTPUT_DIR = join(tmpdir(), 'licode-bash-output')
+
+/**
+ * 保存完整输出到临时文件，返回路径
+ */
+async function saveFullOutput(output: string, command: string): Promise<string> {
+  await mkdir(FULL_OUTPUT_DIR, { recursive: true })
+  const timestamp = Date.now()
+  const safeCommand = command.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50)
+  const filePath = join(FULL_OUTPUT_DIR, `${timestamp}-${safeCommand}.txt`)
+  
+  const header = `# Command: ${command}
+# Timestamp: ${new Date().toISOString()}
+# Size: ${Buffer.byteLength(output, 'utf-8')} bytes
+# Lines: ${output.split('\n').length}
+
+${output}`
+  
+  await writeFile(filePath, header, 'utf-8')
+  return filePath
+}
+
+/**
+ * 友好的超时错误信息
+ */
+function formatTimeoutError(timeout: number, command: string): string {
+  return `命令执行超时 (${timeout}秒)
+命令: ${command.slice(0, 100)}${command.length > 100 ? '...' : ''}
+建议:
+- 增加 timeout 参数（最大 ${MAX_TIMEOUT_SECONDS} 秒）
+- 检查命令是否需要更长时间
+- 使用后台执行方式（如 elevated_bash）`
+}
+
 function registerBash(registry: ToolRegistry): void {
   registry.register({
     name: 'bash',
-    description: '执行 shell 命令。',
-    inputSchema: z.object({ command: z.string(), cwd: z.string().optional(), timeout: z.number().optional() }),
+    description: '执行 shell 命令。支持超时控制、大输出自动截断。',
+    inputSchema: z.object({
+      command: z.string().describe('要执行的 shell 命令'),
+      cwd: z.string().optional().describe('工作目录'),
+      timeout: z.number().optional().describe(`超时秒数，默认 ${DEFAULT_TIMEOUT_SECONDS}，最大 ${MAX_TIMEOUT_SECONDS}`),
+    }),
     handler: async ({ command, cwd, timeout }: { command: string; cwd?: string; timeout?: number }, ctx: ToolContext) => {
       // 进程泄漏守卫
       const leakCheck = checkProcessLeak(command)
@@ -58,10 +107,62 @@ function registerBash(registry: ToolRegistry): void {
       if (!cmdCheck.allowed) {
         return { success: false, error: cmdCheck.reason ?? '命令被安全策略阻止' }
       }
+
+      // timeout 参数校验
+      const effectiveTimeout = Math.min(
+        timeout ?? DEFAULT_TIMEOUT_SECONDS,
+        MAX_TIMEOUT_SECONDS
+      )
+      
       try {
-        const { stdout, stderr } = await execAsync(command, { cwd: cwd ?? ctx.cwd, timeout: timeout ?? 30_000, maxBuffer: 10 * 1024 * 1024 })
-        return { success: true, output: stdout || stderr || '完成' }
-      } catch (e) { return { success: false, error: e instanceof Error ? e.message : String(e) } }
+        const { stdout, stderr } = await execAsync(command, {
+          cwd: cwd ?? ctx.cwd,
+          timeout: effectiveTimeout * 1000,
+          maxBuffer: 50 * 1024 * 1024, // 50MB 内部缓冲
+        })
+        
+        const rawOutput = stdout || stderr || '完成'
+        
+        // 输出卫生：截断 + 清理
+        const truncated = smartTruncate(rawOutput, {
+          maxBytes: OUTPUT_MAX_BYTES,
+          maxLines: OUTPUT_MAX_LINES,
+        })
+        
+        let output = truncated.text
+        let fullOutputPath: string | undefined
+        
+        // 如果被截断，保存完整输出到临时文件
+        if (truncated.truncated) {
+          fullOutputPath = await saveFullOutput(rawOutput, command)
+          const summary = getTruncationSummary(truncated)
+          output = `${output}
+
+完整输出已保存到: ${fullOutputPath}`
+          if (summary) {
+            output = `${summary}\n${output}`
+          }
+        }
+        
+        return {
+          success: true,
+          output,
+          metadata: truncated.truncated ? { fullOutputPath, truncated: true } : undefined,
+        }
+      } catch (e) {
+        const error = e instanceof Error ? e : new Error(String(e))
+        const msg = error.message
+        
+        // 超时友好错误
+        if (msg.includes('timeout') || msg.includes('SIGTERM')) {
+          return {
+            success: false,
+            error: formatTimeoutError(effectiveTimeout, command),
+          }
+        }
+        
+        return { success: false, error: msg }
+      }
     },
   })
 }
