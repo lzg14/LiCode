@@ -1,0 +1,24 @@
+{
+  "name": "light",
+  "mode": "light",
+  "theme": {
+    "primary": "#1e66f5",
+    "error": "#d20f39",
+    "warning": "#df8e1d",
+    "success": "#40a02b",
+    "info": "#209fb5",
+    "text": "#4c4f69",
+    "textMuted": "#9ca0b0",
+    "background": "#eff1f5",
+    "backgroundPanel": "#e6e9ef",
+    "backgroundElement": "#dce0e8",
+    "border": "#ccd0da",
+    "borderActive": "#1e66f5"
+  },
+  "defs": {
+    "darkStep1": "#dce0e8",
+    "darkStep2": "#ccd0da",
+    "lightStep1": "#e6e9ef",
+    "lightStep2": "#eff1f5"
+  }
+}

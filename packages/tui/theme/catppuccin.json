@@ -1,0 +1,24 @@
+{
+  "name": "catppuccin",
+  "mode": "dark",
+  "theme": {
+    "primary": "#cba6f7",
+    "error": "#f38ba8",
+    "warning": "#fab387",
+    "success": "#a6e3a1",
+    "info": "#89dceb",
+    "text": "#cdd6f4",
+    "textMuted": "#6c7086",
+    "background": "#1e1e2e",
+    "backgroundPanel": "#181825",
+    "backgroundElement": "#313244",
+    "border": "#45475a",
+    "borderActive": "#cba6f7"
+  },
+  "defs": {
+    "darkStep1": "#313244",
+    "darkStep2": "#45475a",
+    "lightStep1": "#bac2de",
+    "lightStep2": "#a6adc8"
+  }
+}
