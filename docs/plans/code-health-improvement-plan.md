@@ -308,15 +308,17 @@ D:\ProjectFile\ai-talk    -> RDpcUHJvamVjdEZp   ← 碰撞
   - `licode remove <name>` 卸载包 ✅
   - 支持 npm、git、本地路径三种来源 ✅
 
-- [ ] **Step 27**: 完善主题系统
-  - 支持主题文件加载：`~/.licode/themes/`、`.licode/themes/`
-  - 热重载：修改文件立即生效
-  - 位置：`packages/tui/theme/`
+- [x] **Step 27**: 完善主题系统
+  - 位置：`packages/tui/theme/loader.ts`
+  - 支持主题文件加载：`~/.licode/themes/`、`.licode/themes/` ✅
+  - 热重载：修改文件立即生效 ✅
+  - 新增 light、catppuccin 主题 ✅
 
-- [ ] **Step 28**: 添加项目信任机制
-  - 加载项目级配置前询问用户信任
-  - 保存决策：`~/.licode/trust.json`
+- [x] **Step 28**: 添加项目信任机制
   - 位置：`packages/security/trust.ts`
+  - 加载项目级配置前询问用户信任 ✅
+  - 保存决策：`~/.licode/trust.json` ✅
+  - 支持子目录信任继承 ✅
 
 - [ ] **Step 29**: 编写生产差距文档更新
   - 更新：`docs/plans/production-gaps-2026-q3.md`
@@ -325,8 +327,8 @@ D:\ProjectFile\ai-talk    -> RDpcUHJvamVjdEZp   ← 碰撞
 - verify：
   - 包管理命令可用 ✅
   - CLI 测试通过 ✅
-  - 主题系统待后续实现
-  - 项目信任机制待后续实现
+  - 主题系统可用 ✅
+  - 项目信任机制可用 ✅
 
 ---
 
@@ -355,8 +357,8 @@ D:\ProjectFile\ai-talk    -> RDpcUHJvamVjdEZp   ← 碰撞
 - [x] Prompt 模板变量替换可用 ✅
 - [x] 多级上下文文件加载正常 ✅
 - [x] 包管理基础命令可用 ✅
-- [ ] 主题热重载可用（待实现）
-- [ ] 项目信任机制可用（待实现）
+- [x] 主题热重载可用 ✅
+- [x] 项目信任机制可用 ✅
 - [x] 相关代码已编写 ✅
 
 ---
