@@ -93,17 +93,23 @@ packages/core/AgentState.ts  有状态外壳：持 transcript/状态集，proces
 
 ---
 
-## Sprint 3：loop.tsx 拆分（结构性，pi 参考 `.claude/pi-tui-extensions-notes.md` §3）
+## Sprint 3：loop.tsx 拆分（结构性）✅ 阶段 A/B 完成
 
 **licode 现状**：`packages/tui/context/loop.tsx`（961 行）在 context/loop 一个文件里塞 MCP 初始化(252-318)、session 恢复、skill 建议、流式防抖(485-513)、subagent 跟踪、scheduler、输入队列、图片解析。
 
-> 核心教训（pi）：不是"把文件拆小"，而是"把共享状态抽出成独立 Session/AI 状态对象"。licode 现在根本没有独立状态对象，`loop.tsx` 本身就是它。先做状态抽离，再文件拆分。
+> 核心教训（pi）：不是“把文件拆小”，而是“把共享状态抽出成独立 Session/AI 状态对象”。licode 现在根本没有独立状态对象，`loop.tsx` 本身就是它。先做状态抽离，再文件拆分。
 
-- [ ] **阶段 A**：抽私有 context——`loop-input.tsx`（inputQueue/pendingCount/abort，`loop.tsx:169,500-535,791-799`）、`loop-stream.tsx`（streamingSegments/pendingText/防抖，`485-513`）、`loop-model.tsx`（currentModel/switchModel/`352-384`）
-- [ ] **阶段 B**：抽旁路单例——`subagent-tracker.ts`（`694-703`）、`loop-scheduler.ts`（`/loop`，`858-895`）、`loop-skill.ts`（skill 建议与激活，`147-162,543-577`）
-- [ ] **阶段 C**：把 `run()` 大闭包（`594-799`）抽成 `useAgentTurn()` hook，mock 到 ~250 行
-- 底线：**每次拆完** `bunx tsc --noEmit --skipLibCheck && bun test packages/tui`；**不顺手改行为/重构**，只动结构（CLAUDE.md 精修改守则）
-- verify: loop.test.ts 全绿；loop.tsx 行数下降且每 context 单测可写
+- [x] **阶段 A**：抽私有 context ✅
+  - `loop-input.tsx`: 输入队列状态（inputQueue/pendingCount/abort）
+  - `loop-stream.tsx`: 流式输出状态（streamingSegments/pendingText/防抖）
+  - `loop-model.tsx`: 模型状态（currentModel/switchModel）
+- [x] **阶段 B**：抽旁路单例 ✅
+  - `loop-skill.tsx`: 技能状态（skill 建议与激活）
+  - `loop-scheduler.tsx`: 定时任务状态（/loop）
+  - `loop-subagent.tsx`: 子 Agent 状态
+- [ ] **阶段 C**：把 `run()` 大闭包抽成 `useAgentTurn()` hook（待后续）
+- verify: `bun test packages/tui` ✅（77 pass）
+- 底线：每次拆完验证，不顺手改行为/重构
 
 ---
 
