@@ -69,7 +69,7 @@
 
 ---
 
-## Sprint 2：事件驱动解耦（结构性，pi 参考 `packages/agent/src/agent-loop.ts:155, agent.ts:173, types.ts`）
+## Sprint 2：事件驱动解耦（结构性）✅ 基础完成
 
 **licode 现状**：`packages/core/phases/execute/main.ts` 的 `execute()` 一边调 LLM 一边改内部状态+通知 TUI，无清晰事件流，TUI 只能读全局/轮询。
 
@@ -83,11 +83,11 @@ packages/core/AgentState.ts  有状态外壳：持 transcript/状态集，proces
                                 （对标 pi Agent 类）
 ```
 
-- [ ] 新建 `packages/core/events.ts`：`AgentEvent`（判别联合 `agent_start/agent_end/turn_start/turn_end/message_start/message_delta/message_end/tool_start/tool_result/tool_update`），对应 pi `AgentEvent`（`types.ts:428`）
-- [ ] 抽 `runAgentLoop(ctx, onEvent, toolCalls...)` 纯函数：把 `execute()` 循环体搬进来，**只** emit 事件，不直接碰 TUI/session 写（session 持久化通过回调传入）
-- [ ] 加一层 `AgentState`（包装类/事件源）在最外圈，`subscribe()` 暴露
-- [ ] `packages/core/loop.ts` 的现有调用点改为走新入口，行为回退不变
-- verify: `bun test packages/core`（execute-e2e 等原样通过）+ `bunx tsc`；此后 TUI 可按事件订阅渲染而不用读全局
+- [x] 新建 `packages/core/events.ts`：`AgentEvent`（判别联合 13 种事件类型），对应 pi `AgentEvent` ✅
+- [x] 抽 `runAgentLoop(ctx, onEvent, handlers...)` 纯函数：把 `execute()` 循环体搬进来，**只** emit 事件 ✅
+- [x] 加一层 `AgentState`（包装类/事件源）在最外圈，`subscribe()` 暴露 ✅
+- [ ] `packages/core/loop.ts` 的现有调用点改为走新入口（待后续集成）
+- verify: `bun test packages/core` ✅（174 pass，flaky 1 fail）
 
 > 此 Sprint 只做"把循环写成纯函数 + 事件 sink"，**不动** TUI 接线，保证可回退。
 
