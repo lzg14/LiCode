@@ -23,7 +23,7 @@ import { configLoader } from '../config/loader'
 import { createModel } from '../llm/provider'
 import { globalToolRegistry } from '../tools/registry'
 import { registerBuiltinTools } from '../tools/builtin'
-import { zodToJsonSchema } from '../utils'
+import { zodToJsonSchema } from '../core/utils'
 import { jsonSchema, tool } from 'ai'
 import { homedir } from 'os'
 

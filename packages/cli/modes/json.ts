@@ -15,13 +15,12 @@
 
 import { readFile } from 'fs/promises'
 import { resolve } from 'path'
-import { streamText } from 'ai'
+import { streamText, jsonSchema, tool } from 'ai'
 import { configLoader } from '../../config/loader'
 import { createModel } from '../../llm/provider'
 import { globalToolRegistry } from '../../tools/registry'
 import { registerBuiltinTools } from '../../tools/builtin'
-import { zodToJsonSchema } from '../../utils'
-import { jsonSchema, tool } from 'ai'
+import { zodToJsonSchema } from '../../core/utils'
 import { homedir } from 'os'
 
 export interface JSONEvent {
