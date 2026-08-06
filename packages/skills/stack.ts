@@ -134,7 +134,7 @@ export function inferSkillStack(userInput: string): string[] {
 
   if (matchCount >= 2) {
     // 多步骤任务，先加 planning
-    if (/重构|重构|模块|设计/i.test(input)) {
+    if (/重构|模块|设计/i.test(input)) {
       skills.push('planning')
     }
   }

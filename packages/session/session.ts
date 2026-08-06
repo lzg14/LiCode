@@ -257,7 +257,138 @@ export class SessionManager {
     return getLastSession(this.db, directory)
   }
 
+  // ============================================================
+  // 会话树操作
+  // ============================================================
+
+  /**
+   * 获取指定会话的所有子会话
+   */
+  getChildren(parentId: string): Session[] {
+    return this.listSessions({ parentId })
+  }
+
+  /**
+   * 获取会话的完整树结构（递归）
+   */
+  getSessionTree(sessionId: string): SessionTreeNode | null {
+    const session = this.getSession(sessionId)
+    if (!session) return null
+
+    const children = this.getChildren(sessionId)
+    return {
+      session,
+      children: children.map(c => this.getSessionTree(c.id)!).filter(Boolean),
+    }
+  }
+
+  /**
+   * 获取会话的祖先链（从根到当前会话）
+   */
+  getAncestors(sessionId: string): Session[] {
+    const ancestors: Session[] = []
+    let current = this.getSession(sessionId)
+    
+    while (current?.parentId) {
+      const parent = this.getSession(current.parentId)
+      if (parent) {
+        ancestors.unshift(parent)
+        current = parent
+      } else {
+        break
+      }
+    }
+    
+    return ancestors
+  }
+
+  /**
+   * 从指定消息分叉会话
+   * 创建一个新会话，继承原会话到指定消息的历史
+   */
+  forkSession(sourceSessionId: string, fromMessageId?: string): Session {
+    const sourceSession = this.getSession(sourceSessionId)
+    if (!sourceSession) {
+      throw new Error(`Source session ${sourceSessionId} not found`)
+    }
+
+    // 创建新会话
+    const newSession = this.createSession({
+      title: `Forked from ${sourceSession.title}`,
+      directory: sourceSession.directory,
+      parentId: sourceSessionId,
+      contextFrom: sourceSessionId,
+      contextWatermark: fromMessageId,
+      model: sourceSession.model,
+      provider: sourceSession.provider,
+    })
+
+    return newSession
+  }
+
+  /**
+   * 克隆会话（复制完整历史到新会话）
+   */
+  cloneSession(sessionId: string): Session {
+    const sourceSession = this.getSession(sessionId)
+    if (!sourceSession) {
+      throw new Error(`Source session ${sessionId} not found`)
+    }
+
+    // 创建新会话
+    const newSession = this.createSession({
+      title: `Cloned from ${sourceSession.title}`,
+      directory: sourceSession.directory,
+      model: sourceSession.model,
+      provider: sourceSession.provider,
+    })
+
+    // 复制所有消息
+    const messages = this.getMessages(sessionId)
+    for (const msg of messages) {
+      this.addMessage({
+        sessionId: newSession.id,
+        role: msg.role,
+        content: msg.content,
+        agent: msg.agent,
+        model: msg.model,
+        tokenUsage: msg.tokenUsage,
+        cost: msg.cost,
+      })
+    }
+
+    return newSession
+  }
+
+  /**
+   * 获取当前活跃分支（从指定会话沿着最后一个子会话向下）
+   */
+  getActiveBranch(sessionId: string): Session[] {
+    const branch: Session[] = []
+    let currentId: string | undefined = sessionId
+    
+    while (currentId) {
+      const session = this.getSession(currentId)
+      if (session) {
+        branch.push(session)
+        const children = this.getChildren(currentId)
+        // 选择最新的子会话作为活跃分支
+        currentId = children.length > 0 ? children[children.length - 1].id : undefined
+      } else {
+        break
+      }
+    }
+    
+    return branch
+  }
+
   close(): void {
     this.db.close()
   }
+}
+
+/** 会话树节点 */
+export interface SessionTreeNode {
+  session: Session
+  children: SessionTreeNode[]
 }

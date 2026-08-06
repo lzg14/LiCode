@@ -20,6 +20,10 @@ const BUILTIN_COMMANDS = [
   { type: 'cmd' as const, label: '/loop', desc: '定时执行', usage: '/loop <间隔> <提示词>' },
   { type: 'cmd' as const, label: '/model', desc: '切换模型' },
   { type: 'cmd' as const, label: '/skill', desc: '激活/列出技能', usage: '/skill <名称>' },
+  { type: 'cmd' as const, label: '/tree', desc: '会话树导航' },
+  { type: 'cmd' as const, label: '/fork', desc: '分叉会话' },
+  { type: 'cmd' as const, label: '/clone', desc: '克隆当前会话' },
+  { type: 'cmd' as const, label: '/session', desc: '会话信息' },
 ]
 
 export function Home() {
@@ -150,6 +154,22 @@ export function Home() {
     else if (label === '/compact') compactSession()
     else if (label === '/help') setHelpOpen(true)
     else if (label === '/model') toggleModelPicker()
+    else if (label === '/tree') {
+      // TODO: 实现会话树导航 UI
+      addMessage({ role: "system", content: "会话树功能开发中..." })
+    }
+    else if (label === '/fork') {
+      // TODO: 实现分叉会话
+      addMessage({ role: "system", content: "分叉会话功能开发中..." })
+    }
+    else if (label === '/clone') {
+      // TODO: 实现克隆会话
+      addMessage({ role: "system", content: "克隆会话功能开发中..." })
+    }
+    else if (label === '/session') {
+      // TODO: 显示会话信息
+      addMessage({ role: "system", content: "会话信息功能开发中..." })
+    }
     else if (label.startsWith('/')) {
       const skillName = label.replace(/^\//, '')
       setActiveSkill(skillName)
@@ -163,6 +183,7 @@ export function Home() {
     if (!selected) return
     handleSlashSubmitByLabel(selected.label)
     setSlashOpen(false)
+    setPromptText("")
   }
 
   // 全局快捷键（不受 textarea 焦点限制）
@@ -292,6 +313,7 @@ export function Home() {
       const cmd = pendingSlashCmd()!
       setPendingSlashCmd(null)
       handleSlashSubmitByLabel(cmd)
+      setPromptText("")
       return
     }
     // PageUp/PageDown/Home/End: 直接控制消息列表滚动

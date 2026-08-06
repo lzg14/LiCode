@@ -7,7 +7,6 @@
 // - upsert 语义（依赖 Memory.writeRaw）
 // - 失败不 throw — 只 devLogger.warn，adapter 不 crash
 
-import { Buffer } from 'node:buffer'
 import { devLogger } from '../dev-logger'
 import {
   recordErrorPattern,
@@ -17,12 +16,9 @@ import {
   type ToolStatsEntry,
   type UserPrefEntry,
 } from '../../memory/schema'
+import { projectId } from '../../memory/project-id'
 import type { Memory } from '../../memory/memory'
 import type { IntelligenceContext, ToolCallEvent } from './types'
-
-function projectId(cwd: string): string {
-  return Buffer.from(cwd).toString('base64').slice(0, 16)
-}
 
 /** 按 id 找已有 entry（v2 entries: tool-stats / user-pref / error-pattern） */
 function findById(memory: Memory, id: string): unknown {

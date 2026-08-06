@@ -19,18 +19,19 @@ describe("cli index", () => {
       resolve(__dirnameSrc, "../index.ts"),
       "utf-8",
     )
-    expect(indexContent).toContain('from "../tui/app"')
+    // 新的 index.ts 使用 '../tui/app' 导入
+    expect(indexContent).toContain("from '../tui/app'")
     expect(indexContent).toContain("runTUI")
   })
 
-  it("index.ts calls runTUI and catches errors", async () => {
+  it("index.ts has main function and error handling", async () => {
     const fs = await import("node:fs")
     const indexContent = fs.readFileSync(
       resolve(__dirnameSrc, "../index.ts"),
       "utf-8",
     )
-    expect(indexContent).toContain("runTUI()")
-    expect(indexContent).toContain(".catch(console.error)")
+    expect(indexContent).toContain("async function main()")
+    expect(indexContent).toContain(".catch((e)")
   })
 
   it("index.ts has shebang for direct execution", async () => {
@@ -40,5 +41,47 @@ describe("cli index", () => {
       "utf-8",
     )
     expect(indexContent.startsWith("#!/usr/bin/env bun")).toBe(true)
+  })
+
+  it("index.ts supports print mode", async () => {
+    const fs = await import("node:fs")
+    const indexContent = fs.readFileSync(
+      resolve(__dirnameSrc, "../index.ts"),
+      "utf-8",
+    )
+    expect(indexContent).toContain("--print")
+    expect(indexContent).toContain("-p")
+    expect(indexContent).toContain("runPrint")
+  })
+
+  it("index.ts supports JSON mode", async () => {
+    const fs = await import("node:fs")
+    const indexContent = fs.readFileSync(
+      resolve(__dirnameSrc, "../index.ts"),
+      "utf-8",
+    )
+    expect(indexContent).toContain("--mode")
+    expect(indexContent).toContain("json")
+    expect(indexContent).toContain("runJSON")
+  })
+
+  it("index.ts supports install command", async () => {
+    const fs = await import("node:fs")
+    const indexContent = fs.readFileSync(
+      resolve(__dirnameSrc, "../index.ts"),
+      "utf-8",
+    )
+    expect(indexContent).toContain("install")
+    expect(indexContent).toContain("runInstall")
+  })
+
+  it("index.ts supports list command", async () => {
+    const fs = await import("node:fs")
+    const indexContent = fs.readFileSync(
+      resolve(__dirnameSrc, "../index.ts"),
+      "utf-8",
+    )
+    expect(indexContent).toContain("list")
+    expect(indexContent).toContain("listPackages")
   })
 })

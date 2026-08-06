@@ -14,6 +14,7 @@ import type { ExecuteContext, MessageContent } from "./context"
 import { SYSTEM_PROMPT } from "./prompts"
 import { loadProjectConfig } from "./load-config"
 import { findValidStart } from "./helpers"
+import { SkillStack } from "../../../skills/stack"
 
 const MAX_ITERATIONS = 100
 
@@ -294,18 +295,13 @@ function buildSystem(
   const projectRole = buildProjectRole(projectInfo)
   let sys = SYSTEM_PROMPT.replace('你是一个名为 licode 的 AI 助手，专注于代码开发。', projectRole)
   if (projectConfig) sys += `\n\n## 项目配置\n\n${projectConfig}`
-  // 多 skill 栈注入（优先）
+  // 多 skill 栈注入（优先）— 使用 SkillStack.toPromptString() 避免重复渲染逻辑
   if (ctx.skillStack && ctx.skillStack.length > 0) {
-    sys += `\n\n## 当前激活技能栈\n\n`
-    for (let i = 0; i < ctx.skillStack.length; i++) {
-      const item = ctx.skillStack[i]
-      const roleLabel = item.role === 'primary' ? '主' : '辅'
-      sys += `${i + 1}. ${item.skill.name} (${roleLabel}) — ${item.skill.description || '无描述'}\n`
-      if (item.instructions) {
-        sys += `\n${item.instructions}\n`
-      }
+    const stack = new SkillStack()
+    for (const item of ctx.skillStack) {
+      stack.push(item.skill, item.role, item.instructions)
     }
-    sys += `\n请严格遵循上述技能的指令与规则。`
+    sys += `\n\n${stack.toPromptString()}`
   } else if (ctx.activeSkillInstructions) {
     // 单 skill 模式（兼容）
     sys += `\n\n## 当前激活技能: ${ctx.activeSkill ?? "?"}\n\n${ctx.activeSkillInstructions}\n\n请严格遵循上述技能的指令与规则。`

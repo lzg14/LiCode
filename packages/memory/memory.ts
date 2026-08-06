@@ -2,6 +2,7 @@ import { readFile, writeFile, access, mkdir, readdir, unlink, stat } from 'fs/pr
 import { join } from 'path'
 import { homedir } from 'os'
 import type { AnyMemoryEntry, MemoryEntry, MemorySearchResult } from './schema'
+import { projectId } from './project-id'
 
 const DEFAULT_MEMORY_BASE = join(homedir(), '.licode', 'memory')
 const DEFAULT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
@@ -34,8 +35,8 @@ export class Memory {
     this.initialized = true
     await this.loadFromDir(join(this.baseDir, 'global'))
     if (this.projectPath) {
-      const projectId = Buffer.from(this.projectPath).toString('base64').slice(0, 16)
-      await this.loadFromDir(join(this.baseDir, 'projects', projectId))
+      const pid = projectId(this.projectPath)
+      await this.loadFromDir(join(this.baseDir, 'projects', pid))
     }
     // 加载后立即按 hardCap 裁剪，防止磁盘上有大量历史 entry 时一次性吃光内存
     this.enforceHardCap()
@@ -171,8 +172,8 @@ export class Memory {
     if (entry.scope === 'global') {
       dir = join(this.baseDir, 'global')
     } else if (entry.scope === 'project' && this.projectPath) {
-      const projectId = Buffer.from(this.projectPath).toString('base64').slice(0, 16)
-      dir = join(this.baseDir, 'projects', projectId)
+      const pid = projectId(this.projectPath)
+      dir = join(this.baseDir, 'projects', pid)
     } else {
       dir = join(this.baseDir, 'sessions')
     }
@@ -254,8 +255,8 @@ export class Memory {
     if (entry.scope === 'global') {
       dir = join(this.baseDir, 'global')
     } else if (entry.scope === 'project' && this.projectPath) {
-      const projectId = Buffer.from(this.projectPath).toString('base64').slice(0, 16)
-      dir = join(this.baseDir, 'projects', projectId)
+      const pid = projectId(this.projectPath)
+      dir = join(this.baseDir, 'projects', pid)
     } else {
       dir = join(this.baseDir, 'sessions')
     }
@@ -300,8 +301,8 @@ export class Memory {
         if (scope === 'global') {
           dir = join(this.baseDir, 'global')
         } else if (scope === 'project' && this.projectPath) {
-          const projectId = Buffer.from(this.projectPath).toString('base64').slice(0, 16)
-          dir = join(this.baseDir, 'projects', projectId)
+          const pid = projectId(this.projectPath)
+          dir = join(this.baseDir, 'projects', pid)
         } else {
           dir = join(this.baseDir, 'sessions')
         }
