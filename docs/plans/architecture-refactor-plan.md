@@ -44,7 +44,18 @@
 
 > 注：Phase 2 顺带清理了 `dist/` 旧编译产物（含引用已删除 `partsToString` 的 `.test.js`），解决 `bun test` 报 `SyntaxError`。
 
-### 🔄 Phase 3 待开始：引入轻量 DI
+### ✅ Phase 3 已完成：引入轻量 DI
+
+| 文件 | 行数 | 职责 | 状态 |
+|---|---|---:|---|
+| `core/container.ts` | 35 | 轻量 DI 容器（register/resolve/has，惰性单例 + 覆盖清缓存） | ✅ 已创建 |
+| `core/services.ts` | 60 | 按 config 注册 CoreLoop 依赖（memory/sessionManager/checkpoint/Projector/compactor/git），每个实例独立容器 | ✅ 已创建 |
+| `core/loop.ts` | 387 | 构造器改为注入 container（缺省自建），保留公开 API 与私有字段 | ✅ 已重构（410→387） |
+| `core/__tests__/container.test.ts` | 45 | DI 容器 6 项测试 | ✅ 已添加 |
+
+> 设计要点：**不采用全局单例**——每个 CoreLoop 实例用独立容器，避免多实例共享 SQLite 连接 / Memory 目录破坏测试隔离（这是计划的"只注册单例"与现有 `loop-helpers.test.ts` 契约之间的必要权衡）。
+
+### 🔄 Phase 4 待开始：清理 query-builder + 依赖整理
 
 ---
 

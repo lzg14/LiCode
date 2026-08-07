@@ -1,6 +1,4 @@
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { GitIntegration } from '../integration/git'
+import type { GitIntegration } from '../integration/git'
 import { pluginManager } from '../integration/plugin'
 import { getModelConfig } from '../llm/catalog'
 import { createModel } from '../llm/provider'
@@ -9,12 +7,14 @@ import { Memory } from '../memory/memory'
 import type { SkillIndex } from '../skills/types'
 import { SessionManager } from '../session/session'
 import { CheckpointManager, type SessionCheckpoint } from './checkpoint'
+import { type Container } from './container'
 import { devLogger } from './dev-logger'
 import { type PerfTrace, Timer } from './perf'
 import { execute } from './phases/execute'
 import { Projector } from './projector'
 
 import { SessionCompactor } from './session-compactor'
+import { createCoreContainer, SERVICE_KEYS } from './services'
 import type { Config, Phase, Plan } from './types'
 import { verifyDeliverables } from './verify'
 
@@ -76,18 +76,18 @@ export class CoreLoop {
   private projector: Projector
   private sessionCompactor: SessionCompactor
 
-  constructor(private config: Config, private llm?: LLMProvider) {
-    this.memory = new Memory(config.cwd)
-    const home = homedir()
-    const memoryPath = (config.memory?.path ?? './licode-sessions.db').replace(/^~/, home)
-    this.sessionManager = new SessionManager(memoryPath)
-    this.checkpointManager = new CheckpointManager(config.cwd)
-    this.projector = new Projector()
-    this.sessionCompactor = new SessionCompactor({ dataDir: join(homedir(), '.licode') })
+  constructor(private config: Config, private llm?: LLMProvider, container?: Container) {
+    // 依赖注入：默认按 config 构建，测试/扩展可传入自定义 container 替换服务
+    const services = container ?? createCoreContainer(config)
+    this.memory = services.resolve(SERVICE_KEYS.memory)
+    this.sessionManager = services.resolve(SERVICE_KEYS.sessionManager)
+    this.checkpointManager = services.resolve(SERVICE_KEYS.checkpointManager)
+    this.projector = services.resolve(SERVICE_KEYS.projector)
+    this.sessionCompactor = services.resolve(SERVICE_KEYS.sessionCompactor)
 
     // 初始化 Git 集成
-    if (config.cwd) {
-      this.git = new GitIntegration(config.cwd)
+    if (services.has(SERVICE_KEYS.git)) {
+      this.git = services.resolve(SERVICE_KEYS.git)
       this.git.connect().catch((e) => { devLogger.debug('GIT', 'connect failed', e) })
     }
   }

@@ -8,6 +8,9 @@ import { runTUI } from "../../tui/app"
 const __filename = fileURLToPath(import.meta.url)
 const __dirnameSrc = dirname(__filename)
 
+// 解析源码目录（packages/cli）而不是 dist 目录
+const srcDir = resolve(__dirnameSrc, "../../../packages/cli")
+
 describe("cli index", () => {
   it("runTUI is importable from tui/app", () => {
     expect(typeof runTUI).toBe("function")
@@ -16,7 +19,7 @@ describe("cli index", () => {
   it("index.ts imports runTUI from the correct module", async () => {
     const fs = await import("node:fs")
     const indexContent = fs.readFileSync(
-      resolve(__dirnameSrc, "../index.ts"),
+      resolve(srcDir, "index.ts"),
       "utf-8",
     )
     // 新的 index.ts 使用 '../tui/app' 导入
@@ -27,7 +30,7 @@ describe("cli index", () => {
   it("index.ts has main function and error handling", async () => {
     const fs = await import("node:fs")
     const indexContent = fs.readFileSync(
-      resolve(__dirnameSrc, "../index.ts"),
+      resolve(srcDir, "index.ts"),
       "utf-8",
     )
     expect(indexContent).toContain("async function main()")
@@ -37,7 +40,7 @@ describe("cli index", () => {
   it("index.ts has shebang for direct execution", async () => {
     const fs = await import("node:fs")
     const indexContent = fs.readFileSync(
-      resolve(__dirnameSrc, "../index.ts"),
+      resolve(srcDir, "index.ts"),
       "utf-8",
     )
     expect(indexContent.startsWith("#!/usr/bin/env bun")).toBe(true)
@@ -46,7 +49,7 @@ describe("cli index", () => {
   it("index.ts supports print mode", async () => {
     const fs = await import("node:fs")
     const indexContent = fs.readFileSync(
-      resolve(__dirnameSrc, "../index.ts"),
+      resolve(srcDir, "index.ts"),
       "utf-8",
     )
     expect(indexContent).toContain("--print")
@@ -57,7 +60,7 @@ describe("cli index", () => {
   it("index.ts supports JSON mode", async () => {
     const fs = await import("node:fs")
     const indexContent = fs.readFileSync(
-      resolve(__dirnameSrc, "../index.ts"),
+      resolve(srcDir, "index.ts"),
       "utf-8",
     )
     expect(indexContent).toContain("--mode")
@@ -68,7 +71,7 @@ describe("cli index", () => {
   it("index.ts supports install command", async () => {
     const fs = await import("node:fs")
     const indexContent = fs.readFileSync(
-      resolve(__dirnameSrc, "../index.ts"),
+      resolve(srcDir, "index.ts"),
       "utf-8",
     )
     expect(indexContent).toContain("install")
@@ -78,7 +81,7 @@ describe("cli index", () => {
   it("index.ts supports list command", async () => {
     const fs = await import("node:fs")
     const indexContent = fs.readFileSync(
-      resolve(__dirnameSrc, "../index.ts"),
+      resolve(srcDir, "index.ts"),
       "utf-8",
     )
     expect(indexContent).toContain("list")
