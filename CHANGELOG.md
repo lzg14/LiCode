@@ -13,6 +13,11 @@
   - Phase 2: 抽取 LLM 调用层（`llm-client.ts` + `tool-executor.ts`），`execute/main.ts` 560→350 行
   - Phase 3: 引入轻量 DI 容器，解耦 `core/loop.ts` 依赖
   - Phase 4: 清理 `query-builder.ts` + 跨模块依赖整理
+- **Slash 菜单改进计划**（`slash-menu-improvement-plan`）：重新设计 `/` 命令菜单
+  - 蓝色边框弹窗 + 分组显示
+  - 新增 `/provider`、`/undo`、`/export`、`/theme`、`/debug` 命令
+  - 动态显示当前模型/技能状态
+  - 智能过滤 + 键盘快捷键
 
 ### Changed
 - **移除 simple-git 依赖**：`packages/integration/git.ts` 改用 `child_process.exec` 直接调用 git CLI，减少约 200KB 依赖体积
