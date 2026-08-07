@@ -1,43 +1,30 @@
 /**
  * loop-input.tsx - 输入队列状态管理
- * 
+ *
  * 从 loop.tsx 抽取：
  * - inputQueue: 用户消息队列
  * - pendingCount: 待处理消息数
- * - abortController: 取消控制器
- * - addInputToQueue / dequeueInput / abort
+ * - enqueue / dequeue / clearQueue / queueLength
  */
 
 import { createSignal } from "solid-js"
 
 export interface InputQueueItem {
+  id: string
   text: string
-  clipboardImages?: Array<{ base64: string; mimeType: string }>
-}
-
-export interface InputState {
-  /** 消息队列 */
-  inputQueue: InputQueueItem[]
-  /** 是否正在处理 */
-  isProcessing: boolean
-  /** 待处理数量 */
-  pendingCount: number
-  /** 中止控制器 */
-  abortController: AbortController | null
 }
 
 export function createInputState() {
   const [inputQueue, setInputQueue] = createSignal<InputQueueItem[]>([])
-  const [isProcessing, setIsProcessing] = createSignal(false)
   const [pendingCount, setPendingCount] = createSignal(0)
-  let abortController: AbortController | null = null
 
-  const addInputToQueue = (text: string, clipboardImages?: Array<{ base64: string; mimeType: string }>) => {
-    setInputQueue(prev => [...prev, { text, clipboardImages }])
+  const enqueue = (item: Omit<InputQueueItem, 'id'> & { id?: string }) => {
+    const id = item.id ?? `queued_${Date.now()}`
+    setInputQueue(prev => [...prev, { id, text: item.text }])
     setPendingCount(prev => prev + 1)
   }
 
-  const dequeueInput = (): InputQueueItem | undefined => {
+  const dequeue = (): InputQueueItem | undefined => {
     const queue = inputQueue()
     if (queue.length === 0) return undefined
     const item = queue[0]
@@ -46,35 +33,19 @@ export function createInputState() {
     return item
   }
 
-  const abort = () => {
-    if (abortController) {
-      abortController.abort()
-      abortController = null
-    }
-    setIsProcessing(false)
+  const clearQueue = () => {
     setInputQueue([])
     setPendingCount(0)
   }
 
-  const createAbortController = (): AbortController => {
-    abortController = new AbortController()
-    return abortController
-  }
-
-  const getAbortSignal = (): AbortSignal | undefined => {
-    return abortController?.signal
-  }
+  const queueLength = () => inputQueue().length
 
   return {
-    inputQueue,
-    isProcessing,
     pendingCount,
-    setIsProcessing,
-    addInputToQueue,
-    dequeueInput,
-    abort,
-    createAbortController,
-    getAbortSignal,
+    enqueue,
+    dequeue,
+    clearQueue,
+    queueLength,
   }
 }
 

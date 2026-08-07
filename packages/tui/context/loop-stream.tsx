@@ -9,7 +9,8 @@
  */
 
 import { createSignal } from "solid-js"
-import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
+import { createStreamAccumulator } from "../util/stream-accumulator"
+import type { Segment } from "../util/stream-accumulator"
 
 export interface StreamState {
   /** 流式输出片段 */
@@ -76,4 +77,4 @@ export function createStreamState() {
   }
 }
 
-export type StreamStateReturn = ReturnType<typeof createStreamState>
+export type { Segment }

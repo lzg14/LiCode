@@ -1,3 +1,16 @@
+/**
+ * loop.tsx - 核心状态管理（重构版）
+ *
+ * 整合各独立 context：
+ * - message.tsx: 消息状态
+ * - loop-model.tsx: 模型状态
+ * - loop-skill.tsx: Skill 状态
+ * - loop-stream.tsx: 流式输出状态
+ * - loop-subagent.tsx: Subagent 状态
+ * - loop-scheduler.tsx: 定时任务状态
+ * - loop-input.tsx: 输入队列状态
+ */
+
 import { type Accessor, batch, createContext, createMemo, createSignal, type JSX, onCleanup, onMount, useContext } from "solid-js"
 import { devLogger } from "../../core/dev-logger"
 import type { CoreLoop } from "../../core/loop"
@@ -7,8 +20,16 @@ import { listModelsByProvider } from "../../llm/catalog"
 import { createModel } from "../../llm/provider"
 import { readImageFile } from "../../tools/builtin"
 import { useToast } from "../ui/toast"
-import { createStreamAccumulator, type Segment } from "../util/stream-accumulator"
 import type { SkillIndex } from "../../skills/types"
+
+// 导入各独立 context
+import { createMessageState, type Message, type AddMessageInput } from "./message"
+import { createModelState } from "./loop-model"
+import { createSkillState } from "./loop-skill"
+import { createStreamState } from "./loop-stream"
+import { createSubagentState } from "./loop-subagent"
+import { createSchedulerState } from "./loop-scheduler"
+import { createInputState } from "./loop-input"
 
 /** 解析用户输入中的图片引用（@/path/to/image.png 或 @C:\path\to\image.png） */
 export function parseImageRefs(text: string): { text: string; images: Array<{ base64: string; mimeType: string }> } {
@@ -28,41 +49,6 @@ export function parseImageRefs(text: string): { text: string; images: Array<{ ba
   return { text: cleaned, images }
 }
 
-export interface Message {
-  id: string
-  role: "user" | "assistant" | "system" | "tool"
-  content: string
-  timestamp: number
-  toolName?: string
-  toolArgs?: Record<string, unknown>
-  toolStatus?: "pending" | "running" | "completed" | "error"
-  toolBatch?: number
-  duration?: number
-  /** 工具执行产生的 diff */
-  diff?: string
-  /** 队列中等待发送的 user 消息 */
-  queued?: boolean
-  /** 附带的图片列表（base64 + mimeType），用于 multimodal 消息 */
-  images?: Array<{ base64: string; mimeType: string }>
-  /** 是否为压缩摘要消息（渲染为 markdown） */
-  compaction?: boolean
-}
-
-type AddMessageInput = {
-  role: Message["role"]
-  content: string
-  id?: string
-  toolName?: string
-  toolArgs?: Record<string, unknown>
-  toolStatus?: "pending" | "running" | "completed" | "error"
-  toolBatch?: number
-  duration?: number
-  diff?: string
-  queued?: boolean
-  images?: Message["images"]
-  compaction?: boolean
-}
-
 export interface LoopContext {
   run: (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }> }) => Promise<void>
   abort: () => void
@@ -70,7 +56,7 @@ export interface LoopContext {
   pendingCount: Accessor<number>
   elapsed: Accessor<number>
   messages: Accessor<Message[]>
-  streamingSegments: Accessor<Segment[]>
+  streamingSegments: Accessor<import("./loop-stream").Segment[]>
   pendingText: Accessor<string>
   streamMode: Accessor<'text' | 'in-thinking' | 'in-system-reminder'>
   addMessage: (msg: AddMessageInput) => void
@@ -89,9 +75,7 @@ export interface LoopContext {
   setActiveSkill: (name: string | null) => void
   currentModel: Accessor<string>
   currentProvider: Accessor<string>
-  /** 该模型真实的 context window（由 createModel 用原始 model 字符串查 catalog 得到，不被 normalize 副作用影响） */
   effectiveContextWindow: Accessor<number | undefined>
-  /** 最近一次后台压缩的错误；null 表示正常；UI 据此显示 ⚠️ 警示 */
   compactionError: Accessor<Error | null>
   switchModel: (modelId: string) => void
   switchProvider: (providerId: string) => void
@@ -131,42 +115,28 @@ const Ctx = createContext<LoopContext>()
 
 export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; model: any; provider?: string; sessionId?: string; llmConfig?: { provider: string; model: string; apiKey?: string; baseUrl?: string }; effectiveContextWindow?: number }) {
   const toast = useToast()
+
+  // ===== 初始化各独立 context =====
+  const messageState = createMessageState()
+  const modelState = createModelState(props.provider ?? "deepseek", props.model?.modelId ?? "unknown")
+  const skillState = createSkillState()
+  const streamState = createStreamState()
+  const subagentState = createSubagentState()
+  const schedulerState = createSchedulerState()
+  const inputState = createInputState()
+
+  // ===== 本地状态 =====
   const [isProcessing, setIsProcessing] = createSignal(false)
   const [elapsed, setElapsed] = createSignal(0)
-  const [messages, setMessages] = createSignal<Message[]>([])
   const [toolCallExpanded, setToolCallExpanded] = createSignal(false)
   const toggleToolCallExpanded = () => setToolCallExpanded(prev => !prev)
   const [llmCallCount, setLlmCallCount] = createSignal(0)
   const [llmTokenUsage, setLlmTokenUsage] = createSignal({ input: 0, output: 0, total: 0 })
-  // 累计 token 用量（不随 turn 重置）
   const [cumulativeTokens, setCumulativeTokens] = createSignal({ input: 0, output: 0, total: 0, turns: 0 })
-  const [currentModel, setCurrentModel] = createSignal(props.model?.modelId ?? "unknown")
-  const [currentProvider, setCurrentProvider] = createSignal(props.provider ?? "deepseek")
-  const [effectiveContextWindow, _setEffectiveContextWindow] = createSignal<number | undefined>(props.effectiveContextWindow)
   const [compactionError, setCompactionError] = createSignal<Error | null>(null)
-  const [activeSkill, setActiveSkillState] = createSignal<string | null>(null)
-  const [activeSkillInstructions, setActiveSkillInstructions] = createSignal<string | null>(null)
-  // VERIFY 阶段状态
   const [currentPhase, setCurrentPhase] = createSignal<string>("EXECUTE")
   const [verifyResults, setVerifyResults] = createSignal<Array<{ passed: boolean; message?: string }>>([])
-  // Subagent 状态跟踪
-  interface SubagentStatus { id: string; task: string; status: 'running' | 'done' | 'error'; startTime: number; endTime?: number }
-  const [subagentStatuses, setSubagentStatuses] = createSignal<SubagentStatus[]>([])
-  const [subagentOpen, setSubagentOpen] = createSignal(false)
-  // Skill 自动建议状态
-  const [pendingSkillSuggestion, setPendingSkillSuggestion] = createSignal<Array<{ name: string; description: string; triggerHints: string }> | null>(null)
-  const [skillSuggestIdx, setSkillSuggestIdx] = createSignal(0)
-  let skillSuggestResolve: ((value: boolean) => void) | null = null
-  const setSkillSuggestResolve = (fn: ((value: boolean) => void) | null) => {
-    skillSuggestResolve = fn
-  }
 
-  const [pendingCount, setPendingCount] = createSignal(0)
-  const [streamingSegments, setStreamingSegments] = createSignal<Segment[]>([])
-  const [pendingText, setPendingText] = createSignal("")
-  const [streamMode, setStreamMode] = createSignal<'text' | 'in-thinking' | 'in-system-reminder'>('text')
-  const streamAccumulator = createStreamAccumulator()
-  const inputQueue: { id: string; text: string }[] = []
   let toolCallIdCounter = 0
   const toolStartTimes = new Map<string, number>()
   let abortController: AbortController | null = null
@@ -176,79 +146,59 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   let _setPromptTextFn: ((text: string) => void) | null = null
   let _prependPromptTextFn: ((text: string) => void) | null = null
 
-  /** 注册输入框操作函数（Prompt 组件调用） */
   const registerInputFns = (fns: { focus: () => void; setText: (text: string) => void; prependText: (text: string) => void }) => {
     _focusInputFn = fns.focus
     _setPromptTextFn = fns.setText
     _prependPromptTextFn = fns.prependText
   }
 
-  /** 清除输入框操作函数（Prompt 组件卸载时调用） */
   const unregisterInputFns = () => {
     _focusInputFn = null
     _setPromptTextFn = null
     _prependPromptTextFn = null
   }
 
-  /** 聚焦输入框 */
   const focusInput = () => _focusInputFn?.()
-  /** 设置输入框文本 */
   const setPromptText = (text: string) => _setPromptTextFn?.(text)
-  /** 在输入框文本前插入内容 */
   const prependPromptText = (text: string) => _prependPromptTextFn?.(text)
 
   const abort = () => {
     abortController?.abort()
-    // 清空队列
-    inputQueue.length = 0
-    setPendingCount(0)
+    inputState.clearQueue()
   }
-  // 进程级 Ctrl+C 处理：LLM 卡死时 TUI 事件循环被阻塞，useKeyboard 收不到 ESC
-  // SIGINT 不经过 TUI 事件循环，直接 abort 当前操作
+
+  // SIGINT 处理
   const originalSigint = process.listeners('SIGINT').slice()
   let sigintHandled = false
   process.removeAllListeners('SIGINT')
   process.on('SIGINT', () => {
     sigintHandled = true
     abort()
-    // 恢复原始处理器
     for (const handler of originalSigint) {
       process.on('SIGINT', handler as any)
     }
   })
-  // 组件卸载时清理所有资源，防止内存泄漏
+
+  // 清理
   onCleanup(() => {
-    // 恢复原始 SIGINT 处理器（仅当 SIGINT 未触发过）
     if (!sigintHandled) {
       process.removeAllListeners('SIGINT')
       for (const handler of originalSigint) {
         process.on('SIGINT', handler as any)
       }
     }
-    // 清理所有状态
     toolStartTimes.clear()
-    setSubagentStatuses([])
-    inputQueue.length = 0
-    streamAccumulator.reset()
-    if (_pendingFlushTimer) {
-      clearTimeout(_pendingFlushTimer)
-      _pendingFlushTimer = null
-    }
-    if (_segmentFlushTimer) {
-      clearTimeout(_segmentFlushTimer)
-      _segmentFlushTimer = null
-    }
+    streamState.clearStream()
     abortController?.abort()
     abortController = null
-    // 停止 /loop 定时器
-    scheduler.deleteAll()
+    schedulerState.stopLoops()
   })
 
   let activeModel: any = props.model
-  // 工具调用轮次上限确认机制
   let confirmResolve: ((value: boolean) => void) | null = null
+  let persistentSessionId: string | undefined = props.sessionId
 
-  // MCP 集成
+  // ===== MCP 初始化 =====
   const initMCP = async () => {
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('MCP init timeout')), 5000))
     try {
@@ -274,11 +224,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           await mcp.connect()
           const tools = await mcp.discoverTools()
 
-          // 注册 MCP 工具到 globalToolRegistry
           for (const tool of tools) {
             const toolName = `mcp__${id}__${tool.name}`
-            // MCP 工具的 inputSchema 是 JSON Schema，用 z.any() 透传
-            // AI SDK 会用这个 schema 构建 tool 定义，z.any() 接受任意输入
             const inputSchema = await import("zod").then(z => z.z.any())
             globalToolRegistry.register({
               name: toolName,
@@ -317,22 +264,21 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   }
   initMCP()
 
+  // ===== Skill 相关 =====
   const setActiveSkill = async (name: string | null) => {
     if (!name) {
-      setActiveSkillState(null)
-      setActiveSkillInstructions(null)
+      skillState.setActiveSkill(null)
       return
     }
     try {
       const { findSkill, loadAllSkills } = await import("../../skills/loader")
       const skill = await findSkill(name, process.cwd())
       if (skill) {
-        setActiveSkillState(name)
-        setActiveSkillInstructions(skill.instructions)
+        skillState.setActiveSkill(name)
       } else {
         const all = await loadAllSkills(process.cwd())
         const available = all.map(s => s.name).join(', ')
-        addMessage({ role: 'system', content: `未找到 skill: ${name}\n可用: ${available || '(无)'}` })
+        messageState.addMessage({ role: 'system', content: `未找到 skill: ${name}\n可用: ${available || '(无)'}` })
       }
     } catch (e) {
       devLogger.debug("SKILL", "load failed", e)
@@ -340,24 +286,19 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
   }
 
   const listSkills = async (): Promise<string[]> => {
-    try {
-      const { loadAllSkills } = await import("../../skills/loader")
-      const all = await loadAllSkills(process.cwd())
-      return all.map(s => s.name)
-    } catch {
-      return []
-    }
+    return skillState.listSkills()
   }
 
+  // ===== 模型切换 =====
   const switchModel = async (modelId: string) => {
     const cfg = props.llmConfig
     activeModel = await createModel({
-      provider: cfg?.provider ?? currentProvider(),
+      provider: cfg?.provider ?? modelState.currentProvider(),
       model: modelId,
       apiKey: cfg?.apiKey,
       baseUrl: cfg?.baseUrl,
     })
-    setCurrentModel(modelId)
+    modelState.switchModel(modelId)
   }
 
   const switchProvider = async (providerId: string) => {
@@ -370,22 +311,10 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       apiKey: cfg?.apiKey,
       baseUrl: cfg?.baseUrl,
     })
-    setCurrentProvider(providerId)
-    setCurrentModel(models[0])
+    modelState.switchProvider(providerId)
   }
 
-  const getAvailableModels = (): string[] => {
-    return listModelsByProvider(currentProvider())
-  }
-
-  const getAvailableProviders = (): string[] => {
-    const all = ["anthropic", "openai", "deepseek", "MiniMax"] as const
-    return all.filter(p => listModelsByProvider(p).length > 0)
-  }
-
-  // 持久化 session ID，跨轮对话复用同一个 session
-  let persistentSessionId: string | undefined = props.sessionId
-
+  // ===== Session 恢复 =====
   onMount(() => {
     if (props.sessionId && props.loop) {
       try {
@@ -396,7 +325,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         let idx = 0
         let toolBatch = 0
 
-        // raw.content 是 unknown[]（上游 session 层有意退化为弱类型），下游需要 narrow
         type ContentPart = { type: string; text?: string; toolName?: string; input?: unknown }
         for (const raw of modelMsgs) {
           if (raw.role === 'user' || raw.role === 'assistant') {
@@ -439,146 +367,77 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         }
 
         if (restored.length > 0) {
-          setMessages(restored)
+          messageState.setMessages(restored)
         }
       } catch {
       }
     }
   })
 
-  const addMessage = (input: AddMessageInput) => {
-    const id = input.id ?? crypto.randomUUID()
-    const msg: Message = {
-      id,
-      role: input.role,
-      content: input.content,
-      timestamp: Date.now(),
-      toolName: input.toolName,
-      toolArgs: input.toolArgs,
-      toolStatus: input.toolStatus,
-      duration: input.duration,
-      queued: input.queued,
-      images: input.images,
-      compaction: input.compaction,
-    }
-    setMessages((prev) => [...prev, msg])
-  }
-
-  const updateMessage = (id: string, patch: Partial<Message>) => {
-    setMessages((prev) => prev.map(m => m.id === id ? { ...m, ...patch } : m))
-  }
-
-  const clearMessages = () => {
-    setMessages([])
-  }
-
   const clearSession = () => {
-    setMessages([])
+    messageState.clearMessages()
     persistentSessionId = undefined
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
-    setActiveSkillState(null)
-    setActiveSkillInstructions(null)
-    addMessage({ role: "system", content: "已开新会话" })
+    skillState.setActiveSkill(null)
+    messageState.addMessage({ role: "system", content: "已开新会话" })
   }
 
-  // 流式 pending 文本防抖，减少高频更新导致的闪烁
-  let _pendingFlushTimer: ReturnType<typeof setTimeout> | null = null
-  let _latestPending = ''
-  const PENDING_FLUSH_MS = 60
-  const _flushPendingText = () => {
-    _pendingFlushTimer = null
-    setPendingText(_latestPending)
-  }
-  const _schedulePendingFlush = () => {
-    if (_pendingFlushTimer) return
-    _pendingFlushTimer = setTimeout(_flushPendingText, PENDING_FLUSH_MS)
-  }
-
-  // 流式 closed segments 防抖，与 pendingText 相同策略
-  let _segmentFlushTimer: ReturnType<typeof setTimeout> | null = null
-  let _latestClosedSegments: Segment[] = []
-  const _flushSegments = () => {
-    _segmentFlushTimer = null
-    if (_latestClosedSegments.length > 0) {
-      // 先保存当前 segments 并立即清空原引用，避免竞态条件下重复添加
-      const segmentsToFlush = _latestClosedSegments
-      _latestClosedSegments = []
-      setStreamingSegments(prev => [...prev, ...segmentsToFlush])
-    }
-  }
-  const _scheduleSegmentFlush = () => {
-    if (_segmentFlushTimer) return
-    _segmentFlushTimer = setTimeout(_flushSegments, PENDING_FLUSH_MS)
-  }
-
+  // ===== 核心 run 函数 =====
   const run = async (input: string, opts?: { clipboardImages?: Array<{ base64: string; mimeType: string }> }): Promise<void> => {
-    // 如果正在等待用户确认是否继续 tool call 迭代
     if (confirmResolve) {
       const shouldContinue = input.trim().toLowerCase() === "y"
       const resolve = confirmResolve
       confirmResolve = null
       setIsProcessing(true)
-      addMessage({ role: "system", content: shouldContinue ? "继续执行..." : "停止工具调用" })
+      messageState.addMessage({ role: "system", content: shouldContinue ? "继续执行..." : "停止工具调用" })
       resolve(shouldContinue)
       return
     }
 
     if (isProcessing()) {
-      // 记录到 inputQueue 等待后续发送
       const msgId = `queued_${++toolCallIdCounter}`
-      inputQueue.push({ id: msgId, text: input })
-      setPendingCount(inputQueue.length)
-      // 同步插入 message-list，标记 queued（显示在对话列表底部）
-      addMessage({ id: msgId, role: "user", content: input, queued: true })
+      inputState.enqueue({ text: input })
+      messageState.addMessage({ id: msgId, role: "user", content: input, queued: true })
       return
     }
 
-    // 解析用户输入中的图片引用（@/path/to/image.png）
     const { text: cleanText, images: parsedImages } = parseImageRefs(input)
-    // 合并剪贴板图片 + 文件引用图片
     const allImages = [...parsedImages, ...(opts?.clipboardImages ?? [])]
 
-    // 一次加载 skill 索引，后续复用
     const { getSkillIndex } = await import("../../skills/loader")
     const availableSkills = await getSkillIndex(process.cwd())
 
-    // Phase 2: 自动建议 skill（规则匹配 + 用户确认）
-    if (!activeSkill()) {
+    // Skill 自动建议
+    if (!skillState.activeSkill()) {
       const { matchSkills } = await import("../../skills/auto-suggest")
       const { inferSkillStack } = await import("../../skills/stack")
-      // 规则匹配 + 推断组合
-      const ruleMatched = matchSkills(cleanText, availableSkills, activeSkill())
+      const ruleMatched = matchSkills(cleanText, availableSkills, skillState.activeSkill())
       const inferredNames = inferSkillStack(cleanText)
       const inferred = inferredNames
         .map(name => availableSkills.find(s => s.name === name))
-        .filter((s): s is SkillIndex => !!s && s.name !== activeSkill())
-      // 合并去重
+        .filter((s): s is SkillIndex => !!s && s.name !== skillState.activeSkill())
       const suggestedMap = new Map<string, SkillIndex>()
       for (const s of [...ruleMatched, ...inferred]) {
         suggestedMap.set(s.name, s)
       }
       const suggested = [...suggestedMap.values()]
       if (suggested.length > 0) {
-        // 暂存建议，等待用户确认（通过 skill-suggest 组件）
-        setSkillSuggestIdx(0)
-        setPendingSkillSuggestion(suggested)
-        // 等待用户响应（最多 10 秒）
-        const confirmed = await new Promise<boolean>((resolve) => {
+        skillState.setSkillSuggestIdx(0)
+        skillState.setPendingSkillSuggestion(suggested)
+        await new Promise<boolean>((resolve) => {
           const timeout = setTimeout(() => resolve(false), 10_000)
-          skillSuggestResolve = (v) => {
+          skillState.setSkillSuggestResolve((v) => {
             clearTimeout(timeout)
             resolve(v)
-            skillSuggestResolve = null
-          }
+          })
         })
-        setPendingSkillSuggestion(null)
+        skillState.setPendingSkillSuggestion(null)
       }
     }
 
     abortController = new AbortController()
-    addMessage({ role: "user", content: cleanText, images: allImages.length > 0 ? allImages : undefined })
-    // 让消息先渲染，再做后续状态更新（避免 solid 批量合并导致"输入清了但消息没出来"的卡顿）
+    messageState.addMessage({ role: "user", content: cleanText, images: allImages.length > 0 ? allImages : undefined })
     await new Promise(r => queueMicrotask(r))
     setLlmCallCount(0)
     setLlmTokenUsage({ input: 0, output: 0, total: 0 })
@@ -592,7 +451,6 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     }, 1000)
 
     try {
-      // 首次运行时创建 session，后续复用
       if (!persistentSessionId) {
         persistentSessionId = crypto.randomUUID()
       }
@@ -605,15 +463,14 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         phase: "EXECUTE" as Phase,
         cwd: process.cwd(),
         model: activeModel,
-        activeSkill: activeSkill() ?? undefined,
-        activeSkillInstructions: activeSkillInstructions() ?? undefined,
+        activeSkill: skillState.activeSkill() ?? undefined,
+        activeSkillInstructions: skillState.activeSkillInstructions() ?? undefined,
         availableSkills,
         onPhaseChange: (phase: string) => {
           setCurrentPhase(phase)
         },
         onPhaseLog: (text: string) => {
           devLogger.info('PHASE', text.trimEnd())
-          // 解析 VERIFY 结果
           if (text.startsWith('✓') || text.startsWith('✗')) {
             setVerifyResults(prev => [...prev, {
               passed: text.startsWith('✓'),
@@ -625,13 +482,11 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           setLlmCallCount(prev => prev + 1)
         },
         onLLMResult: (usage: { inputTokens: number; outputTokens: number; totalTokens: number }) => {
-          // 显示当前请求的上下文（不是累加）— inputTokens 本身已包含完整历史
           setLlmTokenUsage({
             input: usage.inputTokens,
             output: usage.outputTokens,
             total: usage.inputTokens + usage.outputTokens,
           })
-          // 累计 token 用量
           setCumulativeTokens(prev => ({
             input: prev.input + usage.inputTokens,
             output: prev.output + usage.outputTokens,
@@ -640,68 +495,44 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
           }))
         },
         onStreamText: (delta: string) => {
-          const { closed, pending, mode } = streamAccumulator.push(delta)
-          setStreamMode(mode)
-          if (closed.length > 0) {
-            // 逐个添加避免展开数组，减少 GC 压力
-            for (const seg of closed) {
-              _latestClosedSegments.push(seg)
-            }
-            _scheduleSegmentFlush()
-          }
-          _latestPending = pending
-          _schedulePendingFlush()
+          streamState.onStreamText(delta)
         },
         onIntermediateText: (text: string) => {
-          // 中间轮：batch 包裹清空 + 添加，避免"清空→重建"闪烁
           batch(() => {
-            // 先 flush 所有 pending 内容
-            if (_pendingFlushTimer) {
-              clearTimeout(_pendingFlushTimer)
-              _pendingFlushTimer = null
-            }
-            if (_segmentFlushTimer) {
-              clearTimeout(_segmentFlushTimer)
-              _segmentFlushTimer = null
-            }
-            _latestClosedSegments = []
-            streamAccumulator.reset()
-            setStreamingSegments([])
-            setPendingText("")
-            // 添加完整消息
-            addMessage({ role: "assistant", content: text })
+            streamState.clearStream()
+            messageState.addMessage({ role: "assistant", content: text })
           })
         },
-        onToolCall: (toolName: string, args: Record<string, unknown>, batch: number) => {
+        onToolCall: (toolName: string, args: Record<string, unknown>, batchNum: number) => {
           toolCallIdCounter++
           const id = `tool_${toolCallIdCounter}`
           toolStartTimes.set(id, Date.now())
-          addMessage({ id, role: "tool", content: toolName, toolName, toolArgs: args, toolStatus: "running", toolBatch: batch })
+          messageState.addMessage({ id, role: "tool", content: toolName, toolName, toolArgs: args, toolStatus: "running", toolBatch: batchNum })
         },
         onToolResult: (result: any) => {
-          setMessages((prev) => {
-            const last = prev[prev.length - 1]
-            if (last?.role === "tool") {
-              const start = toolStartTimes.get(last.id) ?? 0
-              const duration = start > 0 ? Date.now() - start : 0
-              toolStartTimes.delete(last.id)  // 用后即删，防止 Map 无限增长
-              const diff = result?.diff
-              return [...prev.slice(0, -1), { ...last, toolStatus: "completed", duration, diff }]
-            }
-            return prev
-          })
+          const msgs = messageState.messages()
+          const lastMsg = msgs[msgs.length - 1]
+          if (lastMsg) {
+            const start = toolStartTimes.get(lastMsg.id) ?? 0
+            const duration = start > 0 ? Date.now() - start : 0
+            toolStartTimes.delete(lastMsg.id)
+            messageState.updateMessage(lastMsg.id, {
+              toolStatus: "completed",
+              duration,
+              diff: result?.diff
+            })
+          }
         },
         onSubagentStart: (id: string, task: string) => {
-          setSubagentStatuses(prev => [...prev, { id, task, status: 'running', startTime: Date.now() }])
+          subagentState.onSubagentStart(id, task)
         },
         onSubagentEnd: (id: string, success: boolean) => {
-          setSubagentStatuses(prev => prev.map(s => s.id === id ? { ...s, status: success ? 'done' : 'error', endTime: Date.now() } : s))
+          subagentState.onSubagentEnd(id, success)
         },
         onConfirmContinue: () => {
           return new Promise<boolean>((resolve) => {
             confirmResolve = resolve
-            addMessage({ role: "system", content: "已达最大迭代次数。输入 y 继续，其他任意键停止。" })
-            // 临时解除 processing 以允许用户输入
+            messageState.addMessage({ role: "system", content: "已达最大迭代次数。输入 y 继续，其他任意键停止。" })
             setIsProcessing(false)
           })
         },
@@ -716,17 +547,16 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
             return
           }
           setCompactionError(null)
-          // 压缩后重新加载消息列表，清掉旧的 1000 条，只保留压缩后的近 100 条
           if (persistentSessionId) {
             const history = props.loop.getSessionMessages(persistentSessionId)
-            setMessages(history.map((m, i) => ({
+            messageState.setMessages(history.map((m, i) => ({
               id: `hist_${i}`,
               role: m.role as Message["role"],
               content: m.content,
               timestamp: Date.now() - (history.length - i) * 1000,
             })))
           }
-          addMessage({ role: "system", content: `🗜️ 已压缩对话历史：${originalCount} 条 → 保留 ${preservedCount} 条\n\n${summary}`, compaction: true })
+          messageState.addMessage({ role: "system", content: `🗜️ 已压缩对话历史：${originalCount} 条 → 保留 ${preservedCount} 条\n\n${summary}`, compaction: true })
           const saved = originalCount - preservedCount
           toast.show({
             message: `已压缩 ${saved} 条历史，保留最近 ${preservedCount} 条`,
@@ -743,22 +573,8 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       }
 
       if (result.text) {
-        // 清空 streaming 状态，避免重复显示
-        if (_pendingFlushTimer) {
-          clearTimeout(_pendingFlushTimer)
-          _pendingFlushTimer = null
-        }
-        if (_segmentFlushTimer) {
-          clearTimeout(_segmentFlushTimer)
-          _segmentFlushTimer = null
-        }
-        _latestPending = ''
-        _latestClosedSegments = []
-        streamAccumulator.reset()
-        setStreamingSegments([])
-        setPendingText("")
-
-        addMessage({
+        streamState.clearStream()
+        messageState.addMessage({
           role: "assistant",
           content: result.text,
           duration: Math.floor((Date.now() - startTime) / 1000),
@@ -766,60 +582,45 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
       }
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e)
-      // AbortError 是用户主动取消，不显示错误
       if (!error.includes('abort') && !error.includes('Abort')) {
-        addMessage({ role: "system", content: `错误: ${error}` })
+        messageState.addMessage({ role: "system", content: `错误: ${error}` })
       }
     } finally {
       abortController = null
       setIsProcessing(false)
       clearInterval(timer)
       setElapsed(0)
-      if (_pendingFlushTimer) {
-        clearTimeout(_pendingFlushTimer)
-        _pendingFlushTimer = null
-      }
-      if (_segmentFlushTimer) {
-        clearTimeout(_segmentFlushTimer)
-        _segmentFlushTimer = null
-      }
-      _latestClosedSegments = []
-      setPendingText(_latestPending)
-      // 回合结束清理 subagent 状态，防止数组无限增长
-      setSubagentStatuses([])
+      streamState.clearStream()
+      subagentState.clearSubagents()
 
-      // 处理队列中下一个输入
-      if (inputQueue.length > 0) {
-        const next = inputQueue.shift()!
-        setPendingCount(inputQueue.length)
-        // 把已经发出过的 user 消息 queued 标记去掉
-        updateMessage(next.id, { queued: false })
-        run(next.text)
+      if (inputState.queueLength() > 0) {
+        const next = inputState.dequeue()
+        if (next) {
+          messageState.updateMessage(next.id, { queued: false })
+          run(next.text)
+        }
       }
     }
   }
 
   const compactSession = async () => {
     if (!persistentSessionId) {
-      addMessage({ role: "system", content: "没有活跃的 session" })
+      messageState.addMessage({ role: "system", content: "没有活跃的 session" })
       return
     }
-    addMessage({ role: "system", content: "正在压缩对话历史..." })
+    messageState.addMessage({ role: "system", content: "正在压缩对话历史..." })
     try {
       const result = await props.loop.compactSession(persistentSessionId)
       if (result) {
         if (result.summary) {
-          // 显示摘要内容
           const tag = result.wasFallback ? '[规则提取]' : '[LLM 摘要]'
-          const preview = result.summary.length > 200 ? `${result.summary.slice(0, 200)}...` : result.summary
-          addMessage({ role: "system", content: `🗜️ 已压缩 ${result.originalCount} 条 → 保留 ${result.preservedCount} 条\n\n${tag}\n${result.summary}`, compaction: true })
+          messageState.addMessage({ role: "system", content: `🗜️ 已压缩 ${result.originalCount} 条 → 保留 ${result.preservedCount} 条\n\n${tag}\n${result.summary}`, compaction: true })
         } else {
-          addMessage({ role: "system", content: result.saved > 0 ? `压缩完成，节省 ${result.saved} 条消息` : "无需压缩" })
+          messageState.addMessage({ role: "system", content: result.saved > 0 ? `压缩完成，节省 ${result.saved} 条消息` : "无需压缩" })
         }
-        // 重新加载 session 消息以更新 contextTokens
         if (persistentSessionId) {
           const history = props.loop.getSessionMessages(persistentSessionId)
-          setMessages(history.map((m, i) => ({
+          messageState.setMessages(history.map((m, i) => ({
             id: `hist_${i}`,
             role: m.role as Message["role"],
             content: m.content,
@@ -828,23 +629,18 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
         }
       }
     } catch (e) {
-      addMessage({ role: "system", content: `压缩失败: ${e instanceof Error ? e.message : String(e)}` })
+      messageState.addMessage({ role: "system", content: `压缩失败: ${e instanceof Error ? e.message : String(e)}` })
     }
   }
 
-  // 估算当前上下文的 token 数（与 session-compactor 一致）
   const contextTokens = createMemo(() => {
     let totalChars = 0
-    for (const msg of messages()) {
+    for (const msg of messageState.messages()) {
       const content = msg.content
       if (Array.isArray(content)) {
         for (const part of content) {
           if (part?.type === 'text' && part?.text) {
             totalChars += part.text.length
-          } else if (part?.type === 'tool-result' && part?.output?.value) {
-            totalChars += typeof part.output.value === 'string' ? part.output.value.length : JSON.stringify(part.output.value).length
-          } else if (part?.type === 'tool-call' && part?.input) {
-            totalChars += JSON.stringify(part.input).length
           }
         }
       } else if (typeof content === 'string') {
@@ -855,58 +651,62 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     return Math.ceil(totalChars / 4)
   })
 
-  // ===== /loop 定时执行 =====
+  // ===== Scheduler =====
   const scheduler = new Scheduler({
     onTrigger: async (prompt: string) => {
       await run(prompt)
     },
     onLog: (msg: string) => {
-      addMessage({ role: "system", content: msg })
+      messageState.addMessage({ role: "system", content: msg })
     },
   })
+  schedulerState.setScheduler(scheduler)
 
   const addLoop = (interval: string, prompt: string): string | null => {
     const ms = scheduler.parseInterval(interval)
     if (!ms) {
-      addMessage({ role: "system", content: `无效的时间格式: ${interval}。支持: 30s, 5m, 2h, 1d` })
+      messageState.addMessage({ role: "system", content: `无效的时间格式: ${interval}。支持: 30s, 5m, 2h, 1d` })
       return null
     }
     const id = scheduler.create(ms, prompt)
-    addMessage({ role: "system", content: `循环已启动 (ID: ${id})\n间隔: ${interval}\nPrompt: ${prompt}\n输入 /loop stop 停止` })
+    messageState.addMessage({ role: "system", content: `循环已启动 (ID: ${id})\n间隔: ${interval}\nPrompt: ${prompt}\n输入 /loop stop 停止` })
+    schedulerState.updateTasks()
     return id
   }
 
   const stopLoops = () => {
     const count = scheduler.deleteAll()
-    addMessage({ role: "system", content: count > 0 ? `已停止 ${count} 个循环` : "没有运行中的循环" })
+    messageState.addMessage({ role: "system", content: count > 0 ? `已停止 ${count} 个循环` : "没有运行中的循环" })
+    schedulerState.updateTasks()
   }
 
   const listLoops = () => {
     const tasks = scheduler.list()
     if (tasks.length === 0) {
-      addMessage({ role: "system", content: "没有运行中的循环" })
+      messageState.addMessage({ role: "system", content: "没有运行中的循环" })
       return
     }
     const lines = tasks.map(t => {
       const mins = Math.round(t.intervalMs / 60_000)
       return `  ${t.id} | 每 ${mins}m | 已执行 ${t.runCount} 次 | ${t.prompt}`
     })
-    addMessage({ role: "system", content: `运行中的循环 (${tasks.length}):\n${lines.join('\n')}` })
+    messageState.addMessage({ role: "system", content: `运行中的循环 (${tasks.length}):\n${lines.join('\n')}` })
   }
 
+  // ===== 构建 context value =====
   const value: LoopContext = {
     run,
     abort,
     isProcessing,
-    pendingCount,
+    pendingCount: inputState.pendingCount,
     elapsed,
-    messages,
-    streamingSegments,
-    pendingText,
-    streamMode,
-    addMessage,
-    updateMessage,
-    clearMessages,
+    messages: messageState.messages,
+    streamingSegments: streamState.streamingSegments,
+    pendingText: streamState.pendingText,
+    streamMode: streamState.streamMode,
+    addMessage: messageState.addMessage,
+    updateMessage: messageState.updateMessage,
+    clearMessages: messageState.clearMessages,
     clearSession,
     toolCallExpanded,
     toggleToolCallExpanded,
@@ -914,17 +714,17 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     llmTokenUsage,
     compactSession,
     listSkills,
-    currentModel,
-    currentProvider,
-    effectiveContextWindow,
+    currentModel: modelState.currentModel,
+    currentProvider: modelState.currentProvider,
+    effectiveContextWindow: modelState.effectiveContextWindow,
     compactionError,
     switchModel,
     switchProvider,
-    getAvailableModels,
-    getAvailableProviders,
+    getAvailableModels: modelState.getAvailableModels,
+    getAvailableProviders: modelState.getAvailableProviders,
     contextTokens,
-    activeSkill,
-    activeSkillInstructions,
+    activeSkill: skillState.activeSkill,
+    activeSkillInstructions: skillState.activeSkillInstructions,
     setActiveSkill,
     addLoop,
     stopLoops,
@@ -933,23 +733,18 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     currentPhase,
     verifyResults,
     cumulativeTokens,
-    subagentStatuses,
-    subagentOpen,
-    setSubagentOpen,
+    subagentStatuses: subagentState.subagentStatuses,
+    subagentOpen: subagentState.subagentOpen,
+    setSubagentOpen: subagentState.setSubagentOpen,
     focusInput,
     setPromptText,
     prependPromptText,
     registerInputFns,
     unregisterInputFns,
-    pendingSkillSuggestion,
-    skillSuggestIdx,
-    setSkillSuggestIdx,
-    resolveSkillSuggestion: (confirmed: boolean) => {
-      if (skillSuggestResolve) {
-        skillSuggestResolve(confirmed)
-        skillSuggestResolve = null
-      }
-    },
+    pendingSkillSuggestion: skillState.pendingSkillSuggestion,
+    skillSuggestIdx: skillState.skillSuggestIdx,
+    setSkillSuggestIdx: skillState.setSkillSuggestIdx,
+    resolveSkillSuggestion: skillState.resolveSuggestion,
   }
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>
 }
@@ -959,3 +754,6 @@ export function useLoop(): LoopContext {
   if (!ctx) throw new Error("useLoop: missing LoopProvider")
   return ctx
 }
+
+// 导出 Message 类型供外部使用
+export type { Message, AddMessageInput } from "./message"

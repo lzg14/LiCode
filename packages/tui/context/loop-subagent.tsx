@@ -11,9 +11,7 @@ import { createSignal } from "solid-js"
 export interface SubagentStatus {
   id: string
   task: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  result?: string
-  error?: string
+  status: 'running' | 'done' | 'error'
   startTime: number
   endTime?: number
 }
@@ -48,6 +46,17 @@ export function createSubagentState() {
     setSubagentStatuses([])
   }
 
+  const onSubagentStart = (id: string, task: string) => {
+    addSubagent(id, task)
+  }
+
+  const onSubagentEnd = (id: string, success: boolean) => {
+    updateSubagent(id, {
+      status: success ? 'done' : 'error',
+      endTime: Date.now(),
+    })
+  }
+
   return {
     subagentStatuses,
     subagentOpen,
@@ -56,6 +65,8 @@ export function createSubagentState() {
     updateSubagent,
     removeSubagent,
     clearSubagents,
+    onSubagentStart,
+    onSubagentEnd,
   }
 }
 
