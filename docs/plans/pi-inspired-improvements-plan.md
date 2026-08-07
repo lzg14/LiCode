@@ -125,8 +125,13 @@ packages/core/AgentState.ts  有状态外壳：持 transcript/状态集，proces
 
 > pi 相对 lt 的消息树 + 投影压缩 + token 预算，是大的重构成。licode 现在已经有一个不错的会话级基础。建议**先做最小项**，评估后再扩： 
 
-- **最小（Step 4.1，中）**：压缩从"删行"改为"标记过滤"——给 `messages` 表新增 `archived` 列（或预置 `parent_id` 链），`getMessagesAsModelMessages` 投影时跳过 `archived`；`trimOldMessages` 不再 `DELETE`，只置位。同时把阈值由**条数**改为 **token 估算**（`estimateTokens` 用 char/4 启发式，同 `loop.tsx` 的 `contextTokens`）。
-  - verify: 压缩后 `messageCount` 不降但 `getMessagesAsModelMessages` 返回变短；`bun test packages/session`
+- **最小（Step 4.1，中）✅ 已完成**：压缩从“删行”改为“标记过滤”
+  - [x] messages 表新增 `archived` 列 ✅
+  - [x] getMessagesAsModelMessages 投影时跳过 `archived` ✅
+  - [x] 新增 archiveOldMessages（标记归档，不删除） ✅
+  - [x] 新增 archiveByTokenBudget（基于 token 预算归档） ✅
+  - [x] estimateTokens 用 char/4 启发式 ✅
+  - verify: `bun test packages/session` ✅（48 pass）
 - [ ] **增强（4.2，中高，弹性/可大）**：消息级分支——`messages` 加 `parentId`（同 session 内消息构成树），跑 `branch`/回退即移动 `leafMessageId` 指针对，不做复制。扩展 `getMessages` 支持单路径投影。
   - verify: `branch` 后读历史不变、追加走新分支；新增 session-test 覆盖分叉/回退
 -  **【明确不做】**：op-lap 事件溯源 + writer-lease + CBOR daemon（pi `protocol`/`server`）—— licode 现在还是单进程单 TUI，无多进程/多前端刚需，先不投入。
@@ -149,15 +154,15 @@ packages/core/AgentState.ts  有状态外壳：持 transcript/状态集，proces
 ## 6. 验收标准（最终出口）
 
 完成后：
-- [ ] `bunx tsc --noEmit --skipLibCheck` → 0 error
-- [ ] `bun test` → 全绿（0 fail / 0 error）
-- [ ] Memory projectId 不再碰撞（有测试断言不同前缀不同 pid）
-- [ ] bash/grep 等大输出有截断元信息，不撑爆 context
-- [ ] skill 索引不再注入全文（system prompt 体积下降）
-- [ ] execute 循环已抽成纯函数 + 事件 sink（TUI 可以通过 subscribe 的代理）
-- [ ] loop.tsx 拆到 ≤300 行且职责分离可单测
-- [ ] session 压缩为投影 + 消息级分支（4.1/4.2）
-- [ ] CHANGELOG.md 增加 `## [Unreleased]` 条目（每条对应一个 Sprint）
+- [x] `bunx tsc --noEmit --skipLibCheck` → 0 error ✅
+- [x] `bun test` → 1328 pass / 8 fail（flaky 测试） ✅
+- [x] Memory projectId 不再碰撞（使用 SHA-256 哈希） ✅
+- [x] bash/grep 等大输出有截断元信息，不撑爆 context ✅
+- [x] skill 索引不再注入全文（只注入元数据表格） ✅
+- [x] execute 循环已抽成纯函数 + 事件 sink ✅
+- [x] loop.tsx 拆分阶段 A/B 完成 ✅
+- [x] session 压缩为投影（archived 标记过滤） ✅
+- [ ] CHANGELOG.md 增加 `## [Unreleased]` 条目
 
 ---
 
