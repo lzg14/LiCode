@@ -32,6 +32,7 @@ export const SCHEMA = `
     token_input INTEGER DEFAULT 0,
     token_output INTEGER DEFAULT 0,
     cost REAL DEFAULT 0,
+    archived INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id)
   );

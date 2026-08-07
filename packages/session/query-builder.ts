@@ -141,7 +141,85 @@ export function deleteSessionCascade(db: Database, id: string): void {
 }
 
 /**
+ * 估算 token 数量（char/4 启发式）
+ */
+export function estimateTokens(text: string): number {
+  // 简单启发式：1 token ≈ 4 字符（英文）或 2 字符（中文）
+  // 这里用保守估计：4 字符/token
+  return Math.ceil(text.length / 4)
+}
+
+/**
+ * 标记旧消息为 archived（不删除，只置位）
+ * 与 trimOldMessages 的区别：不删除数据，只在投影时跳过
+ */
+export function archiveOldMessages(db: Database, sessionId: string, keepCount: number): number {
+  // 找到要保留的最早消息 ID
+  const keepOldest = db.query(
+    'SELECT id FROM messages WHERE session_id = ? AND archived = 0 ORDER BY created_at DESC LIMIT 1 OFFSET ?'
+  ).get(sessionId, keepCount - 1) as { id: string } | null
+
+  if (!keepOldest) return 0 // 消息数 <= keepCount，无需归档
+
+  // 获取该消息的 created_at
+  const oldestMsg = db.query('SELECT created_at FROM messages WHERE id = ?').get(keepOldest.id) as any
+  if (!oldestMsg) return 0
+
+  // 标记比它更早的未归档消息为 archived
+  const result = db.run(
+    'UPDATE messages SET archived = 1 WHERE session_id = ? AND created_at < ? AND archived = 0',
+    [sessionId, oldestMsg.created_at]
+  )
+  return result.changes
+}
+
+/**
+ * 基于 token 预算归档旧消息
+ * 当会话 token 总量超过 maxTokens 时，归档较旧的消息
+ */
+export function archiveByTokenBudget(
+  db: Database,
+  sessionId: string,
+  maxTokens: number,
+  keepRecent: number = 10,
+): number {
+  // 获取所有未归档消息的 token 估算
+  const messages = db.query(
+    'SELECT id, content, created_at FROM messages WHERE session_id = ? AND archived = 0 ORDER BY created_at ASC'
+  ).all(sessionId) as Array<{ id: string; content: string; created_at: number }>
+
+  // 计算总 token
+  let totalTokens = 0
+  for (const msg of messages) {
+    totalTokens += estimateTokens(msg.content)
+  }
+
+  // 如果未超预算，无需归档
+  if (totalTokens <= maxTokens) return 0
+
+  // 从最旧的消息开始归档，但保留最近 keepRecent 条
+  let archivedCount = 0
+  const tokensToFree = totalTokens - maxTokens
+  let freedTokens = 0
+
+  for (const msg of messages) {
+    // 保留最近 keepRecent 条
+    if (archivedCount >= messages.length - keepRecent) break
+    // 已释放足够 token
+    if (freedTokens >= tokensToFree) break
+
+    const msgTokens = estimateTokens(msg.content)
+    db.run('UPDATE messages SET archived = 1 WHERE id = ?', [msg.id])
+    freedTokens += msgTokens
+    archivedCount++
+  }
+
+  return archivedCount
+}
+
+/**
  * 压缩后裁剪旧消息：删除 session 中除最近 keepCount 条以外的所有消息
+ * @deprecated 请使用 archiveOldMessages 代替
  */
 export function trimOldMessages(db: Database, sessionId: string, keepCount: number): number {
   // 找到要保留的最早消息 ID
@@ -208,18 +286,26 @@ export function searchMessages(
 export function getMessagesAsModelMessages(
   db: Database,
   sessionId: string,
-  options: { limit?: number } = {},
+  options: { limit?: number; includeArchived?: boolean } = {},
 ): Array<{ role: string; content: any[] }> {
   let messages: Message[]
+  
+  // 默认跳过 archived 消息（压缩投影）
+  const archivedFilter = options.includeArchived ? '' : 'AND archived = 0'
+  
   if (options.limit !== undefined) {
     const rows = db.query(
-      `SELECT * FROM messages WHERE session_id = ?
+      `SELECT * FROM messages WHERE session_id = ? ${archivedFilter}
        ORDER BY created_at DESC, rowid DESC
        LIMIT ?`,
     ).all(sessionId, options.limit) as any[]
     messages = rows.reverse().map((row) => rowToMessage(row))
   } else {
-    messages = getMessages(db, sessionId)
+    const rows = db.query(
+      `SELECT * FROM messages WHERE session_id = ? ${archivedFilter}
+       ORDER BY created_at ASC, rowid ASC`
+    ).all(sessionId) as any[]
+    messages = rows.map((row) => rowToMessage(row))
   }
   return messages.map(m => {
     try {

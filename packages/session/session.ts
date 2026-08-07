@@ -11,7 +11,7 @@ import {
   getMessages, getMessage, searchMessages, getMessagesAsModelMessages,
   insertMessage, touchSession,
   getParts, insertPart,
-  getSessionStats, trimOldMessages,
+  getSessionStats, trimOldMessages, archiveOldMessages, archiveByTokenBudget, estimateTokens,
 } from './query-builder'
 
 export type { Message, Part, PartType, Session, SessionStatus, SessionSummary }
@@ -84,9 +84,26 @@ export class SessionManager {
     return true
   }
 
-  /** 压缩后裁剪旧消息：删除除最近 keepCount 条以外的所有消息 */
+  /** 压缩后裁剪旧消息：删除除最近 keepCount 条以外的所有消息
+   * @deprecated 请使用 archiveOldMessages 代替
+   */
   trimOldMessages(sessionId: string, keepCount: number): number {
     return trimOldMessages(this.db, sessionId, keepCount)
+  }
+
+  /** 标记旧消息为 archived（不删除，只置位） */
+  archiveOldMessages(sessionId: string, keepCount: number): number {
+    return archiveOldMessages(this.db, sessionId, keepCount)
+  }
+
+  /** 基于 token 预算归档旧消息 */
+  archiveByTokenBudget(sessionId: string, maxTokens: number, keepRecent: number = 10): number {
+    return archiveByTokenBudget(this.db, sessionId, maxTokens, keepRecent)
+  }
+
+  /** 估算 token 数量 */
+  estimateTokens(text: string): number {
+    return estimateTokens(text)
   }
 
   addMessage(input: {
