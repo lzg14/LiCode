@@ -12,6 +12,8 @@ import {
   insertMessage, touchSession,
   getParts, insertPart,
   getSessionStats, trimOldMessages, archiveOldMessages, archiveByTokenBudget, estimateTokens,
+  getChildMessages, getMessageBranch, getMessageTree, getBranchMessages, updateMessageParent,
+  type MessageTreeNode,
 } from './query-builder'
 
 export type { Message, Part, PartType, Session, SessionStatus, SessionSummary }
@@ -105,6 +107,73 @@ export class SessionManager {
   estimateTokens(text: string): number {
     return estimateTokens(text)
   }
+
+  // ============================================================
+  // 消息级分支
+  // ============================================================
+
+  /** 获取消息的子消息 */
+  getChildMessages(parentId: string): Message[] {
+    return getChildMessages(this.db, parentId)
+  }
+
+  /** 获取消息的完整分支（从根到叶） */
+  getMessageBranch(messageId: string): Message[] {
+    return getMessageBranch(this.db, messageId)
+  }
+
+  /** 获取会话的消息树 */
+  getMessageTree(sessionId: string): MessageTreeNode[] {
+    return getMessageTree(this.db, sessionId)
+  }
+
+  /** 获取指定分支的消息 */
+  getBranchMessages(sessionId: string, leafMessageId?: string): Message[] {
+    return getBranchMessages(this.db, sessionId, leafMessageId)
+  }
+
+  /** 更新消息的 parent_id */
+  updateMessageParent(messageId: string, newParentId: string | null): void {
+    updateMessageParent(this.db, messageId, newParentId)
+  }
+
+  /**
+   * 在当前分支末尾追加消息
+   * 自动设置 parentId 为当前分支的最后一个消息
+   */
+  appendMessageToBranch(input: {
+    sessionId: string
+    role: Message['role']
+    content: string
+    leafMessageId?: string
+    agent?: string
+    model?: string
+    tokenUsage?: Message['tokenUsage']
+    cost?: number
+  }): Message {
+    // 获取当前分支的最后一个消息
+    const branch = this.getBranchMessages(input.sessionId, input.leafMessageId)
+    const lastMessage = branch.length > 0 ? branch[branch.length - 1] : null
+    
+    // 创建消息
+    const message = this.addMessage({
+      sessionId: input.sessionId,
+      role: input.role,
+      content: input.content,
+      agent: input.agent,
+      model: input.model,
+      tokenUsage: input.tokenUsage,
+      cost: input.cost,
+    })
+    
+    // 设置 parentId
+    if (lastMessage) {
+      this.updateMessageParent(message.id, lastMessage.id)
+    }
+    
+    return message
+  }
+
 
   addMessage(input: {
     sessionId: string

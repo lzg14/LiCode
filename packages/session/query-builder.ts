@@ -324,13 +324,136 @@ export function getMessagesAsModelMessages(
 
 export function insertMessage(db: Database, message: Message): void {
   db.run(
-    `INSERT INTO messages (id, session_id, role, content, agent, model, token_input, token_output, cost, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO messages (id, session_id, role, content, agent, model, token_input, token_output, cost, parent_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [message.id, message.sessionId, message.role, message.content,
      message.agent ?? null, message.model ?? null,
      message.tokenUsage?.input ?? 0, message.tokenUsage?.output ?? 0,
-     message.cost ?? 0, message.createdAt]
+     message.cost ?? 0, message.parentId ?? null, message.createdAt]
   )
+}
+
+// ── Message Branching ──
+
+/**
+ * 获取消息的子消息
+ */
+export function getChildMessages(db: Database, parentId: string): Message[] {
+  const rows = db.query(
+    'SELECT * FROM messages WHERE parent_id = ? ORDER BY created_at ASC'
+  ).all(parentId) as any[]
+  return rows.map(row => rowToMessage(row))
+}
+
+/**
+ * 获取消息的完整分支（从根到叶）
+ */
+export function getMessageBranch(db: Database, messageId: string): Message[] {
+  const branch: Message[] = []
+  let currentId: string | undefined = messageId
+  
+  while (currentId) {
+    const row = db.query('SELECT * FROM messages WHERE id = ?').get(currentId) as any
+    if (!row) break
+    branch.unshift(rowToMessage(row))
+    currentId = row.parent_id
+  }
+  
+  return branch
+}
+
+/**
+ * 获取会话的消息树（所有分支）
+ */
+export function getMessageTree(db: Database, sessionId: string): MessageTreeNode[] {
+  // 获取所有消息
+  const allMessages = db.query(
+    'SELECT * FROM messages WHERE session_id = ? AND archived = 0 ORDER BY created_at ASC'
+  ).all(sessionId) as any[]
+  
+  const messages = allMessages.map(row => rowToMessage(row))
+  const messageMap = new Map(messages.map(m => [m.id, m]))
+  
+  // 构建树
+  const roots: MessageTreeNode[] = []
+  const childrenMap = new Map<string, MessageTreeNode[]>()
+  
+  for (const msg of messages) {
+    const node: MessageTreeNode = { message: msg, children: [] }
+    
+    if (msg.parentId && messageMap.has(msg.parentId)) {
+      // 有父节点，添加到父节点的 children
+      const children = childrenMap.get(msg.parentId) || []
+      children.push(node)
+      childrenMap.set(msg.parentId, children)
+    } else {
+      // 根节点
+      roots.push(node)
+    }
+    
+    childrenMap.set(msg.id, node.children)
+  }
+  
+  // 填充 children
+  for (const [parentId, children] of childrenMap) {
+    const parentNode = roots.find(r => r.message.id === parentId) || 
+                       findNodeInTree(roots, parentId)
+    if (parentNode) {
+      parentNode.children = children
+    }
+  }
+  
+  return roots
+}
+
+/**
+ * 在树中查找节点
+ */
+function findNodeInTree(nodes: MessageTreeNode[], id: string): MessageTreeNode | null {
+  for (const node of nodes) {
+    if (node.message.id === id) return node
+    const found = findNodeInTree(node.children, id)
+    if (found) return found
+  }
+  return null
+}
+
+/**
+ * 获取指定分支的消息（从根到指定叶节点）
+ */
+export function getBranchMessages(
+  db: Database,
+  sessionId: string,
+  leafMessageId?: string,
+): Message[] {
+  if (!leafMessageId) {
+    // 没有指定叶节点，返回线性历史（按时间排序）
+    return db.query(
+      'SELECT * FROM messages WHERE session_id = ? AND archived = 0 AND parent_id IS NULL ORDER BY created_at ASC'
+    ).all(sessionId).map(row => rowToMessage(row))
+  }
+  
+  // 返回从根到指定叶节点的路径
+  return getMessageBranch(db, leafMessageId)
+}
+
+/**
+ * 更新消息的 parent_id（用于分支/回退）
+ */
+export function updateMessageParent(
+  db: Database,
+  messageId: string,
+  newParentId: string | null,
+): void {
+  db.run('UPDATE messages SET parent_id = ? WHERE id = ?', [newParentId, messageId])
+}
+
+/**
+ * 消息树节点
+ */
+export interface MessageTreeNode {
+  message: Message
+  children: MessageTreeNode[]
 }
 
 export function touchSession(db: Database, sessionId: string, now: number): void {

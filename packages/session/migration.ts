@@ -33,6 +33,7 @@ export function migrate(db: Database): void {
 
   const messageExpected: Array<{ name: string; type: string; default?: string }> = [
     { name: 'archived', type: 'INTEGER', default: '0' },
+    { name: 'parent_id', type: 'TEXT' },
   ]
 
   for (const col of messageExpected) {

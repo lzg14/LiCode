@@ -33,8 +33,10 @@ export const SCHEMA = `
     token_output INTEGER DEFAULT 0,
     cost REAL DEFAULT 0,
     archived INTEGER DEFAULT 0,
+    parent_id TEXT,
     created_at INTEGER NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
+    FOREIGN KEY (session_id) REFERENCES sessions(id),
+    FOREIGN KEY (parent_id) REFERENCES messages(id)
   );
 
   CREATE TABLE IF NOT EXISTS parts (

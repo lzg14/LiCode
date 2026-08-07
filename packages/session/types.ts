@@ -30,6 +30,8 @@ export interface Message {
   model?: string
   tokenUsage?: { input: number; output: number; reasoning?: number }
   cost?: number
+  /** 父消息 ID（用于消息级分支） */
+  parentId?: string
   createdAt: number
 }
 
