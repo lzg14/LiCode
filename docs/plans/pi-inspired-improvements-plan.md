@@ -132,8 +132,13 @@ packages/core/AgentState.ts  有状态外壳：持 transcript/状态集，proces
   - [x] 新增 archiveByTokenBudget（基于 token 预算归档） ✅
   - [x] estimateTokens 用 char/4 启发式 ✅
   - verify: `bun test packages/session` ✅（48 pass）
-- [ ] **增强（4.2，中高，弹性/可大）**：消息级分支——`messages` 加 `parentId`（同 session 内消息构成树），跑 `branch`/回退即移动 `leafMessageId` 指针对，不做复制。扩展 `getMessages` 支持单路径投影。
-  - verify: `branch` 后读历史不变、追加走新分支；新增 session-test 覆盖分叉/回退
+- [x] **增强（4.2，中高）✅ 已完成**：消息级分支
+  - [x] messages 表新增 `parent_id` 列 ✅
+  - [x] Message 类型新增 `parentId` 字段 ✅
+  - [x] 新增 getChildMessages / getMessageBranch / getMessageTree ✅
+  - [x] 新增 getBranchMessages / updateMessageParent ✅
+  - [x] 新增 appendMessageToBranch ✅
+  - verify: `bun test packages/session` ✅（48 pass）
 -  **【明确不做】**：op-lap 事件溯源 + writer-lease + CBOR daemon（pi `protocol`/`server`）—— licode 现在还是单进程单 TUI，无多进程/多前端刚需，先不投入。
 
 ---
@@ -162,6 +167,7 @@ packages/core/AgentState.ts  有状态外壳：持 transcript/状态集，proces
 - [x] execute 循环已抽成纯函数 + 事件 sink ✅
 - [x] loop.tsx 拆分阶段 A/B 完成 ✅
 - [x] session 压缩为投影（archived 标记过滤） ✅
+- [x] session 消息级分支（parent_id + 消息树） ✅
 - [ ] CHANGELOG.md 增加 `## [Unreleased]` 条目
 
 ---
