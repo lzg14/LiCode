@@ -18,35 +18,22 @@
 
 ---
 
-## 当前进度（已未提交改动）
+## 当前进度
 
-### ✅ Phase 1 部分完成：Context 拆分文件已创建
-
-已创建的独立 context 文件：
+### ✅ Phase 1 已完成：Context 拆分集成
 
 | 文件 | 行数 | 职责 | 状态 |
 |---|---:|----|---|
-| `loop-model.tsx` | 73 | 模型/Provider 切换 | ✅ 已创建，有修改 |
-| `loop-skill.tsx` | 84 | Skill 状态管理 | ✅ 已创建，有修改 |
-| `loop-stream.tsx` | 79 | 流式输出状态 | ✅ 已创建，有修改 |
-| `loop-subagent.tsx` | 62 | Subagent 状态跟踪 | ✅ 已创建 |
-| `loop-scheduler.tsx` | 70 | 定时任务管理 | ✅ 已创建，有修改 |
-| `loop-input.tsx` | 81 | 输入队列管理 | ✅ 已创建 |
+| `loop.tsx` | 759 | 组合层（核心逻辑） | ✅ 已重构（960→759，-21%） |
+| `message.tsx` | 100 | 消息状态管理 | ✅ 已创建并集成 |
+| `loop-model.tsx` | 73 | 模型/Provider 切换 | ✅ 已集成 |
+| `loop-skill.tsx` | 103 | Skill 状态管理 | ✅ 已集成 |
+| `loop-stream.tsx` | 80 | 流式输出状态 | ✅ 已集成 |
+| `loop-subagent.tsx` | 73 | Subagent 状态跟踪 | ✅ 已集成 |
+| `loop-scheduler.tsx` | 70 | 定时任务管理 | ✅ 已集成 |
+| `loop-input.tsx` | 52 | 输入队列管理 | ✅ 已集成 |
 
-**问题**：这些文件已创建但**未集成到 loop.tsx**，当前 loop.tsx 仍是 960 行。
-
-### ✅ 其他已修改文件
-
-| 文件 | 改动说明 |
-|---|---|
-| `packages/core/phases/execute/run-loop.ts` | 重构执行逻辑 |
-| `packages/core/phases/execute/index.ts` | 导出调整 |
-| `packages/core/utils/truncate.ts` | 工具函数优化 |
-| `packages/extension/manager.ts` | 扩展管理器调整 |
-| `packages/sdk/index.ts` | SDK 入口优化 |
-| `packages/session/query-builder.ts` | 查询构建器微调 |
-| `packages/tui/theme/loader.ts` | 主题加载器修复 |
-| `packages/cli/modes/json.ts` | CLI 模式修复 |
+### 🔄 Phase 2 待开始：抽取 LLM 调用层
 
 ---
 
@@ -454,11 +441,11 @@ bun run dev
 
 | 阶段 | 工作量 | 依赖 | 状态 |
 |---|---|---|---|
-| Phase 1 | 1-2 天 | 无 | **进行中**（文件已创建，待集成） |
-| Phase 2 | 2 天 | Phase 1 完成 | 待开始 |
+| Phase 1 | 1-2 天 | 无 | ✅ **已完成** |
+| Phase 2 | 2 天 | Phase 1 完成 | 🔄 **待开始** |
 | Phase 3 | 2 天 | Phase 2 完成 | 待开始 |
 | Phase 4 | 1-2 天 | Phase 3 完成 | 待开始 |
-| **总计** | **6-8 天** | - | - |
+| **总计** | **6-8 天** | - | **已完成 1/4** |
 
 ---
 
