@@ -1,5 +1,7 @@
 import { useKeyboard } from "@opentui/solid"
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
+import { writeFileSync } from "fs"
+import { join } from "path"
 import { loadAllSkills } from "../../skills/loader"
 import { HelpPanel } from "../component/help-panel"
 import { Logo } from "../component/logo"
@@ -24,10 +26,12 @@ const BUILTIN_COMMANDS = [
   { type: 'cmd' as const, label: '/fork', desc: '分叉会话' },
   { type: 'cmd' as const, label: '/clone', desc: '克隆当前会话' },
   { type: 'cmd' as const, label: '/session', desc: '会话信息' },
+  { type: 'cmd' as const, label: '/undo', desc: '撤销上一条消息' },
+  { type: 'cmd' as const, label: '/export', desc: '导出对话' },
 ]
 
 export function Home() {
-  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort, subagentStatuses, subagentOpen, setSubagentOpen, setPromptText, pendingSkillSuggestion, skillSuggestIdx, setSkillSuggestIdx, resolveSkillSuggestion } = useLoop()
+  const { isProcessing, messages, run, compactSession, clearSession, currentModel, switchModel, getAvailableModels, addMessage, setActiveSkill, activeSkill, undoLastMessage, exportMessages, addLoop, stopLoops, listLoops, scheduler, currentPhase, verifyResults, abort, subagentStatuses, subagentOpen, setSubagentOpen, setPromptText, pendingSkillSuggestion, skillSuggestIdx, setSkillSuggestIdx, resolveSkillSuggestion } = useLoop()
   const { background, backgroundPanel, primary, text, textMuted, success, error } = useTheme()
   const [modelPickerIdx, setModelPickerIdx] = createSignal(0)
   const [helpOpen, setHelpOpen] = createSignal(false)
@@ -123,8 +127,14 @@ export function Home() {
 
   const slashItems = createMemo(() => {
     const q = slashInput().slice(1)
+    // 动态构建命令列表：/model 和 /skill 显示当前状态
+    const cmds = BUILTIN_COMMANDS.map(cmd => {
+      if (cmd.label === '/model') return { ...cmd, desc: `当前: ${currentModel()}` }
+      if (cmd.label === '/skill') return { ...cmd, desc: activeSkill() ? `已激活: ${activeSkill()}` : '激活/列出技能' }
+      return cmd
+    })
     const items = [
-      ...BUILTIN_COMMANDS,
+      ...cmds,
       ...availableSkills().map(s => ({ type: 'skill' as const, label: `/${s.name}`, desc: s.description })),
     ]
     if (!q) return items
@@ -169,6 +179,25 @@ export function Home() {
     else if (label === '/session') {
       // TODO: 显示会话信息
       addMessage({ role: "system", content: "会话信息功能开发中..." })
+    }
+    else if (label === '/undo') {
+      const removed = undoLastMessage()
+      if (removed) {
+        addMessage({ role: "system", content: `已撤销: [${removed.role}] ${removed.content.slice(0, 60)}${removed.content.length > 60 ? '...' : ''}` })
+      } else {
+        addMessage({ role: "system", content: "没有可撤销的消息" })
+      }
+    }
+    else if (label === '/export') {
+      const exported = exportMessages('md')
+      const filename = `licode-export-${Date.now()}.md`
+      const filepath = join(process.cwd(), filename)
+      try {
+        writeFileSync(filepath, exported, 'utf-8')
+        addMessage({ role: "system", content: `已导出 ${messages().length} 条消息到 ${filename}` })
+      } catch (e) {
+        addMessage({ role: "system", content: `导出失败: ${e instanceof Error ? e.message : String(e)}` })
+      }
     }
     else if (label.startsWith('/')) {
       const skillName = label.replace(/^\//, '')

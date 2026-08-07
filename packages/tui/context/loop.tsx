@@ -62,6 +62,8 @@ export interface LoopContext {
   addMessage: (msg: AddMessageInput) => void
   updateMessage: (id: string, patch: Partial<Message>) => void
   clearMessages: () => void
+  undoLastMessage: () => Message | null
+  exportMessages: (format?: 'txt' | 'md') => string
   clearSession: () => void
   toolCallExpanded: Accessor<boolean>
   toggleToolCallExpanded: () => void
@@ -707,6 +709,17 @@ export function LoopProvider(props: { children: JSX.Element; loop: CoreLoop; mod
     addMessage: messageState.addMessage,
     updateMessage: messageState.updateMessage,
     clearMessages: messageState.clearMessages,
+    undoLastMessage: messageState.undoLastMessage,
+    exportMessages: (format: 'txt' | 'md' = 'md') => {
+      const msgs = messageState.messages()
+      if (format === 'txt') {
+        return msgs.map(m => `[${m.role}] ${m.content}`).join('\n\n')
+      }
+      return msgs.map(m => {
+        const role = m.role === 'assistant' ? '**Assistant**' : m.role === 'user' ? '**User**' : m.role === 'tool' ? `**Tool: ${m.toolName ?? '?'}**` : `**${m.role}**`
+        return `### ${role}\n\n${m.content}`
+      }).join('\n\n---\n\n')
+    },
     clearSession,
     toolCallExpanded,
     toggleToolCallExpanded,

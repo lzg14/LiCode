@@ -54,6 +54,8 @@ export interface MessageState {
   updateMessage: (id: string, patch: Partial<Message>) => void
   /** 清空消息 */
   clearMessages: () => void
+  /** 撤销最后一条消息 */
+  undoLastMessage: () => Message | null
   /** 设置消息列表（用于恢复历史） */
   setMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void
 }
@@ -88,11 +90,22 @@ export function createMessageState(): MessageState {
     setMessages([])
   }
 
+  const undoLastMessage = (): Message | null => {
+    let removed: Message | null = null
+    setMessages((prev) => {
+      if (prev.length === 0) return prev
+      removed = prev[prev.length - 1]
+      return prev.slice(0, -1)
+    })
+    return removed
+  }
+
   return {
     messages,
     addMessage,
     updateMessage,
     clearMessages,
+    undoLastMessage,
     setMessages,
   }
 }

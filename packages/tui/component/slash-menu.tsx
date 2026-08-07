@@ -59,7 +59,7 @@ function MatchedLabel(props: { label: string; indices: number[]; fg: string; mat
 }
 
 export function SlashMenu(props: SlashMenuProps) {
-  const { backgroundPanel, primary, text, textMuted } = useTheme()
+  const { primary, text, textMuted } = useTheme()
 
   const filter = createMemo(() => props.query.slice(1))
 
@@ -73,26 +73,16 @@ export function SlashMenu(props: SlashMenuProps) {
   if (!props.open) return null
 
   return (
-    <box
-      flexDirection="column" width="100%"
-      paddingX={2} paddingY={1}
-      backgroundColor={backgroundPanel()}
-      border={["top", "bottom", "left", "right"]}
-      borderColor={primary()}
-      flexShrink={0}
-    >
+    <box flexDirection="column" width="100%" paddingX={2} flexShrink={0}>
       <Show when={itemsWithHL().length === 0}>
-        <text fg={textMuted()}>无匹配结果</text>
+        <text fg={textMuted()}>  无匹配结果</text>
       </Show>
       <For each={itemsWithHL()}>
         {(entry, i) => {
           const isSelected = i() === props.selectedIndex
-          const typeTag = entry.item.type === 'cmd' ? '⌘' : '⚡'
           return (
             <box flexDirection="row">
               <text fg={isSelected ? primary() : textMuted()}>{isSelected ? '▸ ' : '  '}</text>
-              <text fg={textMuted()}>{typeTag}</text>
-              <text> </text>
               <MatchedLabel
                 label={entry.item.label}
                 indices={entry.indices}
