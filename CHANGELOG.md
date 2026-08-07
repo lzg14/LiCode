@@ -8,6 +8,7 @@
 ## [Unreleased]
 
 ### Added
+- **query-builder 移动 + 清理**（架构重构 Phase 4）：`packages/session/query-builder.ts` 移到 `packages/session/utils/` 子目录，补模块级 JSDoc，清理未用类型 import；新增 `utils/index.ts` 聚合导出；核实 Step 4.2 两处依赖均为"单向、无循环"合理依赖、Step 4.3 无 dead code 而跳过
 - **轻量 DI 容器**（架构重构 Phase 3）：新增 `packages/core/container.ts`（惰性单例 + 覆盖清缓存）与 `packages/core/services.ts`（按 config 注册 CoreLoop 依赖）；`core/loop.ts` 构造器改为注入 container（缺省自建），保留公开 API，每实例独立容器避免共享 SQLite 连接
 - **抽取 LLM 调用层**（架构重构 Phase 2）：新增 `packages/core/llm-client.ts`（`callLLM`，封装 60s 超时/abort/流消费/usage 统计/内存泄漏防护）和 `packages/core/tool-executor.ts`（`executeToolBatch`，工具批执行 + subagent 分支 + 结果处理）；`packages/core/phases/execute/main.ts` 从 560 行精简到 293 行（-48%），`execute/index.ts` re-export 上述新模块
 - **事件驱动架构**（Sprint 2）：`packages/core/events.ts` 定义 `AgentEvent` 判别联合（13 种事件类型），覆盖 agent/turn/message/tool/error/phase 6 级事件；`packages/core/agent-state.ts` 提供事件订阅与状态管理；`packages/core/phases/execute/run-loop.ts` 纯函数版 agent 循环，只 emit 事件 + 回调通知，不直接碰 TUI/session

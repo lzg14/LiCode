@@ -14,7 +14,7 @@ import {
   getSessionStats, trimOldMessages, archiveOldMessages, archiveByTokenBudget, estimateTokens,
   getChildMessages, getMessageBranch, getMessageTree, getBranchMessages, updateMessageParent,
   type MessageTreeNode,
-} from './query-builder'
+} from './utils/query-builder'
 
 export type { Message, Part, PartType, Session, SessionStatus, SessionSummary }
 

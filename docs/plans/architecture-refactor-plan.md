@@ -55,7 +55,26 @@
 
 > 设计要点：**不采用全局单例**——每个 CoreLoop 实例用独立容器，避免多实例共享 SQLite 连接 / Memory 目录破坏测试隔离（这是计划的"只注册单例"与现有 `loop-helpers.test.ts` 契约之间的必要权衡）。
 
-### 🔄 Phase 4 待开始：清理 query-builder + 依赖整理
+### ✅ Phase 4 已完成：清理 query-builder + 依赖整理
+
+| 文件 | 职责 | 状态 |
+|---|---:|---|
+| `session/utils/query-builder.ts` | query-builder 从 session/ 根移到 utils/ 子目录，补模块级 JSDoc，清理未用类型 import | ✅ 已移动（526 行） |
+| `session/utils/index.ts` | utils 聚合导出 | ✅ 已创建 |
+| `session/session.ts` | import 路径改为 `./utils/query-builder` | ✅ 已更新 |
+
+**Step 4.2 依赖整理（核实后跳过）**：
+- `config/defaults.ts → security/merge.ts`：核实为**单向依赖，无循环**（security 不 import config），且 `PLATFORM_DEFAULTS` 是 security 的默认值定义，复制进 config 会造成默认值双份维护——不改
+- `extension/types.ts → skills/types.ts`：仅为单向类型引用（`SkillIndex`），无重复定义，`packages/shared/` 不存在——不改
+- `core/loop.ts → 多依赖`：Phase 3 已通过 DI 处理
+
+**Step 4.3 dead code（核实后无需清理）**：
+- query-builder 25 个导出全部被 session.ts 使用，无 dead export
+- session.ts 无空 catch、无注释掉的代码
+
+> 计划的两个"依赖问题"经核实均非真问题（无循环依赖、无重复定义），强制重构会制造数据/类型双份维护。按"精准修改"原则跳过，避免无收益改动。
+
+### ✅ 全部阶段完成
 
 ---
 
@@ -466,8 +485,8 @@ bun run dev
 | Phase 1 | 1-2 天 | 无 | ✅ **已完成** |
 | Phase 2 | 2 天 | Phase 1 完成 | ✅ **已完成** |
 | Phase 3 | 2 天 | Phase 2 完成 | ✅ **已完成** |
-| Phase 4 | 1-2 天 | Phase 3 完成 | 🔄 **待开始** |
-| **总计** | **6-8 天** | - | **已完成 3/4** |
+| Phase 4 | 1-2 天 | Phase 3 完成 | ✅ **已完成** |
+| **总计** | **6-8 天** | - | ✅ **全部完成** |
 
 ---
 

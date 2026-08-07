@@ -1,15 +1,27 @@
 import type { Database } from 'bun:sqlite'
-import type { SessionRow } from './helpers'
-import { rowToSession, rowToMessage, rowToPart } from './helpers'
-import type { Message, Part, PartType, Session, SessionSummary } from './types'
+import type { SessionRow } from '../helpers'
+import { rowToSession, rowToMessage, rowToPart } from '../helpers'
+import type { Message, Part, Session } from '../types'
+
+/**
+ * SQLite 查询构建器
+ *
+ * 所有 session/message/part 的 SQL 读写操作集中在此，session.ts 只负责
+ * 业务编排。函数均为纯函数，接受 db 作为第一个参数，便于测试。
+ */
 
 // ── Session reads ──
 
+/** 按 id 读取单个 session */
 export function getSession(db: Database, id: string): Session | null {
   const row = db.query('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | null
   return row ? rowToSession(row) : null
 }
 
+/**
+ * 列出 sessions，支持按 directory / parentId 过滤，按 updated_at 倒序，
+ * 可选 limit / offset 分页
+ */
 export function listSessions(
   db: Database,
   options: {
