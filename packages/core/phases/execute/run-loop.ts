@@ -7,6 +7,7 @@
  */
 
 import { type DynamicToolCall, type ImagePart, type TextPart, type Tool, type ToolResultPart, jsonSchema, streamText, tool } from "ai"
+import type { SkillStackItem } from "../../../skills/stack"
 import type { ToolResult } from "../../../tools/types"
 import { globalToolRegistry } from "../../../tools/registry"
 import { buildProjectRole, detectProject } from "../../detect-project"
@@ -55,7 +56,7 @@ export interface RunLoopContext {
   activeSkill?: string | null
   activeSkillInstructions?: string | null
   availableSkills?: Array<{ name: string; description: string; triggerHints: string; path?: string }>
-  skillStack?: Array<{ skill: { name: string; description: string }; role: 'primary' | 'secondary'; instructions: string }>
+  skillStack?: SkillStackItem[]
   /** Memory */
   memory?: any
   /** 模型信息 */
@@ -100,17 +101,13 @@ async function callLLM(
     : timeoutController.signal
 
   try {
-    const result = await streamText({
+    const result = streamText({
       model: ctx.model as any,
       messages: msgs as any,
       tools,
-      maxSteps: 50,
       system,
       temperature: 0.3,
-      signal: combinedSignal as any,
-      onStepFinish: async ({ toolCalls, toolResults }) => {
-        // 工具执行完成回调（可扩展）
-      },
+      abortSignal: combinedSignal as any,
     })
 
     let fullText = ""
@@ -119,7 +116,7 @@ async function callLLM(
     }
 
     const usage = await result.usage
-    const toolCalls = await result.toolCalls
+    const toolCalls = (await result.toolCalls) as DynamicToolCall[]
 
     return {
       result: {
@@ -165,7 +162,7 @@ function buildInitialMessages(ctx: RunLoopContext): Array<{ role: string; conten
   const userContent: Array<TextPart | ImagePart> = [{ type: "text", text: ctx.userInput }]
   if (ctx.userImages?.length) {
     for (const img of ctx.userImages) {
-      userContent.push({ type: "image", image: Buffer.from(img.base64, 'base64'), mimeType: img.mimeType as any })
+      userContent.push({ type: "image", image: `data:${img.mimeType};base64,${img.base64}`, mediaType: img.mimeType } as any)
     }
   }
 
@@ -238,8 +235,13 @@ export async function runAgentLoop(
     execute: async ({ task, tools: allowedTools, timeoutMs }) => {
       const subagentInput: SubagentInput = { task, tools: allowedTools, timeoutMs }
       try {
-        const result = await subagentManager.execute(subagentInput, ctx.model as any, subagentSystem)
-        return result
+        const subResult = await subagentManager.spawn(subagentInput, {
+          model: ctx.model as any,
+          system: subagentSystem,
+          messages: [],
+          cwd: ctx.cwd,
+        })
+        return { success: subResult.success, output: subResult.text, error: subResult.error }
       } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : String(e) }
       }
@@ -382,7 +384,8 @@ export async function runAgentLoop(
         try {
           const toolDef = tools[tc.toolName]
           if (toolDef?.execute) {
-            toolResult = await toolDef.execute(tc.input as any, { cwd: ctx.cwd, sessionId: ctx.sessionId, signal: ctx.signal })
+            const regResult = await globalToolRegistry.execute(tc.toolName, tc.input as Record<string, unknown>, { cwd: ctx.cwd })
+            toolResult = regResult
           } else {
             toolResult = { success: false, error: `Tool ${tc.toolName} not found` }
           }

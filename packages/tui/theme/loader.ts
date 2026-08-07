@@ -4,7 +4,8 @@
  * 支持从目录加载主题文件，支持热重载
  */
 
-import { readFile, readdir, access, watch, stat } from 'fs/promises'
+import { readFile, readdir, access, stat } from 'fs/promises'
+import { watch as watchCb } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import { devLogger } from '../../core/dev-logger'
@@ -244,7 +245,7 @@ export class ThemeManager {
     for (const dir of dirs) {
       try {
         await access(dir)
-        const watcher = watch(dir, async (eventType) => {
+        const watcher = watchCb(dir, async (eventType: string) => {
           if (eventType === 'change' || eventType === 'rename') {
             devLogger.info('THEME', `Theme directory changed: ${dir}`)
             // 重新加载主题

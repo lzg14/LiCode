@@ -173,6 +173,7 @@ export class ExtensionManager {
     await factory(api)
 
     // 注册为 pluginManager 的插件（集成现有插件系统）
+    const self = this
     const plugin: Plugin = {
       name: info.name,
       version: info.version || '0.0.0',
@@ -207,7 +208,7 @@ export class ExtensionManager {
         if (self.tools.has(tool.name)) {
           devLogger.warn('EXT', `Tool ${tool.name} already registered, overwriting`)
         }
-        self.tools.set(tool.name, { tool, extensionName: info.name })
+        self.tools.set(tool.name, { name: tool.name, tool, extensionName: info.name })
         devLogger.debug('EXT', `Registered tool: ${tool.name}`)
       },
 

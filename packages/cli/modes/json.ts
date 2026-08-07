@@ -68,7 +68,6 @@ export async function runJSON(args: string[]): Promise<void> {
       model: llmModel,
       messages,
       tools,
-      maxSteps: 50,
       onStepFinish: async ({ toolCalls, toolResults }) => {
         // 输出工具调用
         for (const tc of toolCalls) {
@@ -77,7 +76,7 @@ export async function runJSON(args: string[]): Promise<void> {
             timestamp: Date.now(),
             data: {
               name: tc.toolName,
-              args: tc.args,
+              args: tc.input,
             },
           })
         }
@@ -89,7 +88,7 @@ export async function runJSON(args: string[]): Promise<void> {
             timestamp: Date.now(),
             data: {
               name: tr.toolName,
-              result: tr.result,
+              result: tr.output,
             },
           })
         }
@@ -112,8 +111,8 @@ export async function runJSON(args: string[]): Promise<void> {
       timestamp: Date.now(),
       data: {
         usage: {
-          input: usage.promptTokens,
-          output: usage.completionTokens,
+          input: usage.inputTokens ?? 0,
+          output: usage.outputTokens ?? 0,
         },
       },
     })

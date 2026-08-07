@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### Planned
+- **架构重构计划**（`architecture-refactor-plan`）：分 4 阶段重构核心架构
+  - Phase 1: 拆分 `loop.tsx` God Context（960→400 行）为 MessageContext/ModelContext/SkillContext/SubagentContext
+  - Phase 2: 抽取 LLM 调用层（`llm-client.ts` + `tool-executor.ts`），`execute/main.ts` 560→350 行
+  - Phase 3: 引入轻量 DI 容器，解耦 `core/loop.ts` 依赖
+  - Phase 4: 清理 `query-builder.ts` + 跨模块依赖整理
+
 ### Changed
 - **移除 simple-git 依赖**：`packages/integration/git.ts` 改用 `child_process.exec` 直接调用 git CLI，减少约 200KB 依赖体积
 - **清理 CHANGELOG.md 重复条目**：删除 v0.4.0 中重复的"测试"、"工程"、"文档"部分

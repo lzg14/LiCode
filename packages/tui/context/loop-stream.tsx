@@ -26,6 +26,7 @@ export function createStreamState() {
   const [streamMode, setStreamMode] = createSignal<'text' | 'in-thinking' | 'in-system-reminder'>('text')
   
   const accumulator = createStreamAccumulator()
+  let segments: Segment[] = []
 
   const onStreamText = (text: string) => {
     // 检测是否在 thinking 或 system-reminder 中
@@ -39,8 +40,9 @@ export function createStreamState() {
       setStreamMode('text')
     }
     
-    const segment = accumulator.append(text)
-    setStreamingSegments(accumulator.getSegments())
+    const result = accumulator.push(text)
+    segments = result.closed
+    setStreamingSegments([...segments])
   }
 
   const onIntermediateText = (text: string) => {
@@ -48,7 +50,8 @@ export function createStreamState() {
   }
 
   const clearStream = () => {
-    accumulator.clear()
+    accumulator.reset()
+    segments = []
     setStreamingSegments([])
     setPendingText("")
     setStreamMode('text')
@@ -56,6 +59,7 @@ export function createStreamState() {
 
   const resetStream = () => {
     accumulator.reset()
+    segments = []
     setStreamingSegments([])
     setPendingText("")
     setStreamMode('text')

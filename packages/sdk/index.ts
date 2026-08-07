@@ -127,12 +127,11 @@ export async function createAgent(config: AgentConfig = {}): Promise<Agent> {
         model: llmModel,
         messages: [{ role: 'user', content: message }],
         tools,
-        maxSteps: 50,
         onStepFinish: async ({ toolCalls, toolResults }) => {
           for (const tc of toolCalls) {
             toolCallHistory.push({
               name: tc.toolName,
-              args: tc.args as Record<string, unknown>,
+              args: tc.input as Record<string, unknown>,
             })
           }
           for (const tr of toolResults) {
@@ -140,7 +139,7 @@ export async function createAgent(config: AgentConfig = {}): Promise<Agent> {
               (h) => h.name === tr.toolName && !h.result
             )
             if (existing) {
-              existing.result = tr.result
+              existing.result = tr.output
             }
           }
         },
@@ -149,8 +148,8 @@ export async function createAgent(config: AgentConfig = {}): Promise<Agent> {
       return {
         text: result.text,
         usage: {
-          input: result.usage.promptTokens,
-          output: result.usage.completionTokens,
+          input: result.usage.inputTokens ?? 0,
+          output: result.usage.outputTokens ?? 0,
         },
         toolCalls: [...toolCallHistory],
       }
@@ -161,12 +160,11 @@ export async function createAgent(config: AgentConfig = {}): Promise<Agent> {
         model: llmModel,
         messages: [{ role: 'user', content: message }],
         tools,
-        maxSteps: 50,
         onStepFinish: async ({ toolCalls, toolResults }) => {
           for (const tc of toolCalls) {
             toolCallHistory.push({
               name: tc.toolName,
-              args: tc.args as Record<string, unknown>,
+              args: tc.input as Record<string, unknown>,
             })
           }
           for (const tr of toolResults) {
@@ -174,7 +172,7 @@ export async function createAgent(config: AgentConfig = {}): Promise<Agent> {
               (h) => h.name === tr.toolName && !h.result
             )
             if (existing) {
-              existing.result = tr.result
+              existing.result = tr.output
             }
           }
         },

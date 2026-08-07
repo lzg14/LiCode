@@ -45,13 +45,13 @@ export function createModelState(initialProvider: string, initialModel: string) 
     setCurrentProvider(providerId)
     // 切换 provider 时可能需要更新模型
     const models = listModelsByProvider(providerId as any)
-    if (models.length > 0 && !models.find(m => m.id === currentModel())) {
-      await switchModel(models[0].id, providerId)
+    if (models.length > 0 && !models.find(m => m === currentModel())) {
+      await switchModel(models[0], providerId)
     }
   }
 
   const getAvailableModels = (): string[] => {
-    return listModelsByProvider(currentProvider() as any).map(m => m.id)
+    return listModelsByProvider(currentProvider() as any)
   }
 
   const getAvailableProviders = (): string[] => {

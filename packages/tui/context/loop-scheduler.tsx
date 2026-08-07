@@ -17,37 +17,46 @@ export interface SchedulerState {
 }
 
 export function createSchedulerState() {
-  const [scheduler] = createSignal(new Scheduler())
   const [hasTasks, setHasTasks] = createSignal(false)
-  const [tasks, setTasks] = createSignal<ScheduledTask[]>([])
+  const [tasks, setTasks] = createSignal<Omit<ScheduledTask, "timerId">[]>([])
+
+  // Scheduler 构造函数需要 callbacks
+  let scheduler: Scheduler | null = null
+
+  const setScheduler = (s: Scheduler) => {
+    scheduler = s
+  }
 
   const updateTasks = () => {
-    const s = scheduler()
-    setHasTasks(s.hasTasks())
-    setTasks(s.list())
+    if (!scheduler) return
+    setHasTasks(scheduler.hasTasks())
+    setTasks(scheduler.list())
   }
 
   const addLoop = (intervalMs: number, prompt: string) => {
-    scheduler().add(intervalMs, prompt)
+    if (!scheduler) return
+    scheduler.create(intervalMs, prompt)
     updateTasks()
   }
 
   const stopLoops = () => {
-    scheduler().stopAll()
+    if (!scheduler) return
+    scheduler.deleteAll()
     updateTasks()
   }
 
   const stopLoop = (id: string) => {
-    scheduler().stop(id)
+    if (!scheduler) return
+    scheduler.delete(id)
     updateTasks()
   }
 
-  const listLoops = (): ScheduledTask[] => {
-    return scheduler().list()
+  const listLoops = () => {
+    return scheduler ? scheduler.list() : []
   }
 
   return {
-    scheduler,
+    setScheduler,
     hasTasks,
     tasks,
     addLoop,

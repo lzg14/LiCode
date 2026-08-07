@@ -33,6 +33,8 @@ export interface TruncateOptions {
   keepTailLines?: number
   /** 截断标记 */
   truncationMarker?: string
+  /** 单行最大长度（用于 smartTruncate 中截断超长行，默认 200） */
+  maxLineLength?: number
 }
 
 const DEFAULT_MAX_BYTES = 20 * 1024 // 20KB

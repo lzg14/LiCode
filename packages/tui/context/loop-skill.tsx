@@ -10,7 +10,9 @@
  */
 
 import { createSignal } from "solid-js"
-import { loadAllSkills, type SkillIndex } from "../../skills/loader"
+import { loadAllSkills } from "../../skills/loader"
+import { getSkillIndex } from "../../skills/loader"
+import type { SkillIndex } from "../../skills/types"
 import { matchSkills } from "../../skills/auto-suggest"
 
 export interface SkillState {
@@ -34,7 +36,7 @@ export function createSkillState() {
   const [showSkillSuggestion, setShowSkillSuggestion] = createSignal(false)
 
   const listSkills = async (): Promise<string[]> => {
-    const skills = await loadAllSkills(process.cwd())
+    const skills = await getSkillIndex(process.cwd())
     setAvailableSkills(skills)
     return skills.map(s => s.name)
   }
@@ -50,7 +52,7 @@ export function createSkillState() {
     }
   }
 
-  const resolveSkillSuggestion = (text: string, currentSkill: string | null): string[] => {
+  const resolveSkillSuggestion = (text: string, currentSkill: string | null): SkillIndex[] => {
     const skills = availableSkills()
     const suggestions = matchSkills(text, skills, currentSkill)
     if (suggestions.length > 0) {

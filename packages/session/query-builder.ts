@@ -430,7 +430,7 @@ export function getBranchMessages(
     // 没有指定叶节点，返回线性历史（按时间排序）
     return db.query(
       'SELECT * FROM messages WHERE session_id = ? AND archived = 0 AND parent_id IS NULL ORDER BY created_at ASC'
-    ).all(sessionId).map(row => rowToMessage(row))
+    ).all(sessionId as any).map(row => rowToMessage(row as Record<string, unknown>))
   }
   
   // 返回从根到指定叶节点的路径
