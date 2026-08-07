@@ -8,6 +8,7 @@
 ## [Unreleased]
 
 ### Added
+- **抽取 LLM 调用层**（架构重构 Phase 2）：新增 `packages/core/llm-client.ts`（`callLLM`，封装 60s 超时/abort/流消费/usage 统计/内存泄漏防护）和 `packages/core/tool-executor.ts`（`executeToolBatch`，工具批执行 + subagent 分支 + 结果处理）；`packages/core/phases/execute/main.ts` 从 560 行精简到 293 行（-48%），`execute/index.ts` re-export 上述新模块
 - **事件驱动架构**（Sprint 2）：`packages/core/events.ts` 定义 `AgentEvent` 判别联合（13 种事件类型），覆盖 agent/turn/message/tool/error/phase 6 级事件；`packages/core/agent-state.ts` 提供事件订阅与状态管理；`packages/core/phases/execute/run-loop.ts` 纯函数版 agent 循环，只 emit 事件 + 回调通知，不直接碰 TUI/session
 - **loop.tsx 拆分为 7 个独立 context**（Sprint 3 + 架构重构 Phase 1）：
   - `message.tsx`：消息状态管理（100 行）

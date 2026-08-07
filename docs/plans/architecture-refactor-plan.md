@@ -33,7 +33,18 @@
 | `loop-scheduler.tsx` | 70 | 定时任务管理 | ✅ 已集成 |
 | `loop-input.tsx` | 52 | 输入队列管理 | ✅ 已集成 |
 
-### 🔄 Phase 2 待开始：抽取 LLM 调用层
+### ✅ Phase 2 已完成：抽取 LLM 调用层
+
+| 文件 | 行数 | 职责 | 状态 |
+|---|---|---:|---|
+| `core/llm-client.ts` | - | LLM 调用封装（超时/abort/流消费/usage 统计/内存泄漏防护） | ✅ 已从 main.ts 抽取 |
+| `core/tool-executor.ts` | - | 工具调用批执行 + 结果处理 + subagent 分支 | ✅ 已从 main.ts 抽取 |
+| `execute/main.ts` | 293 | 编排 LLM + 工具（560→293，-48%） | ✅ 已重构 |
+| `execute/index.ts` | - | re-export 新模块 | ✅ 已更新 |
+
+> 注：Phase 2 顺带清理了 `dist/` 旧编译产物（含引用已删除 `partsToString` 的 `.test.js`），解决 `bun test` 报 `SyntaxError`。
+
+### 🔄 Phase 3 待开始：引入轻量 DI
 
 ---
 
@@ -442,10 +453,10 @@ bun run dev
 | 阶段 | 工作量 | 依赖 | 状态 |
 |---|---|---|---|
 | Phase 1 | 1-2 天 | 无 | ✅ **已完成** |
-| Phase 2 | 2 天 | Phase 1 完成 | 🔄 **待开始** |
-| Phase 3 | 2 天 | Phase 2 完成 | 待开始 |
+| Phase 2 | 2 天 | Phase 1 完成 | ✅ **已完成** |
+| Phase 3 | 2 天 | Phase 2 完成 | 🔄 **待开始** |
 | Phase 4 | 1-2 天 | Phase 3 完成 | 待开始 |
-| **总计** | **6-8 天** | - | **已完成 1/4** |
+| **总计** | **6-8 天** | - | **已完成 2/4** |
 
 ---
 
