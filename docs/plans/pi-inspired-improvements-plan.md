@@ -168,7 +168,7 @@ packages/core/AgentState.ts  有状态外壳：持 transcript/状态集，proces
 - [x] loop.tsx 拆分阶段 A/B 完成 ✅
 - [x] session 压缩为投影（archived 标记过滤） ✅
 - [x] session 消息级分支（parent_id + 消息树） ✅
-- [ ] CHANGELOG.md 增加 `## [Unreleased]` 条目
+- [x] CHANGELOG.md 增加 `## [Unreleased]` 条目 ✅
 
 ---
 

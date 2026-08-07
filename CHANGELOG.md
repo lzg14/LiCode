@@ -7,6 +7,37 @@
 
 ## [Unreleased]
 
+### Added
+- **事件驱动架构**（Sprint 2）：`packages/core/events.ts` 定义 `AgentEvent` 判别联合（13 种事件类型），覆盖 agent/turn/message/tool/error/phase 6 级事件；`packages/core/agent-state.ts` 提供事件订阅与状态管理；`packages/core/phases/execute/run-loop.ts` 纯函数版 agent 循环，只 emit 事件 + 回调通知，不直接碰 TUI/session
+- **loop.tsx 拆分为 7 个独立 context**（Sprint 3 + 架构重构 Phase 1）：
+  - `message.tsx`：消息状态管理（100 行）
+  - `loop-model.tsx`：模型/Provider 切换（73 行）
+  - `loop-skill.tsx`：Skill 状态管理（103 行）
+  - `loop-stream.tsx`：流式输出状态（80 行）
+  - `loop-subagent.tsx`：Subagent 状态跟踪（73 行）
+  - `loop-scheduler.tsx`：定时任务管理（70 行）
+  - `loop-input.tsx`：输入队列管理（52 行）
+  - `loop.tsx` 从 960 行减少到 759 行（-21%）
+- **会话压缩投影**（Sprint 4.1）：messages 表新增 `archived` 列，压缩从硬删行改为标记过滤；新增 `archiveOldMessages` / `archiveByTokenBudget` / `estimateTokens`
+- **消息级分支**（Sprint 4.2）：messages 表新增 `parent_id` 列，支持 `getChildMessages` / `getMessageBranch` / `getMessageTree` / `getBranchMessages` / `updateMessageParent` / `appendMessageToBranch`
+- **工具输出卫生**（Sprint 1）：新增 `packages/core/utils/truncate.ts`（`truncateTail`/`truncateHead`/`truncateLine`/`stripAnsi`/`stripBinary`/`smartTruncate`）；bash 工具添加 ANSI 剥离 + 二进制清洗 + 滚动缓冲 + 大输出落盘
+- **Skill 元数据注入优化**（Sprint 1）：`getSkillIndex` 增加 `path` 字段，`buildSystem` 改为注入元数据表格（含路径列），提示模型按需 read 加载
+
+### Fixed
+- **37 处 tsc 错误归零**（commit `5f22604`）：
+  - `run-loop.ts`：移除 `maxSteps`、`signal`→`abortSignal`、`mimeType`→`mediaType`、`subagentManager.execute()`→`.spawn()`、`skillStack` 类型改用 `SkillStackItem`、工具执行改走 `globalToolRegistry.execute`
+  - `execute/index.ts`：恢复 `findValidStart`/`loadProjectConfig`/`ExecuteContext`/`MessageContent` 导出
+  - `loop-scheduler.tsx`：Scheduler 方法名修正（`add/stopAll/stop`→`create/deleteAll/delete`）
+  - `loop-model.tsx`：`listModelsByProvider` 返回 `string[]`，去掉 `.id` 访问
+  - `loop-stream.tsx`：`StreamAccumulator` 接口修正（`append/getSegments/clear`→`push/reset`）
+  - `loop-skill.tsx`：`SkillIndex` 导入源修正，`loadAllSkills`→`getSkillIndex`
+  - `sdk/index.ts`、`cli/modes/json.ts`：AI SDK v6 API 名修正（`args`→`input`、`result`→`output`、`promptTokens`→`inputTokens`、`completionTokens`→`outputTokens`、移除 `maxSteps`）
+  - `tui/theme/loader.ts`：`fs/promises watch`→`fs.watch`（回调模式）
+  - `extension/manager.ts`：`self` 作用域修复 + `RegisteredTool` 补 `name` 字段
+  - `truncate.ts`：`TruncateOptions` 补 `maxLineLength` 字段
+  - `query-builder.ts`：`.all(sessionId)` 类型断言
+- **Memory projectId 前缀碰撞**（Sprint 0）：使用 SHA-256 哈希替代 base64 截断，消除同前缀项目共享记忆文件夹的 bug
+
 ### Planned
 - **架构重构计划**（`architecture-refactor-plan`）：分 4 阶段重构核心架构
   - Phase 1: 拆分 `loop.tsx` God Context（960→400 行）为 MessageContext/ModelContext/SkillContext/SubagentContext
